@@ -1,0 +1,47 @@
+# ==================== 团结引擎 / Unity 生成物（不要提交）====================
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+/[Aa]rtifacts/
+
+# Asset Store 下载缓存
+/[Aa]ssets/AssetStoreTools*
+
+# ==================== IDE / 工具残留 ====================
+.vs/
+.idea/
+.vscode/
+.trae/
+.codely-cli/
+.com-unity-codely.json
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.opendb
+*.VC.db
+
+# ==================== 构建产物 ====================
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# ==================== 其它 ====================
+sysinfo.txt
+crashlytics-build.properties
+
+# 注意：
+# 1) 绝对不要忽略 *.meta —— 它是资源引用的唯一依据，删了就断引用。
+# 2) 项目根目录的「交接文档.md / 游戏设计笔记.md / 参考截图/ / 临时文件夹/」是项目资料，需要提交。

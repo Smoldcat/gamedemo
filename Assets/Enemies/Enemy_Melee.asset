@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bc40d1097dbbba04cb6b73df0f0183b2, type: 3}
+  m_Name: Enemy_Melee
+  m_EditorClassIdentifier: 
+  displayName: "\u8FD1\u6218\u5175"
+  behaviourTypeName: EnemyMeleeBehaviour, Assembly-CSharp
+  dropWeaponChance: 0
+  bodyPrefab: {fileID: 0}
+  bodyScale: 0.85
+  bodyColor: {r: 0.85, g: 0.25, b: 0.2, a: 1}
+  maxHp: 100
+  reactionTime: 0.3
+  patrolSpeed: 2.2
+  sightRange: 11
+  fov: 150
+  loseSightTime: 3
+  chaseSpeed: 3.8
+  meleeDamage: 12
+  attackRange: 1.4
+  meleeCooldown: 0.9
+  keepDistance: 7
+  burstCount: 3
+  burstGap: 1.4
+  gunPrefab: {fileID: 0}
+  shooterWeapon: {fileID: 0}
+  shooterDamage: 8
+  fireInterval: 0.13
+  bulletSpeed: 20
+  spread: 5
+  tracerColor: {r: 1, g: 0.4, b: 0.2, a: 1}
+  explodeRadius: 4
+  explodeDamage: 60
+  fuseTime: 0.8
+  sniperAimTime: 1
+  sniperCooldown: 2.5
+  hpGrowthPerWave: 4
+  hpGrowthCap: 24
+  dmgGrowthPerWave: 1
+  dmgGrowthCap: 6

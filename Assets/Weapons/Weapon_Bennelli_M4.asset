@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc7cac2f169f01048bdf8bf94328df7d, type: 3}
+  m_Name: Weapon_Bennelli_M4
+  m_EditorClassIdentifier: 
+  weaponName: "\u8D1D\u5185\u5229 M4"
+  damage: 11
+  fireInterval: 0.7
+  pellets: 7
+  hipSpread: 9
+  bulletSpeed: 50
+  bulletLife: 0.6
+  magSize: 7
+  reloadTime: 1.9
+  tracerColor: {r: 1, g: 0.55, b: 0.25, a: 1}
+  pickupColor: {r: 1, g: 0.5, b: 0.1, a: 1}
+  gunLength: 0.72
+  shake: 0.06
+  sound: 1
+  hipRecoilUp: 0.05
+  hipRecoilJitter: 0.03
+  recoilRecover: 1
+  explosionRadius: 0
+  explosionDamage: 0
+  pickupModelPrefab: {fileID: 7664263260796425675, guid: a9c3ce1d056dfc44181b4d9e2945cd7d, type: 3}
+  heldModelPrefab: {fileID: 7664263260796425675, guid: a9c3ce1d056dfc44181b4d9e2945cd7d, type: 3}
+  bulletPrefab: {fileID: 0}
+  icon: {fileID: 0}
+  iconKind: 0
+  aimSpread: 3.5
+  aimRecoilUpMultiplier: 0.6
+  aimRecoilJitterMultiplier: 0.6

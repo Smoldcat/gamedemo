@@ -1,0 +1,131 @@
+using UnityEngine;
+
+/// <summary>
+/// 全局资源总表：把原本「写死在代码里」的外观与音效抽成可替换的资源。
+///
+/// 用法：本资源放在 Assets/Resources/GameAssets.asset，代码会自动加载，**不需要手动拖引用**。
+/// 特性：任何槽位留空 → 该处自动回落到原本的代码生成效果。
+///       所以即使你删掉了整个资源表，游戏依然能正常运行，只是用回默认外观/音效。
+///
+/// 想替换资源时：把你的模型做成 Prefab / 导入音频，拖到对应槽位即可。
+/// </summary>
+[CreateAssetMenu(fileName = "GameAssets", menuName = "游戏/资源总表", order = 0)]
+public class GameAssets : ScriptableObject
+{
+    [Header("敌人模型（留空 = 用代码生成的胶囊体）")]
+    [Tooltip("敌人的通用身体模型 Prefab（各敌人可单独在 EnemyConfig.bodyPrefab 里覆盖）")]
+    public GameObject enemyMeleePrefab;
+    [Tooltip("远程敌人手里那把枪的模型 Prefab")]
+    public GameObject enemyGunPrefab;
+
+    [Header("道具模型（留空 = 用代码生成的默认外观）")]
+    [Tooltip("血包模型 Prefab")]
+    public GameObject healthPackPrefab;
+
+    [Header("特效（留空 = 用代码生成的默认特效）")]
+    [Tooltip("命中火花。建议放带 ParticleSystem 的 Prefab，会自动播完即销毁")]
+    public GameObject impactPrefab;
+    [Tooltip("枪口火光")]
+    public GameObject muzzleFlashPrefab;
+    [Tooltip("地面弹孔/血迹")]
+    public GameObject decalPrefab;
+
+    [Header("UI 特效（留空 = 用代码生成的默认样式）")]
+    [Tooltip("伤害飘字 Prefab：含 Text 组件的 UI 物体（可自定义字体/样式/动画）。留空则用代码生成默认文字")]
+    public GameObject damageTextPrefab;
+    [Tooltip("准星图片（Sprite）。全局默认准星外观；Crosshair 组件上单独拖了则优先用组件的。留空用代码生成的十字")]
+    public Sprite crosshairSprite;
+
+    [Header("音效（留空 = 用代码合成的默认音效）")]
+    public AudioClip shot;          // 普通枪声（手枪/冲锋枪）
+    public AudioClip shotgun;       // 霰弹枪声
+    public AudioClip sniper;        // 狙击枪声
+    public AudioClip hit;           // 命中反馈
+    public AudioClip kill;          // 击杀确认
+    public AudioClip pickup;        // 拾取武器
+    public AudioClip hurt;          // 受伤
+    public AudioClip heal;          // 治疗
+    public AudioClip magOut;        // 拔弹匣
+    public AudioClip magInChamber;  // 插弹匣上膛
+    public AudioClip pump;          // 霰弹枪泵动
+    public AudioClip bolt;          // 狙击枪拉栓
+
+    [Header("背包 UI 音效（留空 = 用代码合成的默认音效）")]
+    [Tooltip("打开背包")]
+    public AudioClip invOpen;
+    [Tooltip("关闭背包")]
+    public AudioClip invClose;
+    [Tooltip("点击/确认（装武器、丢弃确认第一步）")]
+    public AudioClip invConfirm;
+    [Tooltip("丢弃武器")]
+    public AudioClip invDrop;
+
+    // ---------------- 击杀反馈（2026-09-20 新增：屏幕下方中央的「击杀图标 + 名字」） ----------------
+    // ⚠️ 新字段一律追加在末尾（见交接文档 §6.8）：Unity 按字段名序列化，追加不会影响已存数值。
+    [Header("击杀反馈（留空 = 代码生成的占位）")]
+    [Tooltip("普通击杀图标（Sprite）。击杀敌人时显示在屏幕下方中央。留空用代码生成的占位（四角星）")]
+    public Sprite killIcon;
+    [Tooltip("爆头击杀图标（Sprite）。最后致命一击是爆头时用它替换普通图标。留空用代码生成的占位（靶心）")]
+    public Sprite killHeadshotIcon;
+    [Tooltip("每条击杀反馈的存活时间（秒）：从出现开始计时，到时向右滑出并淡出。默认 2")]
+    public float killFeedDuration = 2f;
+    [Tooltip("击杀图标大小（px，参考分辨率 1280×720 下的值，运行时按屏幕等比缩放）。默认 64")]
+    public float killFeedIconSize = 64f;
+    [Tooltip("多个击杀图标之间的间距（px，参考分辨率下）。默认 16")]
+    public float killFeedSpacing = 16f;
+    [Tooltip("击杀对象名字的字号（参考分辨率下）。默认 20")]
+    public int killFeedNameFontSize = 20;
+    [Tooltip("同时最多显示几条（0 = 不限，默认 0）")]
+    public int killFeedMaxCount = 0;
+    [Tooltip("爆头命中反馈音（命中敌人头部时播放，替代普通命中音；不需要击杀就播）")]
+    public AudioClip headshotHit;
+
+    // ---------------- 背包（2026-09-20 新增：外观资源槽 + 颜色参数，让背包样式不用改代码） ----------------
+    [Header("背包（留空 = 代码生成的占位）")]
+    [Tooltip("库存格数（同类武器在同一格里叠加 → 等于「最多能装几种武器」）。默认 20")]
+    public int backpackInventorySlots = 20;
+    [Tooltip("背包面板底图（Sprite，九宫格）。留空用代码生成的圆角面板。⚠️ 建议白色/浅色 + 透明（颜色由代码控制）")]
+    public Sprite backpackPanelSprite;
+    [Tooltip("背包描边 / 格子边框（Sprite，九宫格）。用于库存格与丢弃按钮。留空用代码生成")]
+    public Sprite backpackFrameSprite;
+    [Tooltip("快捷武器槽边框（Sprite，九宫格）。留空用代码生成。⚠️ 建议白色描边 + 透明（当前槽高亮色由代码上）")]
+    public Sprite backpackSlotFrameSprite;
+    [Tooltip("血包十字图标（Sprite）。留空用代码生成")]
+    public Sprite backpackMedkitIconSprite;
+    [Tooltip("背包面板底色（与底图相乘）")]
+    public Color backpackPanelColor = new Color(0.04f, 0.05f, 0.09f, 0.92f);
+    [Tooltip("快捷槽普通边框色（当前槽改用「当前槽高亮色」）")]
+    public Color backpackSlotColor = new Color(0.32f, 0.36f, 0.44f, 0.9f);
+    [Tooltip("当前快捷槽的高亮色")]
+    public Color backpackSlotActiveColor = new Color(0.35f, 0.85f, 0.42f, 0.95f);
+    [Tooltip("库存格子底色")]
+    public Color backpackCellColor = new Color(0.16f, 0.18f, 0.26f, 0.92f);
+    [Tooltip("背包 UI 整套界面 Prefab（Canvas + 面板结构）。拖入后背包完全用这个 Prefab（可在编辑器里拖拽改布局）；留空用代码生成。⚠️ 节点名有约定，见 BackpackPanel 类注释")]
+    public GameObject backpackUIPrefab;
+
+    const string ResourcePath = "GameAssets";
+
+    static GameAssets _instance;
+    static bool _loaded;
+
+    /// <summary>自动从 Resources 加载；没放资源表时返回 null，调用方需按「留空」处理</summary>
+    public static GameAssets I
+    {
+        get
+        {
+            if (!_loaded)
+            {
+                _loaded = true;
+                _instance = Resources.Load<GameAssets>(ResourcePath);
+            }
+            return _instance;
+        }
+    }
+
+    /// <summary>静态状态清理（供 StaticReset 调用）：关闭 Reload Domain 时强制下次访问重新加载</summary>
+    internal static void ResetStatics()
+    {
+        _instance = null;
+        _loaded = false;
+    }
+}

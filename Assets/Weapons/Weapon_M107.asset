@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc7cac2f169f01048bdf8bf94328df7d, type: 3}
+  m_Name: Weapon_M107
+  m_EditorClassIdentifier: 
+  weaponName: "M107 \u72D9\u51FB"
+  damage: 130
+  fireInterval: 1.25
+  pellets: 1
+  hipSpread: 0
+  bulletSpeed: 120
+  bulletLife: 0.6
+  magSize: 5
+  reloadTime: 2.4
+  tracerColor: {r: 0.85, g: 0.45, b: 1, a: 1}
+  pickupColor: {r: 0.8, g: 0.4, b: 1, a: 1}
+  gunLength: 0.95
+  shake: 0.1
+  sound: 2
+  hipRecoilUp: 2.5
+  hipRecoilJitter: 2
+  recoilMaxSide: 0
+  recoilRecover: 1
+  explosionRadius: 0
+  explosionDamage: 0
+  pickupModelPrefab: {fileID: 5975588500266691430, guid: e91e9cef667c68540806a67280ef123d, type: 3}
+  heldModelPrefab: {fileID: 5975588500266691430, guid: e91e9cef667c68540806a67280ef123d, type: 3}
+  bulletPrefab: {fileID: 0}
+  icon: {fileID: 0}
+  iconKind: 0
+  aimSpread: 0
+  aimRecoilUpMultiplier: 0.6
+  aimRecoilJitterMultiplier: 0.6

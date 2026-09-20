@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc7cac2f169f01048bdf8bf94328df7d, type: 3}
+  m_Name: Weapon_M249
+  m_EditorClassIdentifier: 
+  weaponName: "M249 \u673A\u67AA"
+  damage: 20
+  fireInterval: 0.08
+  pellets: 1
+  headshotMultiplier: 2
+  hipSpread: 3.2
+  aimSpread: 1.4
+  bulletSpeed: 80
+  bulletLife: 0.6
+  magSize: 100
+  reloadTime: 3.2
+  tracerColor: {r: 0.7, g: 0.8, b: 0.95, a: 1}
+  pickupColor: {r: 0.6, g: 0.7, b: 0.85, a: 1}
+  gunLength: 0.75
+  shake: 0.05
+  sound: 0
+  hipRecoilUp: 0.5
+  hipRecoilJitter: 0.2
+  aimRecoilUpMultiplier: 0.6
+  aimRecoilJitterMultiplier: 0.6
+  recoilMaxSide: 1
+  recoilRecover: 1
+  recoilRecoverDelay: 0
+  explosionRadius: 0
+  explosionDamage: 0
+  pickupModelPrefab: {fileID: 6927570744655734756, guid: f18778fa084cf754f92596abf370bda5, type: 3}
+  heldModelPrefab: {fileID: 6927570744655734756, guid: f18778fa084cf754f92596abf370bda5, type: 3}
+  bulletPrefab: {fileID: 0}
+  icon: {fileID: 0}
+  iconKind: 0
