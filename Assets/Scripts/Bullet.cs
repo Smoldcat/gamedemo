@@ -18,8 +18,6 @@ public class Bullet : MonoBehaviour
     /// <summary>本颗子弹携带的伤害参数（由 `Spawn` 按 WeaponData 填好，命中时交给 `Combat` 结算）</summary>
     public ShotProfile shot;
 
-    /// <summary>代码生成弹体的共享网格（CreatePrimitive 会每实例新建网格，这里只建一次）</summary>
-    static Mesh _cubeMesh;
     bool _pooled;   // 是否来自对象池（prefab 子弹不走池）
 
     /// <summary>
@@ -69,18 +67,13 @@ public class Bullet : MonoBehaviour
         return b;
     }
 
-    /// <summary>创建代码生成弹体的模板：共享网格（子弹靠射线检测，不需要碰撞体）</summary>
+    /// <summary>创建代码生成弹体的模板：共享网格（子弹靠射线检测，不需要碰撞体）
+    /// ⚠️ 共享网格统一从 `Effects.SharedMesh` 取 —— 原来这里自己又造了一份 Cube 网格缓存
+    ///    （与 `Effects` 那份重复，2026-09-22 收敛）。</summary>
     static GameObject CreateCubeBullet()
     {
-        if (_cubeMesh == null)
-        {
-            var t = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _cubeMesh = t.GetComponent<MeshFilter>().sharedMesh;
-            Object.DestroyImmediate(t);
-        }
-
         var go = new GameObject("Bullet");
-        go.AddComponent<MeshFilter>().sharedMesh = _cubeMesh;
+        go.AddComponent<MeshFilter>().sharedMesh = Effects.SharedMesh(PrimitiveType.Cube);
         go.AddComponent<MeshRenderer>();
         return go;
     }

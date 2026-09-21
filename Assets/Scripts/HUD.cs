@@ -189,6 +189,13 @@ public class HUD : MonoBehaviour
     }
 
     /// <summary>
+    /// "背包已满"的统一提示。`WeaponPickup`（捡枪）与 `HealthPack`（捡血包）都用它 ——
+    /// 文案与配色只有一份，改一处两边一起变（原来两处各写一份字面量，2026-09-22 收敛）。
+    /// </summary>
+    public static void AnnounceBackpackFull()
+        => Announce("背包已满", 1.2f, 28, new Color(1f, 0.62f, 0.4f));
+
+    /// <summary>
     /// 整块 HUD 的显隐（打开背包时用）。
     /// 为什么需要：背包面板是**贴屏幕左侧的竖排面板**（约 400×660），会和 HUD 的**左下角信息块**
     /// （血条 / 弹药 / 武器 / 模式）重叠；而那块信息在背包里本来就是**重复的**（面板自己会显示
@@ -239,6 +246,7 @@ public class HUD : MonoBehaviour
         // 缓存 Canvas / 血条满宽 / 击杀文字基色：血条填充宽度不再写死（改场景尺寸或换美术都不会画错）
         _canvas = GetComponentInParent<Canvas>();
         _canvasRect = _canvas != null ? _canvas.GetComponent<RectTransform>() : null;
+        CheckCanvasScaler();   // 防漂移：场景这块画布是手搭的，核一次缩放参数（不一致只告警、不改）
         if (hpFill != null) _hpFullSize = hpFill.rectTransform.sizeDelta;
         if (killText != null) _killBaseColor = killText.color;
 
@@ -274,6 +282,32 @@ public class HUD : MonoBehaviour
         if (o == null) Debug.LogWarning($"[HUD] Inspector 引用「{field}」没有拖 → {symptom}。");
     }
 #endif
+
+    /// <summary>
+    /// 核对**主 HUD 这块画布**（手搭在场景里、参数写在场景 YAML 里）的 `CanvasScaler` 是否与全项目基准一致。
+    /// 为什么需要：另外 4 块 UI 画布都是代码用 `UIUtil.NewOverlayCanvas` 建的（参考分辨率只有一份），
+    /// 而**这一块是手搭的、代码改不到它** —— 一旦有人只改了代码侧或只改了场景侧，
+    /// 就会出现"HUD 与其它 UI 缩放不一致"（观感不一致，且极难看出是哪边错了）。
+    /// ⚠️ **只告警、不改场景**：不替用户改他摆好的画布，避免"悄悄改坏 UI"。
+    /// </summary>
+    void CheckCanvasScaler()
+    {
+        if (_canvas == null) return;
+        var s = _canvas.GetComponent<CanvasScaler>();
+        if (s == null)
+        {
+            Debug.LogWarning("[HUD] 主 HUD 画布上没有 CanvasScaler → 它不会随分辨率缩放（其它 UI 会）→ 观感会不一致。");
+            return;
+        }
+        if (s.uiScaleMode != CanvasScaler.ScaleMode.ScaleWithScreenSize
+            || s.screenMatchMode != CanvasScaler.ScreenMatchMode.MatchWidthOrHeight
+            || s.referenceResolution != UIUtil.RefResolution
+            || !Mathf.Approximately(s.matchWidthOrHeight, UIUtil.MatchWidthOrHeight))
+            Debug.LogWarning($"[HUD] 主 HUD 画布的 CanvasScaler 与全项目基准不一致：期望 " +
+                             $"ScaleWithScreenSize / MatchWidthOrHeight / {UIUtil.RefResolution} / {UIUtil.MatchWidthOrHeight}，" +
+                             $"实际 {s.uiScaleMode} / {s.screenMatchMode} / {s.referenceResolution} / {s.matchWidthOrHeight} " +
+                             $"→ 会与其余 4 块 UI 的缩放不一致。");
+    }
 
     /// <summary>创建全屏受伤红晕：挂在 HUD 所在 Canvas 下并置底，用径向渐变贴图做 sprite（保留原中心透明效果）</summary>
     void BuildDamageVignette()
@@ -324,29 +358,22 @@ public class HUD : MonoBehaviour
     void OnDestroy()
     {
         if (_playerHealth != null) _playerHealth.OnDamaged -= OnPlayerDamaged;
-        // 运行时创建的贴图不会随物体销毁，必须手动释放，否则场景重载会累积
+        // 运行时生成的 Sprite / 贴图不会随物体销毁，必须手动释放，否则场景重载会累积。
+        // ⚠️ **Sprite 与它的 texture 要成对销毁**（用 `UIUtil.DestroySprite`）—— 原来这里只销毁了 texture，
+        //    Sprite 包装对象每次重载都漏一个（2026-09-22 审计发现，违反 §4 #25 自己的规则）。
         // （字体是 UIUtil 的共用资源，由它统一释放，这里不能碰）
-        if (_vignette != null) Destroy(_vignette);
-        if (_damageArrow != null && _damageArrow.sprite != null) Destroy(_damageArrow.sprite.texture);
+        if (_vignetteImage != null && _vignetteImage.sprite != null)
+            UIUtil.DestroySprite(_vignetteImage.sprite);   // 它用的纹理就是 `_vignette`，一起被销毁
+        else if (_vignette != null)
+            Destroy(_vignette);
+        if (_damageArrow != null) UIUtil.DestroySprite(_damageArrow.sprite);
     }
 
     void SetAllTextFont(Font f)
     {
+        // 「注入统一字体 + 强制不截断」的唯一实现在 `UIUtil.ApplyFont`（快捷栏 / 拾取气泡的预置节点也走它）
         foreach (var t in new Text[] { hpText, weaponText, modeText, waveText, killText, announceText, deathStat, restartBtnLabel })
-            ApplyFont(t, f);
-    }
-
-    /// <summary>给一个 Text 注入统一字体，并**强制不截断**（快捷栏 / 拾取气泡的预置节点也走这里）。
-    /// ⚠️ `Text` 默认 `Vertical Overflow = Truncate`，而"行高"是随**字体**变的
-    ///    （换字体后行高会变大，如思源黑体明显大于内置 Arial）→ 一旦「行高 > 文本框高度」，
-    ///    Truncate 会把**整段文字一个字都不画**（症状：部分 HUD 文字整条消失、另一些正常 ——
-    ///    场景里那些文本框的高度是按旧字体摆的，正好卡在临界）。
-    ///    HUD 上这些都是"要么完整显示"的标签，所以统一设成 Overflow。</summary>
-    static void ApplyFont(Text t, Font f)
-    {
-        if (t == null) return;
-        if (f != null) t.font = f;
-        t.verticalOverflow = VerticalWrapMode.Overflow;
+            UIUtil.ApplyFont(t, f);
     }
 
     /// <summary>死亡后点「重新开始」：重载当前场景，开始新一局</summary>
@@ -598,22 +625,47 @@ public class HUD : MonoBehaviour
                 // 字体统一注入（含中文）+ 强制不截断（与拾取气泡预置路径同一处理）
                 Font f = fallbackFont != null ? fallbackFont : UIUtil.Font;
                 for (int i = 0; i < HotbarSlotCount; i++)
-                    ApplyFont(FindTextDeep(_hotbarRect.Find("Slot" + (i + 1)), "KeyText"), f);
-                ApplyFont(_hbCountText, f);
+                    UIUtil.ApplyFont(FindTextDeep(_hotbarRect.Find("Slot" + (i + 1)), "KeyText"), f);
+                UIUtil.ApplyFont(_hbCountText, f);
 
                 // "运行时生成的图存不进场景" → 只给**还空着**的 Image 补占位图（节点上配了真图就不动它）
                 for (int i = 0; i < HotbarSlotCount; i++)
-                    FillSprite(_hbFrame[i], BackpackPanel.SlotFrameSprite(), true);
+                    UIUtil.FillSprite(_hbFrame[i], BackpackPanel.SlotFrameSprite(), true);
 
                 _hbSig = int.MinValue;   // 强制第一帧刷一次状态色 / 图标
                 return;
             }
 
+            // ⚠️ 必须把那个**半成品预置节点关掉**，否则它会和下面代码生成的快捷栏**同时画出来**（两个快捷栏叠在一起）。
+            //    拾取气泡的同款回退路径一直是这么做的（见 BuildPickupBubble），这里当初漏了（2026-09-22 审计发现）。
+            hotbar.gameObject.SetActive(false);
             Debug.LogWarning("[HUD] 快捷栏节点结构不完整（需要 Slot1..Slot4，每格下含 Bg / Frame / Icon / KeyBg / KeyText；" +
-                             "最后一格还要 CountBg / CountText）→ 已退回代码生成。可重跑菜单 Tools/游戏/生成快捷栏到场景。");
+                             "最后一格还要 CountBg / CountText）→ 已退回代码生成（并已把该节点关掉）。可重跑菜单 Tools/游戏/生成快捷栏到场景。");
+        }
+        else
+        {
+            // 引用留空 = "回到代码生成"。⚠️ 但场景里那个预置节点**还留在 Canvas 下、还是激活的**
+            //（它是个场景物体，清空引用不会删掉它）→ 不关掉它就会和代码生成的版本**同时画出来**（两个快捷栏）。
+            DisableLeftoverNode("Hotbar");
         }
 
         BuildHotbarByCode();
+    }
+
+    /// <summary>
+    /// 关掉场景里**残留的预置节点**（用于"清空引用 → 回到代码生成"这条回退路径）。
+    /// ⚠️ 为什么需要：清空 HUD 上的引用**不会删掉场景里那个节点**（它是场景物体、默认还是激活的）
+    ///    → 代码又会生成一份 → **两份同时画出来**（两个快捷栏 / 两个拾取气泡）。
+    ///    引用既然被清空了，代码手里就没有它了，所以只能**按节点名**找（这也是节点名属于"契约"的原因之一）。
+    /// </summary>
+    void DisableLeftoverNode(string nodeName)
+    {
+        if (_canvas == null) return;
+        var leftover = _canvas.transform.Find(nodeName);
+        if (leftover == null) return;
+        leftover.gameObject.SetActive(false);
+        Debug.LogWarning($"[HUD] 场景里有「{nodeName}」节点，但 HUD 上对应的引用是空的 → 已把它关掉，改用代码生成。" +
+                         $"想用预置版就把该节点接回 HUD 的引用；想彻底回到代码生成就直接删掉这个节点。");
     }
 
     /// <summary>按「节点名约定」绑定场景预置的快捷栏；任一项缺失 → false（调用方退回代码生成）</summary>
@@ -778,11 +830,6 @@ public class HUD : MonoBehaviour
         var rt = FindChildRect(parent, name);
         return rt != null ? rt.GetComponent<Image>() : null;
     }
-    static Text FindText(Transform parent, string name)
-    {
-        var rt = FindChildRect(parent, name);
-        return rt != null ? rt.GetComponent<Text>() : null;
-    }
 
     /// <summary>在子树里**递归**按名字找。
     /// ⚠️ `Transform.Find` 只找**直接子节点**，而 `KeyText` / `CountText` 挂在 `KeyBg` / `CountBg` **底下**
@@ -830,14 +877,13 @@ public class HUD : MonoBehaviour
     Text NewHotbarText(Transform parent, string name, string label, int size, Color color)
     {
         var t = NewChildRect(parent, name, new Vector2(HotbarKeyW, HotbarKeyH), Vector2.zero).gameObject.AddComponent<Text>();
-        t.font = fallbackFont != null ? fallbackFont : UIUtil.Font;
+        UIUtil.ApplyFont(t, fallbackFont != null ? fallbackFont : UIUtil.Font);   // 字体 + 强制不截断（唯一实现）
         t.text = label;
         t.fontSize = size;
         t.alignment = TextAnchor.MiddleCenter;
         t.color = color;
         t.raycastTarget = false;
         t.horizontalOverflow = HorizontalWrapMode.Overflow;
-        t.verticalOverflow = VerticalWrapMode.Overflow;   // ⚠️ 必须 Overflow，否则换字体后可能整字不画（见 ApplyFont）
         return t;
     }
 
@@ -875,15 +921,15 @@ public class HUD : MonoBehaviour
             _bubbleKeyText = pickupBubbleKeyText;
 
             // "运行时生成的图存不进场景" → 只给**还空着**的 Image 补占位图（你在节点上配了真图就不动它）
-            FillSprite(_bubbleEdge, UIUtil.RoundedRectSprite(64, 12f, 2f), true);
-            FillSprite(_bubbleBg, UIUtil.RoundedRectSprite(64, 12f, 0f), true);
-            FillSprite(_bubbleKeyBg, UIUtil.CircleSprite(48), false);
+            UIUtil.FillSprite(_bubbleEdge, UIUtil.RoundedRectSprite(64, 12f, 2f), true);
+            UIUtil.FillSprite(_bubbleBg, UIUtil.RoundedRectSprite(64, 12f, 0f), true);
+            UIUtil.FillSprite(_bubbleKeyBg, UIUtil.CircleSprite(48), false);
 
             // 字体统一由代码注入（项目共用字体，保证中文正常）；节点上只调字号 / 颜色
-            // ⚠️ 同时强制 Vertical Overflow = Overflow：不然"按键字母 E"会因行高 > 圆标高度被 Truncate 掉（踩过）
+            // （`UIUtil.ApplyFont` 内部同时强制 Vertical Overflow = Overflow，否则"按键字母 E"会被 Truncate 吞掉）
             var f = fallbackFont != null ? fallbackFont : UIUtil.Font;
-            if (_bubbleName != null) { _bubbleName.font = f; _bubbleName.verticalOverflow = VerticalWrapMode.Overflow; }
-            if (_bubbleKeyText != null) { _bubbleKeyText.font = f; _bubbleKeyText.verticalOverflow = VerticalWrapMode.Overflow; }
+            UIUtil.ApplyFont(_bubbleName, f);
+            UIUtil.ApplyFont(_bubbleKeyText, f);
 
             pickupBubble.gameObject.SetActive(false);   // 运行时先隐藏，Update 按需显示
             _bubbleLabel = null;
@@ -891,10 +937,16 @@ public class HUD : MonoBehaviour
         }
 
         if (pickupBubble != null)
+        {
+            // ⚠️ 同理：把这个"半配置"的节点也关掉，否则它会和下面代码生成的气泡**同时存在**
+            //    （观感重复，而且很难看出多出来的那个是哪来的）
+            pickupBubble.gameObject.SetActive(false);
             Debug.LogWarning("[HUD] 拾取气泡节点不完整（缺「物品名文本 pickupBubbleName」或「按键字母文本 pickupBubbleKeyText」）" +
-                             "→ 已退回代码生成。请检查 HUD 上「拾取气泡」那组引用。");
+                             "→ 已退回代码生成（并已把该节点关掉）。请检查 HUD 上「拾取气泡」那组引用。");
+        }
 
         // ---- ② 代码生成（兜底，与历史版本一致）----
+        if (pickupBubble == null) DisableLeftoverNode("PickupBubble");   // 同上：清空引用后残留的预置节点要关掉
         if (_canvas == null) return;
 
         var go = new GameObject("PickupBubble");
@@ -924,12 +976,6 @@ public class HUD : MonoBehaviour
     }
 
     /// <summary>只给"图还空着"的 Image 补占位图（配了真图不覆盖）。场景预置节点用它补齐"运行时才生成的圆角图"。</summary>
-    static void FillSprite(Image img, Sprite fallback, bool sliced)
-    {
-        if (img == null || img.sprite != null || fallback == null) return;
-        img.sprite = fallback;
-        if (sliced) img.type = Image.Type.Sliced;
-    }
 
     Image AddBubbleImage(Transform parent, string name, Sprite sprite, Color color, float w)
     {

@@ -1,7 +1,8 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
-/// UI 公共资源。目前只放**全项目共用的那一份动态字体**。
+/// UI 公共资源：**全项目共用的那一份动态字体** + 运行时生成 Sprite 的工具 + 三个"每个 UI 类都要做"的小动作。
 ///
 /// 为什么要共用：`HUD` / `BackpackPanel` / `DamageText` 原来各自 `Font.CreateDynamicFontFromOSFont(...)` 造一份 ——
 /// 一份动态字体内部带一张字形图集纹理，是这套 UI 里最贵的一块资源，三份就是三倍（而且每局都要重建）。
@@ -98,7 +99,7 @@ public static class UIUtil
     /// 生成圆角矩形 Sprite（白色 / 透明底，颜色交给 `Image.color`）。
     /// `borderPx &gt; 0` → 描边（中间挖空）；`= 0` → 实心填充。
     /// ⚠️ 返回的 Sprite **自带九宫格 border = radiusPx** → 把 `Image.type` 设成 `Sliced` 后，拉到任意尺寸圆角都不变形。
-    /// ⚠️ 运行时生成的 Sprite 与其纹理是**两个独立对象**，调用方若要释放必须**成对销毁**（见 `BackpackPanel.DestroySprite`）。
+    /// ⚠️ 运行时生成的 Sprite 与其纹理是**两个独立对象**，调用方若要释放必须**成对销毁**（`UIUtil.DestroySprite`）。
     /// </summary>
     public static Sprite RoundedRectSprite(int size = 64, float radiusPx = 14f, float borderPx = 0f)
     {
@@ -151,6 +152,111 @@ public static class UIUtil
         }
         tex.Apply();
         return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+    }
+
+    // ==================== 全项目 UI 都要做的三件小事（原来在 6~7 处各抄了一份，2026-09-22 收敛到这里） ====================
+
+    /// <summary>
+    /// 给一个 Text 注入统一字体，并**强制 `Vertical Overflow = Overflow`**。
+    /// ⚠️ 必须 Overflow 的原因（踩过两次）：`Text` 默认 `Truncate`，而"行高"是随**字体**变的
+    ///    （思源黑体等中文大行高字体明显大于内置 Arial）→ 一旦「行高 &gt; 文本框高度」，
+    ///    Truncate 会把**整段文字一个字都不画**（症状：部分文字整条消失、另一些正常 —— 因为那些框的高度
+    ///    是按旧字体摆的，正好卡在临界）。
+    /// </summary>
+    public static void ApplyFont(Text t, Font f)
+    {
+        if (t == null) return;
+        if (f != null) t.font = f;
+        t.verticalOverflow = VerticalWrapMode.Overflow;
+    }
+
+    /// <summary>
+    /// 只给"图还空着"的 Image 补占位图（**配了真图就不覆盖**）。
+    /// 场景预置的节点用它补齐"运行时才能生成的那种图"（生成期做的图存不进场景）。
+    /// </summary>
+    public static void FillSprite(Image img, Sprite fallback, bool sliced)
+    {
+        if (img == null || img.sprite != null || fallback == null) return;
+        img.sprite = fallback;
+        if (sliced) img.type = Image.Type.Sliced;
+    }
+
+    /// <summary>
+    /// 销毁运行时生成的 Sprite **及其 texture**。
+    /// ⚠️ Sprite 与 texture 是**两个独立对象**，必须**成对销毁**（见 §4 #25）：
+    ///    只销毁 texture → Sprite 包装对象泄漏；只销毁 Sprite → 纹理泄漏（更贵）。
+    /// </summary>
+    public static void DestroySprite(Sprite s)
+    {
+        if (s == null) return;
+        var tex = s.texture;
+        Object.Destroy(s);
+        if (tex != null) Object.Destroy(tex);
+    }
+
+    /// <summary>
+    /// 生成圆环贴图（白色 + alpha）—— 换弹进度环 / 散布圈 / 爆炸范围圈都用它。
+    /// `innerRatio` / `outerRatio` 是相对半径占比；`featherScale` 控制边缘羽化
+    /// （细环要给更小的羽化，否则整圈 alpha 会被削淡）。
+    /// ⚠️ 2026-09-22 收敛：原来 `Crosshair.MakeRingSprite` 与 `Effects.RingTexture` 是**同一份算法写了两遍**
+    ///    （只是参数化程度不同，公式逐字相同）→ 想调"圆环粗细/羽化风格"得改两个文件、还容易改歪一边。
+    ///    现在只有这一份，两个调用方共用。
+    /// </summary>
+    public static Texture2D RingTexture(int size, float innerRatio, float outerRatio, float featherScale = 0.06f)
+    {
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+
+        float c = (size - 1) * 0.5f;
+        float outer = c * outerRatio;
+        float inner = c * innerRatio;
+        float feather = Mathf.Max(1f, c * featherScale);   // 边缘一点羽化，避免锯齿
+
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c));
+            float a = Mathf.Clamp01((outer - d) / feather) * Mathf.Clamp01((d - inner) / feather);
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+        }
+        tex.Apply();
+        return tex;
+    }
+
+    // ==================== 全项目 UI 的统一基准（参考分辨率 / 标准画布） ====================
+
+    /// <summary>
+    /// 全项目 UI 的**参考分辨率**：所有 UI 像素参数（字号 / 尺寸 / 间距 / 位移）都按这个基准填，
+    /// 运行时由 `CanvasScaler` 等比缩放 → 换分辨率观感不变。
+    /// ⚠️ **只有一份**：改这里就是改全项目的基准。
+    /// ⚠️ 但**场景里的主 HUD 画布是手搭的**、参数写在场景 YAML 里，代码改不到它 →
+    ///    `HUD.CheckCanvasScaler()` 会在进入 Play 时核对一次并告警（防"改了代码侧、忘了场景侧"）。
+    /// </summary>
+    public static readonly Vector2 RefResolution = new Vector2(1280f, 720f);
+
+    /// <summary>`ScaleWithScreenSize` 的屏幕匹配策略：0.5 = 宽高各占一半（全项目统一）。</summary>
+    public const float MatchWidthOrHeight = 0.5f;
+
+    /// <summary>
+    /// 建一个**标准 Overlay Canvas**：`ScreenSpaceOverlay` + 指定 `sortingOrder` + 全项目统一的 `CanvasScaler`。
+    /// ⚠️ 全项目**所有代码生成的 UI 画布**都必须走这里 —— 2026-09-22 收敛前，这套参数在 4 个文件里各写了一遍，
+    ///    改一次要改 4 处、漏一个就是"某块 UI 与其它 UI 缩放不一致"（最难查的那一类）。
+    /// ⚠️ 本函数**只**建 Canvas + Scaler；额外件由各调用方自己加（背包要 `GraphicRaycaster`、飘字要设 layer）。
+    /// </summary>
+    public static Canvas NewOverlayCanvas(string name, int sortingOrder)
+    {
+        var go = new GameObject(name);
+        var canvas = go.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = sortingOrder;
+
+        var scaler = go.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = RefResolution;
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = MatchWidthOrHeight;
+
+        return canvas;
     }
 
     /// <summary>UI 层（Unity 内置第 5 层）。取不到时回落 5。</summary>

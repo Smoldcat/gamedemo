@@ -97,7 +97,7 @@ public class WeaponPickup : MonoBehaviour
                 if (bp != null && !bp.CanAddWeapon(nearest.data))
                 {
                     // 快捷槽满 + 库存满且无同类 → 捡不了，枪留在原地（"背包已满"）
-                    HUD.Announce("背包已满", 1.2f, 28, new Color(1f, 0.62f, 0.4f));
+                    HUD.AnnounceBackpackFull();
                     return;
                 }
 

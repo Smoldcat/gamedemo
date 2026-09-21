@@ -198,16 +198,15 @@ public static class HotbarBuilder
     {
         var rt = MakeRect(name, parent, new Vector2(KeyW, KeyH), Vector2.zero);
         var t = rt.gameObject.AddComponent<Text>();
-        t.font = UISpriteToolUtil.PreviewFont();   // 与运行时同源（都优先 GameAssets.uiFont）
+        // 字体（与运行时同源：都优先 GameAssets.uiFont）+ 强制不截断：都走共用实现
+        // ⚠️ 不截断必须有：中文大行高字体（思源黑体）的行高会超过小圆角矩形高度 → Truncate 会把整个字**直接不画**
+        UIUtil.ApplyFont(t, UISpriteToolUtil.PreviewFont());
         t.text = label;
         t.fontSize = size;
         t.alignment = TextAnchor.MiddleCenter;
         t.color = color;
         t.raycastTarget = false;
         t.horizontalOverflow = HorizontalWrapMode.Overflow;
-        // ⚠️ 必须 Overflow：Text 默认 Truncate，而中文大行高字体（思源黑体）的行高会超过小圆角矩形高度
-        //    → 一旦"行高 > 框高"，Truncate 会把整个字**直接不画**（踩过：按键字母 E 不见了）。
-        t.verticalOverflow = VerticalWrapMode.Overflow;
         return t;
     }
 

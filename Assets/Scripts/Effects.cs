@@ -114,7 +114,7 @@ public static class Effects
     /// Unlit/Transparent 在团结引擎里没有 _Color，只做次级兜底。
     /// 注意：每次调用都新建实例，调用方用完直接丢弃即可（特效材质量小，无需缓存）。
     /// </summary>
-    public static Material LineMaterial(Color c)
+    internal static Material LineMaterial(Color c)
     {
         Shader sh = Shader.Find("Sprites/Default");
         if (sh == null) sh = Shader.Find("Unlit/Transparent");
@@ -217,27 +217,13 @@ public static class Effects
     static Texture2D _ringTex;
     static Material _ringMat;
 
-    /// <summary>程序生成圆环贴图（白色 + alpha），只建一次，供所有爆炸圈共用。</summary>
+    /// <summary>程序生成圆环贴图（白色 + alpha），只建一次，供所有爆炸圈共用。
+    /// ⚠️ 算法已收敛到 `UIUtil.RingTexture`（与准星的散布圈 / 换弹环共用同一份实现）。
+    ///    参数与历史值**逐字相同**：size 128 / inner 0.80 / outer 0.98 / feather 0.05（2026-09-22 合并，像素指纹已核对）。</summary>
     static Texture2D RingTexture()
     {
         if (_ringTex != null) return _ringTex;
-
-        const int size = 128;
-        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        tex.wrapMode = TextureWrapMode.Clamp;
-        float c = (size - 1) * 0.5f;
-        float outer = c * 0.98f;
-        float inner = c * 0.80f;
-        float feather = Mathf.Max(1f, c * 0.05f);
-        for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c));
-                float a = Mathf.Clamp01((outer - d) / feather) * Mathf.Clamp01((d - inner) / feather);
-                tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
-            }
-        tex.Apply();
-        _ringTex = tex;
+        _ringTex = UIUtil.RingTexture(128, 0.80f, 0.98f, 0.05f);
         return _ringTex;
     }
 

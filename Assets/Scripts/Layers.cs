@@ -44,9 +44,6 @@ public static class Layers
     /// <summary>射线遮挡物：地面 + 阻挡物（视线与弹道应该被它们打断）</summary>
     public static readonly LayerMask Blocker = ToMask(Obstacle, Ground);
 
-    /// <summary>战斗单位：玩家 + 敌人（子弹命中、爆炸范围伤害只关心这两层）</summary>
-    public static readonly LayerMask Combatants = ToMask(Player, Enemy);
-
     /// <summary>弹道（子弹射线）：墙/箱子/地面挡住它，玩家/敌人被它命中</summary>
     public static readonly LayerMask BulletMask = ToMask(Obstacle, Ground, Player, Enemy);
 
@@ -55,12 +52,6 @@ public static class Layers
 
     /// <summary>前方绕障：墙/箱子/地面 + 其它单位（**刻意保留"躲开同伴"的旧行为**，所以不是纯阻挡物）</summary>
     public static readonly LayerMask AvoidMask = ToMask(Obstacle, Ground, Player, Enemy);
-
-    /// <summary>地面（落点 / 贴地判定）</summary>
-    public static readonly LayerMask GroundMask = ToMask(Ground);
-
-    /// <summary>拾取物（E 键拾取扫描）</summary>
-    public static readonly LayerMask PickupMask = ToMask(Pickup);
 
     /// <summary>把多个层索引合成一个 LayerMask（自动忽略未定义的层）</summary>
     static int ToMask(params int[] layerIndices)

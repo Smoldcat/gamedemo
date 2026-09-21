@@ -99,10 +99,14 @@ public class Crosshair : MonoBehaviour
     {
         if (_playerHealth != null) _playerHealth.OnDamaged -= OnPlayerHit;
         if (InstanceUI == this) InstanceUI = null;
-        // 运行时创建的贴图不会随物体销毁：不释放会「每局 +1 组」
+        // 运行时生成的 Sprite / 贴图不会随物体销毁：不释放会「每局 +1 组」
         //（散布圈 128²≈64KB + 换弹环 64²≈16KB，RGBA32 未压缩）
-        if (_spreadTex != null) Destroy(_spreadTex);
-        if (_reloadTex != null) Destroy(_reloadTex);
+        // ⚠️ **Sprite 与它的 texture 要成对销毁**（`UIUtil.DestroySprite`）—— 原来只销毁了 texture，
+        //    Sprite 包装对象每次都漏（2026-09-22 审计发现，违反 §4 #25 自己的规则）。
+        if (_spreadRing != null) UIUtil.DestroySprite(_spreadRing.sprite);
+        else if (_spreadTex != null) Destroy(_spreadTex);
+        if (_reloadRing != null) UIUtil.DestroySprite(_reloadRing.sprite);
+        else if (_reloadTex != null) Destroy(_reloadTex);
     }
 
     /// 背包面板调用：切换"准星显示 / 隐藏"（**参数是"准星是否可见"，不是"是否要显示光标"**）
@@ -139,20 +143,10 @@ public class Crosshair : MonoBehaviour
     {
         // 独立 Overlay Canvas：准星永远在最上层。加 CanvasScaler 并与主 HUD 同参数，
         // 准星/圆环才会随分辨率一起缩放（否则高分屏上会明显偏小，与 HUD 比例不一致）
-        var canvasGo = new GameObject("CrosshairCanvas");
-        var canvas = canvasGo.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 100;
-
-        var scaler = canvasGo.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1280f, 720f);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
-        _canvas = canvas;
+        _canvas = UIUtil.NewOverlayCanvas("CrosshairCanvas", 100);
 
         var root = new GameObject("Crosshair");
-        root.transform.SetParent(canvasGo.transform, false);
+        root.transform.SetParent(_canvas.transform, false);
         _root = root.AddComponent<RectTransform>();
         // 锚点显式设在屏幕中心：鼠标坐标（左下原点）换算成「相对屏幕中心的偏移」，再除以缩放系数
         _root.anchorMin = new Vector2(0.5f, 0.5f);
@@ -212,7 +206,7 @@ public class Crosshair : MonoBehaviour
         ringGo.SetActive(false);
 
         // 统一放到 UI 层（与 HUD 一致；Overlay 下不影响渲染）
-        UIUtil.SetLayerRecursively(canvasGo, UIUtil.UILayer);
+        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     Image MakeBar(string name, Vector2 sizeDelta, Vector2 anchorPos)
@@ -227,26 +221,13 @@ public class Crosshair : MonoBehaviour
         return img;
     }
 
-    /// <summary>程序生成圆环贴图（换弹进度环 / 散布圈用）：innerRatio/outerRatio 为相对半径占比。
-    /// featherScale 控制边缘羽化（默认 0.06；细环需要更小的羽化，否则整圈alpha都会被削淡）</summary>
+    /// <summary>圆环 Sprite（换弹进度环 / 散布圈用）：innerRatio/outerRatio 为相对半径占比。
+    /// featherScale 控制边缘羽化（默认 0.06；细环需要更小的羽化，否则整圈 alpha 都会被削淡）。
+    /// ⚠️ 贴图算法收敛到 `UIUtil.RingTexture`（与爆炸圈共用同一份实现，2026-09-22 合并）。</summary>
     Sprite MakeRingSprite(int texSize, float innerRatio, float outerRatio, float featherScale = 0.06f)
     {
-        var tex = new Texture2D(texSize, texSize, TextureFormat.RGBA32, false);
-        tex.wrapMode = TextureWrapMode.Clamp;
-
-        float c = (texSize - 1) * 0.5f;
-        float outer = c * outerRatio;
-        float inner = c * innerRatio;
-        float feather = Mathf.Max(1f, c * featherScale);   // 边缘一点羽化，避免锯齿
-
-        for (int y = 0; y < texSize; y++)
-            for (int x = 0; x < texSize; x++)
-            {
-                float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c));
-                float a = Mathf.Clamp01((outer - d) / feather) * Mathf.Clamp01((d - inner) / feather);
-                tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
-            }
-        tex.Apply();
+        // ⚠️ 别在这里再写一遍圆环算法：全项目只有 `UIUtil.RingTexture` 那一份
+        var tex = UIUtil.RingTexture(texSize, innerRatio, outerRatio, featherScale);
         return Sprite.Create(tex, new Rect(0, 0, texSize, texSize), new Vector2(0.5f, 0.5f));
     }
 

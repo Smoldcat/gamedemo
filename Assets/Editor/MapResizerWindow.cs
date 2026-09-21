@@ -46,8 +46,9 @@ public class MapResizerWindow : EditorWindow
             "会改：Ground 的 XZ 缩放 + 四面 Wall_* 的位置与长度（保持相对比例）。\n" +
             "可选：把 Crate* 箱子的 XZ 位置按同样比例摊开、把 Ground 接到 WaveManager。\n" +
             "全程可 Ctrl+Z 撤销；改完记得保存场景（Ctrl+S）。\n\n" +
-            "⚠️ 本工具**不改**代码里写死的刷怪范围（敌人 ±16 / 血包 ±14 / 武器 ±13）——\n" +
-            "地图放大后敌人仍只会刷在中心，需要另行处理（见交接文档）。",
+            "⚠️ 本工具**只改场景几何**。刷怪范围自 2026-09-22 起**跟随地图半径**自动缩放\n" +
+            "（`SpawnPosition.RangeEnemy/RangeMedkit/RangeWeapon`，按半径的 0.85 / 0.75 / 0.65）——\n" +
+            "前提是把地面接到 `WaveManager.mapGround`（本窗口勾选即可），否则会退回内置默认半径 15。",
             MessageType.Info);
 
         EditorGUILayout.Space();

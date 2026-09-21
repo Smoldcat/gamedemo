@@ -30,6 +30,23 @@ public class WaveConfig : ScriptableObject
     /// <summary>按当前波次算出这一波要刷的敌人数</summary>
     public int EnemiesForWave(int wave) => Mathf.Min(baseEnemies + wave * enemiesPerWave, maxEnemies);
 
+    /// <summary>
+    /// 配置数值合法性兜底（仅编辑器生效：Inspector 改完立即夹回合法范围）。
+    /// 最危险的两个：`spawnInterval = 0` → 每帧尝试刷怪；`maxEnemies` 填 0/负数 → `EnemiesForWave` 恒取它、波次失去成长。
+    /// ⚠️ 只用 if 判断、不无条件赋值，避免把合法值也标成「已修改」而脏化资源（与 `WeaponData` / `EnemyConfig` 同一写法）。
+    /// ⚠️ **刻意不强制** `maxEnemies &gt;= baseEnemies` —— "全程固定人数"是个合法的玩法选择，这里只挡"会算崩的数值"。
+    /// </summary>
+    void OnValidate()
+    {
+        if (initialEnemies < 0) initialEnemies = 0;
+        if (baseEnemies < 0) baseEnemies = 0;
+        if (enemiesPerWave < 0) enemiesPerWave = 0;
+        if (maxEnemies < 1) maxEnemies = 1;
+        if (spawnInterval < 0.01f) spawnInterval = 0.01f;
+        if (clearingDelay < 0f) clearingDelay = 0f;
+        if (idleTimeout < 1f) idleTimeout = 1f;
+    }
+
     /// <summary>内置默认值（代码兜底，缺资源时使用）</summary>
     public static WaveConfig Default()
     {

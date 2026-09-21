@@ -88,7 +88,9 @@ public class GameAssets : ScriptableObject
     public Sprite backpackPanelSprite;
     [Tooltip("背包描边 / 格子边框（Sprite，九宫格）。用于库存格与丢弃按钮。留空用代码生成")]
     public Sprite backpackFrameSprite;
-    [Tooltip("快捷武器槽边框（Sprite，九宫格）。留空用代码生成。⚠️ 建议白色描边 + 透明（当前槽高亮色由代码上）")]
+    [Tooltip("快捷武器槽边框（Sprite，九宫格）。留空用代码生成。⚠️ 建议白色描边 + 透明（当前槽高亮色由代码上）。\n" +
+             "⚠️ 名字里是 backpack，但 **HUD 底部快捷栏也在用这一张**（两处共用）→ 换美术时改这一张，背包与快捷栏一起变；\n" +
+             "   将来若想给快捷栏单独一套框，需要新加一个字段（别直接改这张，会连带改掉背包）。")]
     public Sprite backpackSlotFrameSprite;
     [Tooltip("血包十字图标（Sprite）。留空用代码生成")]
     public Sprite backpackMedkitIconSprite;

@@ -110,7 +110,7 @@ public static class PickupBubbleBuilder
         var nameRt = MakeRect("Name", root, out _);
         var nameTxt = nameRt.gameObject.AddComponent<Text>();
         nameTxt.text = "武器名";
-        nameTxt.font = UISpriteToolUtil.PreviewFont();
+        UIUtil.ApplyFont(nameTxt, UISpriteToolUtil.PreviewFont());   // 与运行时同源 + 强制不截断
         nameTxt.fontSize = HUD.BubbleFontSize;
         nameTxt.color = HUD.BubbleTextColor;
         nameTxt.alignment = TextAnchor.MiddleLeft;
@@ -132,15 +132,13 @@ public static class PickupBubbleBuilder
         Stretch(keyTextRt, 0f);
         var keyTxt = keyTextRt.gameObject.AddComponent<Text>();
         keyTxt.text = "E";
-        keyTxt.font = UISpriteToolUtil.PreviewFont();
+        // 字体 + 强制不截断（⚠️ 不给 Overflow 的话，大行高字体会让"按键字母"整字不画）
+        UIUtil.ApplyFont(keyTxt, UISpriteToolUtil.PreviewFont());
         keyTxt.fontSize = HUD.BubbleFontSize - 2;
         keyTxt.color = HUD.BubbleKeyTextColor;
         keyTxt.alignment = TextAnchor.MiddleCenter;
         keyTxt.raycastTarget = false;
-        // ⚠️ 必须给 Overflow：Text 默认是 Truncate，而**中文/大行高字体（如思源黑体）的行高会超过圆标高度** →
-        //    一旦"行高 > 框高"，Truncate 会把整个字**直接不画**（表现为"字母不见了"，编辑器用内置字体时却正常）。
         keyTxt.horizontalOverflow = HorizontalWrapMode.Overflow;
-        keyTxt.verticalOverflow = VerticalWrapMode.Overflow;
 
         // ⚠️ 不用 `UIUtil.UILayer`：它是 internal，编辑器程序集访问不到 → 走共用工具取一次内置 UI 层
         UISpriteToolUtil.SetLayerRecursively(root.gameObject, UISpriteToolUtil.UILayerIndex());

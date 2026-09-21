@@ -500,7 +500,6 @@ public class WaveManager : MonoBehaviour
         faceGo.GetComponent<MeshRenderer>().sharedMaterial = Effects.Shared(cfg.faceColor);
 
         var head = headGo.AddComponent<EnemyHead>();
-        head.radius = r;
         return head;
     }
 

@@ -740,9 +740,6 @@ public class PlayerController : MonoBehaviour
         Head    // 指着敌人的头部（爆头）
     }
 
-    /// <summary>爆头判定圆半径（屏幕像素），供准星着色等外部只读</summary>
-    public float HeadshotRadiusPx => Screen.height * Mathf.Max(headshotRadiusRatio, 0f);
-
     /// <summary>
     /// **统一的「准星指着敌人哪个部位」判定 —— 唯一实现**。
     /// 开火爆头判定（`Fire`）和准星颜色（`Crosshair`）都调这里，所以"看到的颜色 = 打出的伤害"，永不脱节。

@@ -112,25 +112,16 @@ public class BackpackPanel : MonoBehaviour
         // ⚠️ 字体是 UIUtil 的**共用资源**，由 `UIUtil.ResetStatics` 统一释放，这里不要碰
         //（销毁共享字体会让整个工程所有 Legacy Text 一起失效，见 §4 #25）
 
-        // 运行时生成的 Sprite 与它的 Texture2D 是**两个独立对象**（Sprite.Create 不托管纹理），
-        // 只销毁 Sprite 会漏掉纹理，所以必须成对销毁。
-        DestroySprite(_sprPanel); _sprPanel = null;
-        DestroySprite(_sprFrame); _sprFrame = null;
-        DestroySprite(_sprSlotFrame); _sprSlotFrame = null;
-        DestroySprite(_sprCross); _sprCross = null;
-        DestroySprite(_sprRect); _sprRect = null;
+        // 运行时生成的 Sprite 与它的 Texture2D 是**两个独立对象**（Sprite.Create 不托管纹理）→ 必须成对销毁。
+        // 统一走 `UIUtil.DestroySprite`（全项目唯一的成对销毁实现；原来这里各写了一份，2026-09-22 收敛）。
+        UIUtil.DestroySprite(_sprPanel); _sprPanel = null;
+        UIUtil.DestroySprite(_sprFrame); _sprFrame = null;
+        UIUtil.DestroySprite(_sprSlotFrame); _sprSlotFrame = null;
+        UIUtil.DestroySprite(_sprCross); _sprCross = null;
+        UIUtil.DestroySprite(_sprRect); _sprRect = null;
 
-        foreach (var s in _iconCache.Values) DestroySprite(s);
+        foreach (var s in _iconCache.Values) UIUtil.DestroySprite(s);
         _iconCache.Clear();
-    }
-
-    /// <summary>销毁运行时生成的 Sprite 及其纹理（两者独立，必须成对销毁）</summary>
-    static void DestroySprite(Sprite s)
-    {
-        if (s == null) return;
-        var tex = s.texture;
-        Destroy(s);
-        if (tex != null) Destroy(tex);
     }
 
     void Awake()
@@ -290,17 +281,9 @@ public class BackpackPanel : MonoBehaviour
         var sprSlotFrame = SlotFrameSprite();
         var sprCross = MedkitSprite();
 
-        var canvasGo = new GameObject("BackpackCanvas");
-        var canvas = canvasGo.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 200;
-        canvasGo.AddComponent<GraphicRaycaster>();   // 背包可点击
-        var scaler = canvasGo.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1280f, 720f);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
-        _canvas = canvas;
+        _canvas = UIUtil.NewOverlayCanvas("BackpackCanvas", 200);
+        var canvasGo = _canvas.gameObject;
+        canvasGo.AddComponent<GraphicRaycaster>();   // 背包可点击（额外件：其余 3 块 UI 不需要）
 
         // 面板：**贴屏幕左侧、垂直居中**（参考图那样的"左侧竖排"布局）
         _root = new GameObject("Backpack");
@@ -848,7 +831,10 @@ public class BackpackPanel : MonoBehaviour
 
     public static Color PanelColor()      { var a = GameAssets.I; return a != null ? a.backpackPanelColor      : new Color(0.04f, 0.05f, 0.09f, 0.92f); }
     public static Color SlotColor()       { var a = GameAssets.I; return a != null ? a.backpackSlotColor       : new Color(0.32f, 0.36f, 0.44f, 0.9f); }
-    public static Color SlotActiveColor() { var a = GameAssets.I; return a != null ? a.backpackSlotActiveColor : new Color(0.35f, 0.85f, 0.42f, 0.95f); }
+    // ⚠️ 兜底色必须与 `GameAssets.backpackSlotActiveColor` 的**默认值**保持一致（两处是"同一份默认"的两个副本）。
+    //    2026-09-22 审计发现：`GameAssets` 那边已改成亮蓝，这里还是旧的绿色 → 一旦资源表缺失/加载失败，
+    //    高亮会"莫名变回绿色"（背包 + HUD 快捷栏一起错）。
+    public static Color SlotActiveColor() { var a = GameAssets.I; return a != null ? a.backpackSlotActiveColor : new Color(0.30f, 0.65f, 1f, 1f); }
     public static Color CellColor()       { var a = GameAssets.I; return a != null ? a.backpackCellColor       : new Color(0.16f, 0.18f, 0.26f, 0.92f); }
 
     /// <summary>血包图标颜色（库存格子里的红十字；与面板底部那枚血包图标同色）</summary>
@@ -992,14 +978,12 @@ public class BackpackPanel : MonoBehaviour
         var rt = go.AddComponent<RectTransform>();
         rt.sizeDelta = size;
         var t = go.AddComponent<Text>();
-        t.font = UIUtil.Font;
+        UIUtil.ApplyFont(t, UIUtil.Font);   // 字体 + 强制不截断（唯一实现，见 UIUtil 的注释）
         t.fontSize = fontSize;
         t.alignment = TextAnchor.MiddleCenter;
         t.color = color;
         t.text = content;
         t.raycastTarget = false;
-        // ⚠️ 不截断：Text 默认 Vertical Overflow = Truncate，换行高更大的字体后容易"整段不画"（同 HUD 的注释）
-        t.verticalOverflow = VerticalWrapMode.Overflow;
         return t;
     }
 

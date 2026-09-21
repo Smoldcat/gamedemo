@@ -8,7 +8,9 @@ using UnityEngine.UI;
 /// </summary>
 public class DamagePopup : MonoBehaviour
 {
-    [Tooltip("非空时到时回对象池（键名），否则销毁")]
+    [Tooltip("非空时到时回对象池（键名），否则销毁。\n" +
+             "⚠️ 走 `DamageText.Spawn` 创建的飘字，这个值**每次都会被代码覆盖**成池键；\n" +
+             "只有在你自己手动实例化 `DamagePopup`（不经过 DamageText）时它才生效。")]
     public string poolKey;
     [Tooltip("飘字总时长（秒）")]
     public float duration = 0.7f;

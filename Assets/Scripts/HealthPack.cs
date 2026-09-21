@@ -91,7 +91,7 @@ public class HealthPack : MonoBehaviour
                 var bp = pc.backpack;
                 if (bp != null && !bp.AddMedkit(1))   // 血包也是占格物品：背包满了就装不下
                 {
-                    HUD.Announce("背包已满", 1.2f, 28, new Color(1f, 0.62f, 0.4f));
+                    HUD.AnnounceBackpackFull();
                     return;   // 药箱留在原地（和武器一样，等玩家腾出格子）
                 }
                 Sfx.Heal();

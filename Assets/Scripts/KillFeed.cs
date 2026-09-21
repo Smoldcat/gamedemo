@@ -19,9 +19,7 @@ public static class KillFeed
 {
     const string PoolKey = "KillFeed";
 
-    /// <summary>参考分辨率：与项目其它 UI 的 CanvasScaler 一致。
-    /// 下面所有像素常量都是这个基准下的值，运行时由 CanvasScaler 按屏幕等比缩放。</summary>
-    static readonly Vector2 RefResolution = new Vector2(1280f, 720f);
+    // 参考分辨率统一用 `UIUtil.RefResolution`（全项目只有一份，2026-09-22 收敛）。
 
     // ⚠️ 下面这几个是**兜底默认值**：优先读 `GameAssets` 里同名参数（Inspector「击杀反馈 · 出现 / 消失动画」，
     //    2026-09-22 起可调）；资源表缺失或字段没填时才用这里的值。它们同时是那些 Inspector 字段的初值
@@ -39,7 +37,8 @@ public static class KillFeed
     const float RelayoutSpeed = 900f;  // 其余条目重新居中时的挪动速度（参考分辨率像素/秒）
 
     internal static readonly Color NormalIconColor = new Color(1f, 0.92f, 0.35f);    // 普通击杀：金黄
-    internal static readonly Color HeadshotIconColor = new Color(1f, 0.42f, 0.10f);  // 爆头击杀：橙红（与爆头飘字同色）
+    /// <summary>爆头击杀：橙红 —— **直接引用爆头飘字那个色**（唯一来源；原来这里是另写一份同值常量，2026-09-22 收敛）。</summary>
+    internal static Color HeadshotIconColor => DamageText.HeadshotColor;
     internal static readonly Color NameColor = new Color(0.96f, 0.96f, 0.96f);
 
     /// <summary>资源表（可能为 null：没放资源表时全部走本文件里的兜底常量）</summary>
@@ -107,8 +106,8 @@ public static class KillFeed
         _live.Clear();
         _canvas = null;
         _root = null;
-        DestroySprite(_fallbackNormal); _fallbackNormal = null;
-        DestroySprite(_fallbackHeadshot); _fallbackHeadshot = null;
+        UIUtil.DestroySprite(_fallbackNormal); _fallbackNormal = null;
+        UIUtil.DestroySprite(_fallbackHeadshot); _fallbackHeadshot = null;
     }
 
     // ---------- 布局 / 生命周期 ----------
@@ -120,16 +119,65 @@ public static class KillFeed
         var a = GameAssets.I;
         float spacing = Mathf.Max(a != null ? a.killFeedSpacing : 16f, 0f);
 
+        ClampToScreenWidth(spacing);
+
+        // ⚠️ **只按"还没在消失"的条目排版、并按它们居中**：正在淡出的那几条保持原位继续往右滑出即可
+        //（它们 OutDuration 内就回池了）。如果把淡出中的宽度也算进来再整组居中，会出现
+        // "条数已经被挤掉了、但它们占的宽度仍把**最新**的反馈整体推到屏幕外"
+        // ——2026-09-22 实测：16 条时仍占位的 11 条被推到 -856，而屏幕只有 ±640。
         float total = 0f;
-        for (int i = 0; i < _live.Count; i++) total += _live[i].Width;
-        total += spacing * Mathf.Max(0, _live.Count - 1);
+        int n = 0;
+        for (int i = 0; i < _live.Count; i++)
+            if (!_live[i].Leaving) { total += _live[i].Width; n++; }
+        total += spacing * Mathf.Max(0, n - 1);
 
         float x = -total * 0.5f;
         for (int i = 0; i < _live.Count; i++)
         {
             var it = _live[i];
+            if (it.Leaving) continue;   // 淡出中的不重排（保持原位滑出）
             it.TargetX = x + it.Width * 0.5f;
             x += it.Width + spacing;
+        }
+    }
+
+    /// <summary>
+    /// 条目**被销毁**时把它从存活表里摘掉（由 `KillFeedItem.OnDestroy` 调）。
+    /// ⚠️ 为什么必须有：条目只在 `Release`（由 `KillFeedItem.Update` 驱动）里注销，而**场景重载 / 退出 Play**
+    ///    会直接销毁对象、`Update` 不再跑 → `_live` 会留着已销毁条目，`Relayout` 又把这些"幽灵"算进总宽
+    ///    → 新反馈被推离屏幕中心，**且逐次累加、除重进 Play 外无法自愈**
+    ///    （2026-09-22 实测：重载后 `_live` 留 6 条死条目，新反馈 `TargetX` 从 0 变成 **-344**）。
+    ///    与 `EnemyAI.OnDestroy → All.Remove` 是同一套"注册配注销"约定。
+    /// ⚠️ 这里**不能**复用 `Release`：对象正在销毁，不能回池、也不该重排（场景卸载时纯属无用功）。
+    /// </summary>
+    internal static void Forget(KillFeedItem item) => _live.Remove(item);
+
+    /// <summary>
+    /// 兜底：整组宽度超过屏幕（参考分辨率宽 − 两侧边距）时，**把最旧的那几条提前送进消失阶段**，
+    /// 直到"还没在消失的条目"放得下为止。
+    /// ⚠️ 为什么这么做、而不是简单设个条数上限：用户当初明确选的是"**条数不限**"
+    ///    （`killFeedMaxCount` 默认 0），所以这里只在**物理上装不下**时才挤掉最旧的
+    ///    ——正常的"一波连杀 8 个"仍然会全部显示（2026-09-22 实测：14 条时整组 -804~+804，而屏幕只有 ±640）。
+    ///    `killFeedMaxCount` 那个显式上限仍然有效，两者互不冲突。
+    /// ⚠️ 判据只统计"**没在消失中**的条目"：已经在淡出的那几条马上就会回池；把它们算进来会导致
+    ///    一次连杀被一路挤光（本函数每次 `Show` / `Release` 都会被调用，**必须幂等收敛**）。
+    /// </summary>
+    static void ClampToScreenWidth(float spacing)
+    {
+        float maxW = UIUtil.RefResolution.x - 40f;   // 两侧各留 20px 边距（参考分辨率取自全项目唯一那份）
+        for (int guard = 0; guard < _live.Count; guard++)
+        {
+            float sum = 0f;
+            int n = 0;
+            for (int i = 0; i < _live.Count; i++)
+                if (!_live[i].Leaving) { sum += _live[i].Width; n++; }
+
+            if (n <= 1) return;                 // 只剩一条：再挤就没意义了（单条本身就超宽也只能让它去）
+            sum += spacing * (n - 1);
+            if (sum <= maxW) return;
+
+            for (int i = _live.Count - 1; i >= 0; i--)   // 列表末尾 = 最旧的一条
+                if (!_live[i].Leaving) { _live[i].BeginOut(); break; }
         }
     }
 
@@ -147,26 +195,18 @@ public static class KillFeed
     {
         if (_canvas != null) return;
 
-        var go = new GameObject("KillFeedCanvas");
-        _canvas = go.AddComponent<Canvas>();
-        _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        _canvas.sortingOrder = 150;   // HUD(0)/准星(100) 之上、背包(200)/飘字(300) 之下
-
-        var scaler = go.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = RefResolution;
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
+        // sortingOrder 150 = HUD(0)/准星(100) 之上、背包(200)/飘字(300) 之下
+        _canvas = UIUtil.NewOverlayCanvas("KillFeedCanvas", 150);
 
         var root = new GameObject("KillFeedRoot");
-        root.transform.SetParent(go.transform, false);
+        root.transform.SetParent(_canvas.transform, false);
         _root = root.AddComponent<RectTransform>();
         _root.anchorMin = _root.anchorMax = _root.pivot = new Vector2(0.5f, 0f);
         // ⚠️ 只在**建 Canvas 的那一次**读 → 运行中改 Inspector 的「距屏幕底部」不会即时生效（重进 Play 才生效）
         _root.anchoredPosition = new Vector2(0f, Asset != null ? Mathf.Max(Asset.killFeedBottomOffset, 0f) : BottomOffset);
         _root.sizeDelta = Vector2.zero;
 
-        UIUtil.SetLayerRecursively(go, UIUtil.UILayer);
+        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     static KillFeedItem CreateItem()
@@ -196,12 +236,11 @@ public static class KillFeed
         var nameRt = nameGo.AddComponent<RectTransform>();
         nameRt.anchorMin = nameRt.anchorMax = nameRt.pivot = new Vector2(0.5f, 0f);
         var name = nameGo.AddComponent<Text>();
-        name.font = UIUtil.Font;
+        UIUtil.ApplyFont(name, UIUtil.Font);   // 字体 + 强制不截断（唯一实现，见 UIUtil 的注释）
         name.alignment = TextAnchor.MiddleCenter;
         name.color = NameColor;
         name.raycastTarget = false;
         name.horizontalOverflow = HorizontalWrapMode.Overflow;
-        name.verticalOverflow = VerticalWrapMode.Overflow;
 
         var item = go.AddComponent<KillFeedItem>();
         item.Bind(icon, name, cg, iconRt, nameRt, rt);
@@ -268,14 +307,6 @@ public static class KillFeed
         return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
     }
 
-    /// <summary>销毁运行时生成的 Sprite 及其纹理（两者独立，必须成对销毁，见交接文档 §4 #25）</summary>
-    static void DestroySprite(Sprite s)
-    {
-        if (s == null) return;
-        var tex = s.texture;
-        Object.Destroy(s);
-        if (tex != null) Object.Destroy(tex);
-    }
 }
 
 /// <summary>
@@ -301,6 +332,10 @@ public class KillFeedItem : MonoBehaviour
 
     /// <summary>本条目的目标 x（由 `KillFeed` 的居中布局算出）</summary>
     public float TargetX { get => _targetX; set => _targetX = value; }
+
+    /// <summary>本条是否已进入「消失阶段」（`KillFeed.ClampToScreenWidth` 用它区分"还要占位的"与"马上就没了的"）。
+    /// 判据与 `Apply()` 里的 `outStart` 完全一致，别各写一份。</summary>
+    internal bool Leaving => _t >= Mathf.Max(_lifetime - KillFeed.OutDur, KillFeed.InDur);
 
     internal void Bind(Image icon, Text name, CanvasGroup cg, RectTransform iconRt, RectTransform nameRt, RectTransform rt)
     {
@@ -354,6 +389,10 @@ public class KillFeedItem : MonoBehaviour
         _t = 0f;
         if (_cg != null) _cg.alpha = 0f;
     }
+
+    /// <summary>被销毁（场景重载 / 退 Play / 被外部销毁）时把自己从 `KillFeed._live` 摘掉。
+    /// ⚠️ **别删这个**：少了它，"死后重开一局"会让击杀反馈永久偏左并逐次累积（详见 `KillFeed.Forget` 的注释）。</summary>
+    void OnDestroy() => KillFeed.Forget(this);
 
     void Update()
     {

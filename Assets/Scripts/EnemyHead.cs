@@ -14,9 +14,6 @@ using UnityEngine;
 /// </summary>
 public class EnemyHead : MonoBehaviour
 {
-    [Tooltip("头部半径（世界单位）。用于记录/调试；爆头判定用的是屏幕半径（与距离无关）")]
-    public float radius = 0.3f;
-
     /// <summary>头部中心的世界坐标（爆头判定锚点）</summary>
     public Vector3 WorldPosition => transform.position;
 }

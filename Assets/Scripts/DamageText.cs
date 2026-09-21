@@ -26,23 +26,17 @@ public static class DamageText
     static readonly Color EnemyColor = new Color(1f, 0.92f, 0.3f);
     static readonly Color PlayerColor = new Color(1f, 0.32f, 0.25f);
     static readonly Color HealColor = new Color(0.45f, 1f, 0.55f);
-    static readonly Color HeadshotColor = new Color(1f, 0.42f, 0.10f);   // 爆头：醒目橙红（与「打敌黄」「被打红」都区分得开）
+    /// <summary>爆头：醒目橙红（与「打敌黄」「被打红」都区分得开）。
+    /// ⚠️ `internal` 是刻意的：`KillFeed` 的爆头图标色**直接引用它** → 爆头配色全项目只有这一份（2026-09-22 收敛）。</summary>
+    internal static readonly Color HeadshotColor = new Color(1f, 0.42f, 0.10f);
 
     static void EnsureCanvas()
     {
         // 场景重载后旧 Canvas 被销毁（Unity 会把已销毁对象判为 null），这里自动重建
         if (_canvas == null)
         {
-            var go = new GameObject("DamageTextCanvas");
-            _canvas = go.AddComponent<Canvas>();
-            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 300;   // 高于 HUD/准星，飘字永远可见
-            go.layer = UIUtil.UILayer;    // 统一 UI 层（Overlay 下不影响渲染）
-            var scaler = go.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1280f, 720f);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            _canvas = UIUtil.NewOverlayCanvas("DamageTextCanvas", 300);   // 300 = 高于 HUD/准星，飘字永远可见
+            _canvas.gameObject.layer = UIUtil.UILayer;                   // 统一 UI 层（Overlay 下不影响渲染）
         }
     }
 
@@ -64,9 +58,8 @@ public static class DamageText
         }
         go.layer = UIUtil.UILayer;   // 统一 UI 层（Overlay 下不影响渲染）
 
-        // ⚠️ 不截断（含「资源总表里配的飘字 Prefab」这条路径）：见 CreateDefault 的注释
-        var safeTxt = go.GetComponentInChildren<Text>(true);
-        if (safeTxt != null) safeTxt.verticalOverflow = VerticalWrapMode.Overflow;
+        // ⚠️ 不截断（含「资源总表里配的飘字 Prefab」这条路径）：见 UIUtil.ApplyFont 的注释
+        UIUtil.ApplyFont(go.GetComponentInChildren<Text>(true), null);
 
         var popup = go.GetComponent<DamagePopup>();
         if (popup == null) popup = go.AddComponent<DamagePopup>();
@@ -97,8 +90,8 @@ public static class DamageText
         txt.font = UIUtil.Font;
         txt.alignment = TextAnchor.MiddleCenter;
         txt.raycastTarget = false;   // 纯显示，不挡任何点击
-        // ⚠️ 不截断：Truncate + 换字体后行高变大 → 大字号飘字（爆头 40）可能整段不显示（同 HUD 的注释）
-        txt.verticalOverflow = VerticalWrapMode.Overflow;
+        // ⚠️ 不截断：Truncate + 换字体后行高变大 → 大字号飘字（爆头 40）可能整段不显示（见 UIUtil.ApplyFont）
+        UIUtil.ApplyFont(txt, null);
         go.AddComponent<DamagePopup>();
         return go;
     }

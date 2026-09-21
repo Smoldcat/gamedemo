@@ -203,6 +203,12 @@ public class EnemyAI : MonoBehaviour
         if (to.sqrMagnitude > 0.001f)
         {
             var rot = Quaternion.LookRotation(to.normalized);
+            // ⚠️ 这里直接写 `transform.rotation`（不用 `Rigidbody.MoveRotation`）**目前是正确的**：
+            //    敌人的刚体**没有开插值**（2026-09-22 实测 interpolation=None）→ 不存在"物理系统接管 transform、
+            //    直接写会打断插值"的问题。（玩家当初就在这上面踩过，见 `PlayerController.UpdateAim` 的长注释。）
+            // ⚠️ 但**一旦给敌人开了插值**（想让 50Hz 的位移变平滑），下面三件事必须**一起**做，缺一不可：
+            //    ① 这一行换成 `_rb.MoveRotation(look)`；② `SpawnEnemy` 里约束从 `FreezeRotation`（全冻结）放开成
+            //    `FreezeRotationX | FreezeRotationZ`（否则转不动）；③ 确认刚体开了 `Interpolate`。
             transform.rotation = Quaternion.Slerp(transform.rotation, rot, 8f * Time.fixedDeltaTime);
         }
     }
