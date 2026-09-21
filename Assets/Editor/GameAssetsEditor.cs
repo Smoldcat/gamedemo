@@ -38,7 +38,7 @@ public class GameAssetsEditor : Editor
         ("killFeedOutDuration",  "消失时长(秒)",       "存活时间到后「向右滑出 + 淡出」用时。默认 0.3", null),
         ("killFeedSlideDistance","消失滑出距离(px)",   "消失时向右滑出的距离（参考分辨率 1280×720 下）。默认 40", null),
         ("killFeedRelayoutSpeed","重居中速度(px/秒)",  "其余条目因重新居中而挪动的速度。默认 900", null),
-        ("killFeedBottomOffset", "距屏幕底部(px)",     "整组距屏幕底部的距离。⚠️ 只在建 Canvas 时读一次，运行中改要重进 Play。默认 96", null),
+        ("killFeedBottomOffset", "距屏幕底部(px)",     "整组距屏幕底部的距离。⚠️ 只在建 Canvas 时读一次，运行中改要重进 Play。默认 150（原 96，2026-09-22 上移给快捷栏腾位）", null),
 
         ("backpackInventorySlots",  "库存格数",        "同类武器在同一格里叠加，所以等于「最多能装几种武器」。默认 20", "背包（留空 = 代码生成占位）"),
         ("backpackPanelSprite",     "面板底图",        "背包面板底图（Sprite，九宫格）。留空用代码生成的圆角面板。建议白色/浅色 + 透明", null),

@@ -19,6 +19,7 @@ public static class PickupBubbleBuilder
 {
     // 与 HUD 的默认值保持一致（改这里不影响运行时代码生成路径的默认值，只影响本工具生成的节点）
     const float Height = 38f, PadX = 16f, Gap = 8f, KeyD = 24f, RadiusPx = 12f;
+    const string SpriteDir = "Assets/Art/UI/PickupBubble";   // 气泡贴图单独成目录，别把 Assets/Art/UI 堆散
 
     [MenuItem("Tools/游戏/生成拾取气泡到场景")]
     static void Build()
@@ -58,9 +59,9 @@ public static class PickupBubbleBuilder
         if (old != null) Undo.DestroyObjectImmediate(old.gameObject);
 
         // ---------- 贴图资源（生成一次即可复用；失败就退回"运行时自动补图"） ----------
-        var bgSprite = EnsureSpriteAsset("BubbleBg.png", UIUtil.RoundedRectSprite(64, RadiusPx, 0f), new Vector4(RadiusPx, RadiusPx, RadiusPx, RadiusPx));
-        var edgeSprite = EnsureSpriteAsset("BubbleEdge.png", UIUtil.RoundedRectSprite(64, RadiusPx, 2f), new Vector4(RadiusPx, RadiusPx, RadiusPx, RadiusPx));
-        var keySprite = EnsureSpriteAsset("BubbleKey.png", UIUtil.CircleSprite(48), Vector4.zero);
+        var bgSprite = UISpriteToolUtil.EnsureSpriteAsset(SpriteDir, "BubbleBg.png", UIUtil.RoundedRectSprite(64, RadiusPx, 0f), new Vector4(RadiusPx, RadiusPx, RadiusPx, RadiusPx));
+        var edgeSprite = UISpriteToolUtil.EnsureSpriteAsset(SpriteDir, "BubbleEdge.png", UIUtil.RoundedRectSprite(64, RadiusPx, 2f), new Vector4(RadiusPx, RadiusPx, RadiusPx, RadiusPx));
+        var keySprite = UISpriteToolUtil.EnsureSpriteAsset(SpriteDir, "BubbleKey.png", UIUtil.CircleSprite(48), Vector4.zero);
 
         // ---------- 节点 ----------
         var root = MakeRect("PickupBubble", canvas.transform);
@@ -109,7 +110,7 @@ public static class PickupBubbleBuilder
         var nameRt = MakeRect("Name", root, out _);
         var nameTxt = nameRt.gameObject.AddComponent<Text>();
         nameTxt.text = "武器名";
-        nameTxt.font = PreviewFont();
+        nameTxt.font = UISpriteToolUtil.PreviewFont();
         nameTxt.fontSize = HUD.BubbleFontSize;
         nameTxt.color = HUD.BubbleTextColor;
         nameTxt.alignment = TextAnchor.MiddleLeft;
@@ -131,7 +132,7 @@ public static class PickupBubbleBuilder
         Stretch(keyTextRt, 0f);
         var keyTxt = keyTextRt.gameObject.AddComponent<Text>();
         keyTxt.text = "E";
-        keyTxt.font = PreviewFont();
+        keyTxt.font = UISpriteToolUtil.PreviewFont();
         keyTxt.fontSize = HUD.BubbleFontSize - 2;
         keyTxt.color = HUD.BubbleKeyTextColor;
         keyTxt.alignment = TextAnchor.MiddleCenter;
@@ -141,9 +142,8 @@ public static class PickupBubbleBuilder
         keyTxt.horizontalOverflow = HorizontalWrapMode.Overflow;
         keyTxt.verticalOverflow = VerticalWrapMode.Overflow;
 
-        // ⚠️ 不用 `UIUtil.UILayer`：它是 internal，编辑器程序集访问不到 → 这里自己取一次内置 UI 层
-        int uiLayer = LayerMask.NameToLayer("UI");
-        SetLayer(root.gameObject, uiLayer >= 0 ? uiLayer : 5);
+        // ⚠️ 不用 `UIUtil.UILayer`：它是 internal，编辑器程序集访问不到 → 走共用工具取一次内置 UI 层
+        UISpriteToolUtil.SetLayerRecursively(root.gameObject, UISpriteToolUtil.UILayerIndex());
 
         // ---------- 接线到 HUD ----------
         Assign(so, "pickupBubble", root);
@@ -198,72 +198,7 @@ public static class PickupBubbleBuilder
         rt.offsetMax = new Vector2(-inset, -inset);
     }
 
-    static void SetLayer(GameObject go, int layer)
-    {
-        go.layer = layer;
-        for (int i = 0; i < go.transform.childCount; i++) SetLayer(go.transform.GetChild(i).gameObject, layer);
-    }
-
-    /// <summary>编辑期预览字体：优先用「资源总表」里配的**界面字体**（`GameAssets.uiFont`）——
-    /// 于是编辑期看到的就和运行时**完全一致**（含中文）；没配才回落内置占位字体（无中文）。
-    /// ⚠️ 运行时 HUD 会把字体统一注入为 `UIUtil.Font`（同样优先读 GameAssets.uiFont），所以两者同源。</summary>
-    static Font PreviewFont()
-    {
-        var assets = GameAssets.I;
-        if (assets != null && assets.uiFont != null) return assets.uiFont;
-
-        var f = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        if (f == null) f = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        return f;
-    }
-
-    /// <summary>按需创建（多级）目录，例如 `Assets/Art/UI/PickupBubble`</summary>
-    static void EnsureFolder(string folder)
-    {
-        if (AssetDatabase.IsValidFolder(folder)) return;
-        string parent = System.IO.Path.GetDirectoryName(folder).Replace('\\', '/');
-        string leaf = System.IO.Path.GetFileName(folder);
-        if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(leaf)) return;
-        EnsureFolder(parent);
-        AssetDatabase.CreateFolder(parent, leaf);
-    }
-
-    /// <summary>
-    /// 把一个运行时生成的 Sprite 落成正式 PNG 资源（存在就复用），并设好「Sprite + 九宫格 border + 透明」。
-    /// 失败返回 null → 调用方退回"运行时由代码自动补图"，不会中断生成。
-    /// </summary>
-    static Sprite EnsureSpriteAsset(string fileName, Sprite runtime, Vector4 border)
-    {
-        const string dir = "Assets/Art/UI/PickupBubble";   // 气泡贴图单独成目录，别把 Assets/Art/UI 堆散
-        string path = dir + "/" + fileName;
-        try
-        {
-            if (!System.IO.File.Exists(path))
-            {
-                if (runtime == null || runtime.texture == null) return null;
-                EnsureFolder(dir);
-                System.IO.File.WriteAllBytes(path, runtime.texture.EncodeToPNG());
-                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-            }
-
-            var imp = AssetImporter.GetAtPath(path) as TextureImporter;
-            if (imp != null)
-            {
-                imp.textureType = TextureImporterType.Sprite;
-                imp.spriteImportMode = SpriteImportMode.Single;
-                imp.spriteBorder = border;          // 九宫格：拉伸时圆角不变形
-                imp.alphaIsTransparency = true;
-                imp.mipmapEnabled = false;
-                imp.SaveAndReimport();
-            }
-            else AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-
-            return AssetDatabase.LoadAssetAtPath<Sprite>(path);
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogWarning("[PickupBubbleBuilder] 生成贴图 " + fileName + " 失败：会退回\"运行时自动补图\"。" + e.Message);
-            return null;
-        }
-    }
+    // 「生成 PNG 资源 / 按需建目录 / 递归设层 / 编辑期预览字体」四个工具函数已于 2026-09-22
+    // 抽到共用工具 `Assets/Editor/UISpriteToolUtil.cs`（`HotbarBuilder` 也要用同一份，
+    // 避免两个 UI 预置工具各抄一份、改一处漏一处）。
 }

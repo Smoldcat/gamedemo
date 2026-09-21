@@ -117,10 +117,13 @@ public static class UIUtil
             float a = 0f;
             if (borderPx > 0f)
             {
+                // ⚠️ 内圈必须用**同一个 core 矩形**（`cx` / `cy`），只把半径缩到 `r - borderPx` —— 这样才是"外圈内缩 borderPx 的环"。
+                //    🐞 曾经这里把内圈的 clamp 边界也一起缩成 `ir` → 内圈反而**整个包住**外圈 → `outer && !inner` 永远为假
+                //       → **描边模式生成出来的图整张全透明**（2026-09-22 实测：borderPx>0 时 0/4096 个不透明像素）。
+                //       后果：所有"框 / 描边"图（背包快捷槽框、库存格底、整理按钮、拾取气泡外圈、HUD 快捷栏槽框）
+                //       一直不可见 —— 表现为"当前槽高亮怎么调都看不到"。
                 float ir = Mathf.Max(r - borderPx, 0.01f);
-                float ix = Mathf.Clamp(x, ir, size - 1f - ir);
-                float iy = Mathf.Clamp(y, ir, size - 1f - ir);
-                float idx = x - ix, idy = y - iy;
+                float idx = x - cx, idy = y - cy;
                 bool inner = idx * idx + idy * idy <= ir * ir;
                 if (outer && !inner) a = 1f;
             }

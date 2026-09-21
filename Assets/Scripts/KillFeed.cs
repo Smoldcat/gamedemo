@@ -26,7 +26,7 @@ public static class KillFeed
     // ⚠️ 下面这几个是**兜底默认值**：优先读 `GameAssets` 里同名参数（Inspector「击杀反馈 · 出现 / 消失动画」，
     //    2026-09-22 起可调）；资源表缺失或字段没填时才用这里的值。它们同时是那些 Inspector 字段的初值
     //    → **两处请成对修改**（改这里等于改新工程的默认值，不影响已存 asset）。
-    const float BottomOffset = 96f;    // 整组距屏幕底部（参考分辨率像素）
+    const float BottomOffset = 150f;   // 整组距屏幕底部（参考分辨率像素）——2026-09-22 由 96 上移，给底部中央的 HUD「快捷栏」腾位
     const float SlideDistance = 40f;   // 消失时向右滑出的横向距离（参考分辨率像素）——⚠️ 入场已改为原地缩放，不再横滑
     const float InDuration = 0.12f;    // 入场动画时长（秒）
 

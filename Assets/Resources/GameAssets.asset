@@ -38,7 +38,7 @@ MonoBehaviour:
   invDrop: {fileID: 0}
   killIcon: {fileID: 21300000, guid: 9dca9f2d1988c1943a497c0602c355ba, type: 3}
   killHeadshotIcon: {fileID: 21300000, guid: f3a9a735343ebab46a8291593eee029e, type: 3}
-  killFeedDuration: 5
+  killFeedDuration: 4
   killFeedIconSize: 64
   killFeedSpacing: 16
   killFeedNameFontSize: 20
@@ -51,6 +51,14 @@ MonoBehaviour:
   backpackMedkitIconSprite: {fileID: 0}
   backpackPanelColor: {r: 0.04, g: 0.05, b: 0.09, a: 0.92}
   backpackSlotColor: {r: 0.32, g: 0.36, b: 0.44, a: 0.9}
-  backpackSlotActiveColor: {r: 0.35, g: 0.85, b: 0.42, a: 0.95}
+  backpackSlotActiveColor: {r: 0.3, g: 0.65, b: 1, a: 1}
   backpackCellColor: {r: 0.16, g: 0.18, b: 0.26, a: 0.92}
   backpackUIPrefab: {fileID: 784606876045027492, guid: dd7fc9242dc7c584db401ea2736daa05, type: 3}
+  uiFont: {fileID: 12800000, guid: 40e2a9bc6b915424182f97fbe44ac4ec, type: 3}
+  killFeedInScale: 3
+  killFeedInAlpha: 0.5
+  killFeedInDuration: 0.15
+  killFeedOutDuration: 0.3
+  killFeedSlideDistance: 40
+  killFeedRelayoutSpeed: 900
+  killFeedBottomOffset: 96

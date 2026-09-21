@@ -4,12 +4,13 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// HUD：血条、弹药、波次、击杀、**拾取气泡**、中央公告、受伤红晕、低血量警示、死亡结算。
+/// HUD：血条、弹药、波次、击杀、**快捷栏**、**拾取气泡**、中央公告、受伤红晕、低血量警示、死亡结算。
 /// 需要在 Inspector 里拖入下面这些 UI 引用（漏拖的项会跳过，不会报错）：
 ///   hpText / hpFill / weaponText / modeText —— 左下角血条与武器信息
 ///   waveText / killText                     —— 顶部中央波次与击杀数
 ///   announceText                            —— 屏幕中央公告
 ///   deathPanel / deathText / deathStat / restartBtn —— 死亡结算面板
+///   hotbar                                  —— 底部中央快捷栏（1/2/3 = 武器槽、Q = 血包；留空会自动生成）
 /// </summary>
 public class HUD : MonoBehaviour
 {
@@ -117,6 +118,25 @@ public class HUD : MonoBehaviour
     [Tooltip("气泡相对物体原点的**世界高度偏移**（往上抬一点，避免压住物体本身）")]
     public float pickupBubbleWorldHeight = 0.5f;
 
+    [Header("快捷栏（留空 = 运行时自动生成；可用菜单 Tools/游戏/生成快捷栏到场景 一键预置）")]
+    [Tooltip("快捷栏根节点（场景预置，挂在 HUD 的 Canvas 下）。\n" +
+             "配了就用它 —— 布局 / 尺寸 / 图片 / 字号以**节点上的组件**为准（编辑期就能拖），\n" +
+             "代码只写「图标 + 槽框状态色 + 血包数量」。\n" +
+             "⚠️ 颜色由代码统一驱动（读 GameAssets 的「背包」那组颜色 + 拾取气泡的按键圆标配色）→ 节点上调色无效。\n" +
+             "留空 → 运行时用代码生成一个（与预置版同构）。\n" +
+             "⚠️ 节点名有约定：Slot1..Slot4，每格下面 Bg / Frame / Icon / KeyBg / KeyText，\n" +
+             "   最后一格（Q = 血包）额外要 CountBg / CountText。")]
+    public RectTransform hotbar;
+
+    // ---- 快捷栏（1/2/3 = 武器快捷槽，Q = 血包）----
+    RectTransform _hotbarRect;
+    readonly Image[] _hbFrame = new Image[HotbarSlotCount];
+    readonly Image[] _hbIcon = new Image[HotbarSlotCount];
+    readonly Image[] _hbBg = new Image[HotbarSlotCount];   // 槽底填充（颜色 = 背包的「库存格底色」，可选节点）
+    Image _hbCountBg;              // 血包数量圆标（只挂在最后一格）
+    Text _hbCountText;
+    int _hbSig = int.MinValue;     // 脏值签名：当前槽 + 血包数 + 前 3 格武器 → 变了才重刷（避免每帧重建 Canvas）
+
     // ---- 血条平滑显示（文字仍显示精确血量）----
     Vector2 _hpFullSize;
     float _hpShown = 1f;
@@ -124,7 +144,7 @@ public class HUD : MonoBehaviour
     // ---- 脏值检查缓存：数值没变就不重建字符串（避免每帧产生 GC 垃圾）----
     int _sHp = int.MinValue, _sMaxHp = int.MinValue;
     bool _sHasWeapon, _sReloading;
-    int _sMag = int.MinValue, _sMagSize = int.MinValue, _sMedkits = int.MinValue;
+    int _sMag = int.MinValue, _sMagSize = int.MinValue;
     string _sWeaponName;
     bool _sRunning = true;
     int _sKills = int.MinValue, _sWave = int.MinValue, _sAlive = int.MinValue, _sClearTicks = int.MinValue;
@@ -226,6 +246,7 @@ public class HUD : MonoBehaviour
         BuildDamageVignette();   // 全屏红晕 Image（UGUI）
         BuildDamageArrow();      // 受伤方向指示箭头（默认隐藏）
         BuildPickupBubble();     // 拾取气泡（靠近可拾取物时显示，默认隐藏）
+        BuildHotbar();           // 快捷栏（1/2/3 = 武器槽、Q = 血包；场景预置优先，留空则代码生成）
 
         // 纯显示元素不需要接收点击：关掉 raycastTarget，每帧 UI 射线检测只剩重启按钮
         DisableDisplayRaycasts();
@@ -312,16 +333,20 @@ public class HUD : MonoBehaviour
     void SetAllTextFont(Font f)
     {
         foreach (var t in new Text[] { hpText, weaponText, modeText, waveText, killText, announceText, deathStat, restartBtnLabel })
-        {
-            if (t == null) continue;
-            if (f != null) t.font = f;
-            // ⚠️ **强制不截断**：`Text` 默认 `Vertical Overflow = Truncate`，而"行高"是随**字体**变的
-            //    （换字体后行高会变大，如思源黑体明显大于内置 Arial）→ 一旦「行高 > 文本框高度」，
-            //    Truncate 会把**整段文字一个字都不画**（症状：部分 HUD 文字整条消失、另一些正常 ——
-            //    场景里那些文本框的高度是按旧字体摆的，正好卡在临界）。
-            //    HUD 上这些都是"要么完整显示"的标签，所以统一设成 Overflow。
-            t.verticalOverflow = VerticalWrapMode.Overflow;
-        }
+            ApplyFont(t, f);
+    }
+
+    /// <summary>给一个 Text 注入统一字体，并**强制不截断**（快捷栏 / 拾取气泡的预置节点也走这里）。
+    /// ⚠️ `Text` 默认 `Vertical Overflow = Truncate`，而"行高"是随**字体**变的
+    ///    （换字体后行高会变大，如思源黑体明显大于内置 Arial）→ 一旦「行高 > 文本框高度」，
+    ///    Truncate 会把**整段文字一个字都不画**（症状：部分 HUD 文字整条消失、另一些正常 ——
+    ///    场景里那些文本框的高度是按旧字体摆的，正好卡在临界）。
+    ///    HUD 上这些都是"要么完整显示"的标签，所以统一设成 Overflow。</summary>
+    static void ApplyFont(Text t, Font f)
+    {
+        if (t == null) return;
+        if (f != null) t.font = f;
+        t.verticalOverflow = VerticalWrapMode.Overflow;
     }
 
     /// <summary>死亡后点「重新开始」：重载当前场景，开始新一局</summary>
@@ -363,6 +388,9 @@ public class HUD : MonoBehaviour
         // 拾取气泡：跟随"最近可拾取物"的屏幕位置（调用方每帧 ShowPickupBubble 续期）
         UpdatePickupBubble();
 
+        // 快捷栏：图标 / 当前槽高亮 / 血包数量（内部有脏值检查，不变就早退）
+        UpdateHotbar(pc);
+
         // 血条：显示值平滑追赶真实血量（避免瞬跳），文字仍显示精确值
         _hpShown = Mathf.MoveTowards(_hpShown, ratio, Time.deltaTime * 2.5f);
         if (hpFill != null)
@@ -384,15 +412,16 @@ public class HUD : MonoBehaviour
             bool hasWeapon = pc.weapon != null;
             int mag = pc.magAmmo;
             int magSize = hasWeapon ? pc.weapon.magSize : 0;
-            int med = pc.backpack != null ? pc.backpack.Medkits : 0;
+            // ⚠️ 「槽N」与「血包×N」已于 2026-09-22 **移出**这行：底部快捷栏（1/2/3/Q）已经在表达这两项，
+            //    同屏重复反而更难扫读。想恢复就把它们加回下面的字符串。
             if (hasWeapon != _sHasWeapon || pc.reloading != _sReloading || mag != _sMag || magSize != _sMagSize
-                || (hasWeapon && !string.Equals(pc.weapon.weaponName, _sWeaponName)) || med != _sMedkits)
+                || (hasWeapon && !string.Equals(pc.weapon.weaponName, _sWeaponName)))
             {
                 _sHasWeapon = hasWeapon; _sReloading = pc.reloading; _sMag = mag; _sMagSize = magSize;
-                _sWeaponName = hasWeapon ? pc.weapon.weaponName : null; _sMedkits = med;
+                _sWeaponName = hasWeapon ? pc.weapon.weaponName : null;
                 weaponText.text = !hasWeapon ? "空手  ——  到地上捡一把武器吧"
-                    : (pc.reloading ? $"槽{(pc.backpack != null ? pc.backpack.currentSlot + 1 : 1)} {pc.weapon.weaponName}  换弹中...  血包×{med}"
-                                    : $"槽{(pc.backpack != null ? pc.backpack.currentSlot + 1 : 1)} {pc.weapon.weaponName}  {mag}/{magSize} ∞  血包×{med}");
+                    : (pc.reloading ? $"{pc.weapon.weaponName}  换弹中..."
+                                    : $"{pc.weapon.weaponName}  {mag}/{magSize} ∞");
             }
             weaponText.color = hasWeapon ? pc.weapon.pickupColor : new Color(0.7f, 0.7f, 0.7f);
         }
@@ -521,6 +550,306 @@ public class HUD : MonoBehaviour
         rt.pivot = new Vector2(0.5f, 0.5f);
         rt.sizeDelta = new Vector2(26f, 26f);
         _damageArrow.enabled = false;   // 只在受伤后的淡出期间显示
+    }
+
+    // ==================== 快捷栏（1/2/3 = 武器快捷槽，Q = 血包） ====================
+
+    // **双轨**（与「拾取气泡」同思路）：
+    //   ① **场景预置**（推荐）：HUD 上 `hotbar` 拖了、且节点结构自检通过 → 就用它。
+    //      布局 / 尺寸 / 图片 / 字号以**节点上的组件**为准（**没进 Play 也能在编辑器里拖**），
+    //      代码只写「图标 + 槽框状态色 + 血包数量」。一键生成：菜单 `Tools/游戏/生成快捷栏到场景`。
+    //   ② **代码生成（兜底）**：`hotbar` 留空 / 结构不完整 → 运行时自建（与预置版同构），游戏始终能跑。
+    //
+    // ⚠️ **颜色归代码、不跟节点**：槽底 = 背包的「库存格底色」、槽框 = 背包的「槽边框色 / 当前槽高亮色」、
+    //    键位与数量 = 拾取气泡那对「按键圆标」配色 —— 全部读**同一份来源**，
+    //    所以快捷栏和背包 / 拾取气泡**永远一致**。→ 想改颜色请改 `GameAssets`（Inspector 中文「背包」组），
+    //    **别在快捷栏节点上调色**（会被覆盖）。
+    // ⚠️ 图标与槽框 Sprite 复用 `BackpackPanel` 那一套（同一份实现，见那边的 internal 注释）；
+    //    它们的生命周期归 `BackpackPanel.ResetStatics` → **HUD 不要 Destroy 它们**（§4 #25）。
+    // ⚠️ 槽位顺序固定：前 3 格 ↔ `PlayerBackpack.slots[0..2]`（键盘 1/2/3），最后 1 格 = 血包（键盘 Q）。
+
+    // 下面这些像素值**只给「代码生成」兜底路径**用（场景预置时以节点为准）。
+    // ⚠️ `HotbarBuilder`（编辑器程序集）读不到 private const，那边有一份同名副本 → 改这里记得一起改。
+    const int   HotbarSlotCount  = 4;
+    const float HotbarSlotSize   = 56f;   // 槽框边长
+    const float HotbarGap        = 8f;    // 槽间距
+    const float HotbarBottom     = 14f;   // 整组距屏幕底部
+    const float HotbarKeyGap     = 4f;    // 槽框与下方「键位小矩形」的间距
+    const float HotbarKeyW       = 22f;   // 键位小圆角矩形（宽 × 高）
+    const float HotbarKeyH       = 18f;
+    const float HotbarIconSize   = 40f;   // 槽内图标边长
+    const float HotbarBadgeSize  = 15f;   // 血包数量圆标直径（2026-09-22 由 20 调小，用户要求）
+    const int   HotbarKeyFont    = 12;
+    const int   HotbarCountFont  = 10;    // 圆标变小了 → 字号跟着收
+
+    /// <summary>取第 i 个快捷槽里的武器（越界 / 空槽一律返回 null）</summary>
+    static WeaponData SlotWeapon(PlayerBackpack bp, int i)
+        => (bp != null && bp.slots != null && i >= 0 && i < bp.slots.Length && bp.slots[i] != null)
+            ? bp.slots[i].weapon : null;
+
+    /// <summary>快捷栏初始化（双轨，见上面那段长注释）</summary>
+    void BuildHotbar()
+    {
+        if (hotbar != null)
+        {
+            _hotbarRect = hotbar;
+            if (BindHotbarNodes())
+            {
+                // 字体统一注入（含中文）+ 强制不截断（与拾取气泡预置路径同一处理）
+                Font f = fallbackFont != null ? fallbackFont : UIUtil.Font;
+                for (int i = 0; i < HotbarSlotCount; i++)
+                    ApplyFont(FindTextDeep(_hotbarRect.Find("Slot" + (i + 1)), "KeyText"), f);
+                ApplyFont(_hbCountText, f);
+
+                // "运行时生成的图存不进场景" → 只给**还空着**的 Image 补占位图（节点上配了真图就不动它）
+                for (int i = 0; i < HotbarSlotCount; i++)
+                    FillSprite(_hbFrame[i], BackpackPanel.SlotFrameSprite(), true);
+
+                _hbSig = int.MinValue;   // 强制第一帧刷一次状态色 / 图标
+                return;
+            }
+
+            Debug.LogWarning("[HUD] 快捷栏节点结构不完整（需要 Slot1..Slot4，每格下含 Bg / Frame / Icon / KeyBg / KeyText；" +
+                             "最后一格还要 CountBg / CountText）→ 已退回代码生成。可重跑菜单 Tools/游戏/生成快捷栏到场景。");
+        }
+
+        BuildHotbarByCode();
+    }
+
+    /// <summary>按「节点名约定」绑定场景预置的快捷栏；任一项缺失 → false（调用方退回代码生成）</summary>
+    bool BindHotbarNodes()
+    {
+        for (int i = 0; i < HotbarSlotCount; i++)
+        {
+            var slot = _hotbarRect.Find("Slot" + (i + 1));
+            _hbFrame[i] = FindImage(slot, "Frame");
+            _hbIcon[i] = FindImage(slot, "Icon");
+            _hbBg[i] = FindImage(slot, "Bg");          // 可选：没有就不管（只有 Frame / Icon 是必需的）
+            if (slot == null || _hbFrame[i] == null || _hbIcon[i] == null) return false;
+        }
+        var q = _hotbarRect.Find("Slot" + HotbarSlotCount);
+        _hbCountBg = FindImage(q, "CountBg");           // CountBg 是槽的直接子节点
+        // ⚠️ `CountText` 挂在 **`CountBg` 底下** → 必须**递归**找。用直接查找会拿到 null
+        //    → 血包数量**永远停在生成工具写的占位值**（踩过：一直显示 2）。
+        _hbCountText = FindTextDeep(q, "CountText");
+        return true;
+    }
+
+    /// <summary>代码生成整套快捷栏（兜底路径；结构与场景预置版逐位一致）</summary>
+    void BuildHotbarByCode()
+    {
+        if (_canvas == null) return;
+
+        float w = HotbarSlotCount * HotbarSlotSize + (HotbarSlotCount - 1) * HotbarGap;
+        float h = HotbarSlotSize + HotbarKeyGap + HotbarKeyH;
+
+        var rootGo = new GameObject("Hotbar");
+        rootGo.transform.SetParent(_canvas.transform, false);
+        _hotbarRect = rootGo.AddComponent<RectTransform>();
+        _hotbarRect.anchorMin = _hotbarRect.anchorMax = new Vector2(0.5f, 0f);   // 父节点（Canvas）底部中心
+        _hotbarRect.pivot = new Vector2(0.5f, 0f);                              // 贴底：整组从底部往上长
+        _hotbarRect.sizeDelta = new Vector2(w, h);
+        _hotbarRect.anchoredPosition = new Vector2(0f, HotbarBottom);
+
+        for (int i = 0; i < HotbarSlotCount; i++)
+        {
+            bool isLast = i == HotbarSlotCount - 1;
+            float x = -w * 0.5f + HotbarSlotSize * 0.5f + i * (HotbarSlotSize + HotbarGap);
+            var slot = NewChildRect(_hotbarRect, "Slot" + (i + 1), new Vector2(HotbarSlotSize, h), new Vector2(x, h * 0.5f));
+            BuildHotbarSlotByCode(slot, i, isLast ? "Q" : (i + 1).ToString(), isLast);
+        }
+    }
+
+    /// <summary>代码生成一个快捷槽：槽底 + 描边 + 图标 + 下方键位小圆角矩形（最后一格再加血包数量圆标）</summary>
+    void BuildHotbarSlotByCode(RectTransform slot, int index, string keyLabel, bool withBadge)
+    {
+        float h = slot.sizeDelta.y;
+        float boxY = h - HotbarSlotSize * 0.5f;   // 槽框中心（贴顶，键位在下面）
+
+        // 槽底（半透明深色）→ 复用背包的「库存格底色」
+        var bg = NewHotbarImage(slot, "Bg", new Vector2(HotbarSlotSize, HotbarSlotSize), new Vector2(0f, boxY), BackpackPanel.CellColor());
+        bg.sprite = UIUtil.RoundedRectSprite(64, 14f, 0f);
+        bg.type = Image.Type.Sliced;
+
+        // 槽框描边（状态色在 UpdateHotbar 里写：当前槽高亮 / 普通）
+        var frame = NewHotbarImage(slot, "Frame", new Vector2(HotbarSlotSize, HotbarSlotSize), new Vector2(0f, boxY), BackpackPanel.SlotColor());
+        frame.sprite = BackpackPanel.SlotFrameSprite();
+        frame.type = Image.Type.Sliced;
+
+        // 图标（sprite 由 UpdateHotbar 填；空槽时整体隐藏，只留框 + 键位）
+        var icon = NewHotbarImage(slot, "Icon", new Vector2(HotbarIconSize, HotbarIconSize), new Vector2(0f, boxY), Color.white);
+        icon.preserveAspect = true;
+        icon.gameObject.SetActive(false);
+
+        // 键位小圆角矩形（白底 + 深字，与拾取气泡的「按键圆标」同一对配色）
+        var keyBg = NewHotbarImage(slot, "KeyBg", new Vector2(HotbarKeyW, HotbarKeyH), new Vector2(0f, HotbarKeyH * 0.5f), BubbleKeyBgColor);
+        keyBg.sprite = UIUtil.RoundedRectSprite(64, 10f, 0f);
+        keyBg.type = Image.Type.Sliced;
+        // ⚠️ 文字必须**建成键位小矩形的子节点**再铺满 —— `StretchToParent` 只改锚点、**不重挂父子**；
+        //    建成 Slot 的子节点就会铺满整格 → 数字跑到图标正中间（踩过）
+        var keyText = NewHotbarText(keyBg.rectTransform, "KeyText", keyLabel, HotbarKeyFont, BubbleKeyTextColor);
+        StretchToParent(keyText.rectTransform, keyBg.rectTransform);
+
+        _hbFrame[index] = frame;
+        _hbIcon[index] = icon;
+        _hbBg[index] = bg;
+
+        if (!withBadge) return;
+
+        // 血包数量圆标（只有最后一格有；贴在槽框的右下角内侧）
+        float half = HotbarBadgeSize * 0.5f;
+        var badge = NewHotbarImage(slot, "CountBg", new Vector2(HotbarBadgeSize, HotbarBadgeSize),
+            new Vector2(HotbarSlotSize * 0.5f - half, boxY - HotbarSlotSize * 0.5f + half), BubbleKeyBgColor);
+        badge.sprite = UIUtil.CircleSprite(48);
+        var badgeText = NewHotbarText(badge.rectTransform, "CountText", "", HotbarCountFont, BubbleKeyTextColor);
+        StretchToParent(badgeText.rectTransform, badge.rectTransform);
+        badge.gameObject.SetActive(false);
+        badgeText.gameObject.SetActive(false);
+        _hbCountBg = badge;
+        _hbCountText = badgeText;
+    }
+
+    /// <summary>
+    /// 刷新快捷栏：图标（武器图标 / 血包十字）、当前槽高亮、血包数量。
+    /// **脏值检查**：当前槽 + 血包数 + 前 3 格武器都没变就直接返回 —— 每帧写 `Image.sprite` 会让 Canvas 重建。
+    /// 空槽表现（用户 2026-09-22 定）：**槽框与键位留着、里面空**（固定 4 格、位置永不变动）。
+    /// </summary>
+    void UpdateHotbar(PlayerController pc)
+    {
+        if (_hotbarRect == null) return;
+
+        var bp = pc.backpack;
+        int cur = bp != null ? bp.currentSlot : -1;
+        int med = bp != null ? bp.Medkits : 0;
+
+        unchecked
+        {
+            int sig = (cur + 2) * 397 ^ med;
+            for (int i = 0; i < HotbarSlotCount - 1; i++)
+            {
+                var w0 = SlotWeapon(bp, i);
+                sig = sig * 31 + (w0 != null ? w0.GetInstanceID() : 0);
+            }
+            if (sig == _hbSig) return;
+            _hbSig = sig;
+        }
+
+        for (int i = 0; i < HotbarSlotCount; i++)
+        {
+            bool isMedkit = i == HotbarSlotCount - 1;
+            var w = isMedkit ? null : SlotWeapon(bp, i);
+
+            // 图标：没武器 / 没血包 → 干脆不显示（槽框 + 键位留着，一眼看出"这格是空的"）
+            Sprite spr = isMedkit
+                ? (med > 0 ? BackpackPanel.MedkitSprite() : null)
+                : (w != null ? BackpackPanel.WeaponIconSprite(w) : null);
+            if (_hbIcon[i] != null)
+            {
+                _hbIcon[i].sprite = spr;
+                if (spr != null) _hbIcon[i].color = isMedkit ? BackpackPanel.MedkitIconColor : w.pickupColor;
+                if (_hbIcon[i].gameObject.activeSelf != (spr != null)) _hbIcon[i].gameObject.SetActive(spr != null);
+            }
+
+            // 槽底：与背包的「库存格底色」同源（改 GameAssets 两边一起变）
+            if (_hbBg[i] != null) _hbBg[i].color = BackpackPanel.CellColor();
+
+            // 槽框：当前手上那一把高亮（颜色与背包同一套 → 改 GameAssets 两边一起变）
+            if (_hbFrame[i] != null)
+                _hbFrame[i].color = (!isMedkit && i == cur) ? BackpackPanel.SlotActiveColor() : BackpackPanel.SlotColor();
+
+            if (!isMedkit) continue;
+
+            bool show = med > 0;
+            if (_hbCountText != null)
+            {
+                _hbCountText.text = med.ToString();
+                if (_hbCountText.gameObject.activeSelf != show) _hbCountText.gameObject.SetActive(show);
+            }
+            if (_hbCountBg != null && _hbCountBg.gameObject.activeSelf != show) _hbCountBg.gameObject.SetActive(show);
+        }
+    }
+
+    // ---- 快捷栏的节点小工具（只给"代码生成"兜底路径用）----
+
+    static RectTransform FindChildRect(Transform parent, string name)
+        => parent != null ? parent.Find(name) as RectTransform : null;
+    static Image FindImage(Transform parent, string name)
+    {
+        var rt = FindChildRect(parent, name);
+        return rt != null ? rt.GetComponent<Image>() : null;
+    }
+    static Text FindText(Transform parent, string name)
+    {
+        var rt = FindChildRect(parent, name);
+        return rt != null ? rt.GetComponent<Text>() : null;
+    }
+
+    /// <summary>在子树里**递归**按名字找。
+    /// ⚠️ `Transform.Find` 只找**直接子节点**，而 `KeyText` / `CountText` 挂在 `KeyBg` / `CountBg` **底下**
+    /// （2026-09-22 改的层级）→ 用直接查找会拿到 null（踩过：血包数量永远停在生成工具写的占位值 `2`）。</summary>
+    static Transform FindDeep(Transform root, string name)
+    {
+        if (root == null) return null;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            var c = root.GetChild(i);
+            if (c.name == name) return c;
+            var hit = FindDeep(c, name);
+            if (hit != null) return hit;
+        }
+        return null;
+    }
+
+    static Text FindTextDeep(Transform root, string name)
+    {
+        var t = FindDeep(root, name);
+        return t != null ? t.GetComponent<Text>() : null;
+    }
+
+    /// <summary>建一个子节点：锚在父节点**底部中心**、pivot 居中、按 anchoredPosition 摆放</summary>
+    static RectTransform NewChildRect(Transform parent, string name, Vector2 size, Vector2 pos)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = size;
+        rt.anchoredPosition = pos;
+        return rt;
+    }
+
+    static Image NewHotbarImage(Transform parent, string name, Vector2 size, Vector2 pos, Color color)
+    {
+        var img = NewChildRect(parent, name, size, pos).gameObject.AddComponent<Image>();
+        img.color = color;
+        img.raycastTarget = false;   // 纯显示：快捷栏明确不做点击（键盘 1/2/3/Q 才是入口）
+        return img;
+    }
+
+    Text NewHotbarText(Transform parent, string name, string label, int size, Color color)
+    {
+        var t = NewChildRect(parent, name, new Vector2(HotbarKeyW, HotbarKeyH), Vector2.zero).gameObject.AddComponent<Text>();
+        t.font = fallbackFont != null ? fallbackFont : UIUtil.Font;
+        t.text = label;
+        t.fontSize = size;
+        t.alignment = TextAnchor.MiddleCenter;
+        t.color = color;
+        t.raycastTarget = false;
+        t.horizontalOverflow = HorizontalWrapMode.Overflow;
+        t.verticalOverflow = VerticalWrapMode.Overflow;   // ⚠️ 必须 Overflow，否则换字体后可能整字不画（见 ApplyFont）
+        return t;
+    }
+
+    /// <summary>让子节点铺满父节点 —— ⚠️ `child` 必须**已经是** `parent` 的子节点（本函数只调锚点、**不重挂父子**；
+    /// 父子关系传错 = 铺满的是别的节点，键位 / 数量文字会跑到槽中央）。</summary>
+    static void StretchToParent(RectTransform child, RectTransform parent)
+    {
+        if (child == null || parent == null) return;
+        child.anchorMin = Vector2.zero;
+        child.anchorMax = Vector2.one;
+        child.offsetMin = Vector2.zero;
+        child.offsetMax = Vector2.zero;
     }
 
     // ==================== 拾取气泡 ====================

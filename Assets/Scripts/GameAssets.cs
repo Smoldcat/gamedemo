@@ -96,8 +96,8 @@ public class GameAssets : ScriptableObject
     public Color backpackPanelColor = new Color(0.04f, 0.05f, 0.09f, 0.92f);
     [Tooltip("快捷槽普通边框色（当前槽改用「当前槽高亮色」）")]
     public Color backpackSlotColor = new Color(0.32f, 0.36f, 0.44f, 0.9f);
-    [Tooltip("当前快捷槽的高亮色")]
-    public Color backpackSlotActiveColor = new Color(0.35f, 0.85f, 0.42f, 0.95f);
+    [Tooltip("当前快捷槽的高亮色（背包与 HUD 快捷栏共用）。2026-09-22 由绿改蓝，且改为不透明 —— 绿+4px 描边在深色槽底上看不出\"框住\"")]
+    public Color backpackSlotActiveColor = new Color(0.30f, 0.65f, 1f, 1f);
     [Tooltip("库存格子底色")]
     public Color backpackCellColor = new Color(0.16f, 0.18f, 0.26f, 0.92f);
     [Tooltip("背包 UI 整套界面 Prefab（Canvas + 面板结构）。拖入后背包完全用这个 Prefab（可在编辑器里拖拽改布局）；留空用代码生成。⚠️ 节点名有约定，见 BackpackPanel 类注释")]
@@ -129,8 +129,8 @@ public class GameAssets : ScriptableObject
     [Min(0f)] public float killFeedSlideDistance = 40f;
     [Tooltip("其余条目因重新居中而挪动的速度（px/秒，参考分辨率下）。默认 900")]
     [Min(1f)] public float killFeedRelayoutSpeed = 900f;
-    [Tooltip("整组距屏幕底部的距离（px，参考分辨率下）。⚠️ 只在建 Canvas 时读一次 → 运行中改它要重进 Play。默认 96")]
-    [Min(0f)] public float killFeedBottomOffset = 96f;
+    [Tooltip("整组距屏幕底部的距离（px，参考分辨率下）。⚠️ 只在建 Canvas 时读一次 → 运行中改它要重进 Play。默认 150（2026-09-22 由 96 上移：给底部中央的 HUD「快捷栏」腾位）")]
+    [Min(0f)] public float killFeedBottomOffset = 150f;
 
     const string ResourcePath = "GameAssets";
 

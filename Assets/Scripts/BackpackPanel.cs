@@ -797,28 +797,34 @@ public class BackpackPanel : MonoBehaviour
     // ---- 资源 / 颜色：优先 GameAssets（拖了就替换），留空 / 默认 → 代码生成的占位 ----
     // ⚠️ 约定：背包的图请用**白色/浅色 + 透明背景**，颜色由代码控制
     //（因为要表达"当前槽高亮"等状态色；代码会把 Image.color 乘到图上）。
-    static Sprite PanelSprite()
+    // ⚠️ 下面这些是 `public`（2026-09-22 起）：**HUD 的「快捷栏」用的就是同一套**槽框 / 图标 / 状态色
+    //    → 只留一份实现（改 `GameAssets` 或这里，背包与快捷栏一起变）。
+    //    ⚠️ 必须是 public（不能是 internal）：编辑器程序集 `HotbarBuilder` 也要用（internal 跨程序集不可见，
+    //       同 `HUD.BubbleBgColor` 那批"给编辑器工具用"的约定）。
+    //    ⚠️ 生命周期仍归**本类**（`StaticReset` → `BackpackPanel.ResetStatics` 成对销毁 Sprite 与 texture）；
+    //       HUD / 工具**不要**去 Destroy 这些 Sprite —— 它们不是对方创建的（见 §4 #25）。
+    public static Sprite PanelSprite()
     {
         var a = GameAssets.I;
         if (a != null && a.backpackPanelSprite != null) return a.backpackPanelSprite;
         if (_sprPanel == null) _sprPanel = UIUtil.RoundedRectSprite(128, 18f, 0f);      // 圆角填充
         return _sprPanel;
     }
-    static Sprite FrameSprite()
+    public static Sprite FrameSprite()
     {
         var a = GameAssets.I;
         if (a != null && a.backpackFrameSprite != null) return a.backpackFrameSprite;
         if (_sprFrame == null) _sprFrame = UIUtil.RoundedRectSprite(128, 14f, 4f);     // 圆角描边
         return _sprFrame;
     }
-    static Sprite SlotFrameSprite()
+    public static Sprite SlotFrameSprite()
     {
         var a = GameAssets.I;
         if (a != null && a.backpackSlotFrameSprite != null) return a.backpackSlotFrameSprite;
         if (_sprSlotFrame == null) _sprSlotFrame = UIUtil.RoundedRectSprite(128, 16f, 5f);
         return _sprSlotFrame;
     }
-    static Sprite MedkitSprite()
+    public static Sprite MedkitSprite()
     {
         var a = GameAssets.I;
         if (a != null && a.backpackMedkitIconSprite != null) return a.backpackMedkitIconSprite;
@@ -840,19 +846,19 @@ public class BackpackPanel : MonoBehaviour
         return _sprRect;
     }
 
-    static Color PanelColor()      { var a = GameAssets.I; return a != null ? a.backpackPanelColor      : new Color(0.04f, 0.05f, 0.09f, 0.92f); }
-    static Color SlotColor()       { var a = GameAssets.I; return a != null ? a.backpackSlotColor       : new Color(0.32f, 0.36f, 0.44f, 0.9f); }
-    static Color SlotActiveColor() { var a = GameAssets.I; return a != null ? a.backpackSlotActiveColor : new Color(0.35f, 0.85f, 0.42f, 0.95f); }
-    static Color CellColor()       { var a = GameAssets.I; return a != null ? a.backpackCellColor       : new Color(0.16f, 0.18f, 0.26f, 0.92f); }
+    public static Color PanelColor()      { var a = GameAssets.I; return a != null ? a.backpackPanelColor      : new Color(0.04f, 0.05f, 0.09f, 0.92f); }
+    public static Color SlotColor()       { var a = GameAssets.I; return a != null ? a.backpackSlotColor       : new Color(0.32f, 0.36f, 0.44f, 0.9f); }
+    public static Color SlotActiveColor() { var a = GameAssets.I; return a != null ? a.backpackSlotActiveColor : new Color(0.35f, 0.85f, 0.42f, 0.95f); }
+    public static Color CellColor()       { var a = GameAssets.I; return a != null ? a.backpackCellColor       : new Color(0.16f, 0.18f, 0.26f, 0.92f); }
 
     /// <summary>血包图标颜色（库存格子里的红十字；与面板底部那枚血包图标同色）</summary>
-    static readonly Color MedkitIconColor = new Color(0.95f, 0.22f, 0.22f);
+    public static readonly Color MedkitIconColor = new Color(0.95f, 0.22f, 0.22f);
 
     /// <summary>
     /// 武器图标（数据驱动）：优先用 WeaponData.icon 里配置的 Sprite（可在 Inspector 拖入）；
     /// 没配置则回落程序生成的形状图标（兜底）。想全局换风格就在各武器资源里配 icon 即可，无需改代码。
     /// </summary>
-    static Sprite WeaponIconSprite(WeaponData w)
+    public static Sprite WeaponIconSprite(WeaponData w)
     {
         if (w == null) return null;
         if (w.icon != null) return w.icon;   // 数据驱动：配了真实图标就用它
