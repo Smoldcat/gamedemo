@@ -334,7 +334,7 @@ public class Crosshair : MonoBehaviour
     /// 圈 = 散布楔形的内切圆（与两条从玩家射出的射线相切）：半径 = 瞄准距离 × sin(当前散布角)，越远越大。
     /// 「当前散布角」= `PlayerController.CurrentSpread`（腰射/瞄准各一个值）—— 按住右键瞄准时圈会自动收小。
     /// 世界半径换成屏幕像素用 WorldToScreenPoint 投影差分（与后坐偏移显示同一套技巧），
-    /// 沿相机的右/前两个地面方向各投影一次 → 横向/纵向半径，自动适配相机俯角（俯视 70° 下纵向只轻微压扁）。
+    /// 沿相机的右/前两个地面方向各投影一次 → 横向/纵向半径，自动适配相机俯角（当前 60° 俯角下纵向只轻微压扁）。
     /// 十字的留空随圈扩张（始终保持在圈外 ArmClearance 像素）；散布=0 时圈隐藏、十字回到最小间距 gap。
     /// </summary>
     void UpdateSpreadRing(PlayerController pc, Color col)

@@ -16,7 +16,12 @@ public static class UIUtil
     static bool _created;   // true = 我们自己创建的动态字体（可释放）；false = 引擎内置兜底（共享资源，绝不能销毁）
 
     /// <summary>
-    /// 全局共用字体：优先系统微软雅黑（保证中文显示），失败则回落引擎内置字体。
+    /// 全局共用字体，优先级：
+    ///   ① **资源总表里配的工程字体**（`GameAssets.uiFont`，推荐）—— 编辑器与运行时用同一份，
+    ///      于是"编辑期看到的 UI"就是"运行时的样子"（解决"编辑期用内置占位字体、运行时用系统雅黑，
+    ///      两个字体基线不同 → 文字垂直位置对不上"的问题）；
+    ///   ② 系统「微软雅黑」（保证中文显示）；
+    ///   ③ 引擎内置字体（无中文，仅最后兜底）。
     /// </summary>
     public static Font Font
     {
@@ -24,12 +29,23 @@ public static class UIUtil
         {
             if (_font != null) return _font;
 
+            // ① 工程字体（在 GameAssets 里拖入 .ttf/.otf）
+            var assets = GameAssets.I;
+            if (assets != null && assets.uiFont != null)
+            {
+                _font = assets.uiFont;
+                _created = false;   // 工程资产：绝不能销毁
+                return _font;
+            }
+
+            // ② 系统字体（保证中文）
             _font = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "微软雅黑", "SimHei", "Arial" }, 24);
             _created = _font != null;
             if (_font == null)
             {
+                // ③ 引擎内置字体（共享资源，只读不销毁；注意它没有中文字形）
                 _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                _created = false;   // 内置资源是共享的，只读不销毁
+                _created = false;
             }
             return _font;
         }

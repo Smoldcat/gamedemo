@@ -61,6 +61,8 @@ public class GameAssetsEditor : Editor
         ("invClose",      "关闭背包",   "关闭背包面板的音效", null),
         ("invConfirm",    "点击/确认",  "点击装备、丢弃确认第一步的短音", null),
         ("invDrop",       "丢弃武器",   "丢弃武器时的音效", null),
+
+        ("uiFont",        "界面字体",   "界面统一字体（.ttf/.otf）。留空 → 系统雅黑 → 内置兜底。\n填了则**编辑器与运行时同源**（编辑期所见即运行所得）。建议用开源可商用字体（思源黑体 / Noto Sans CJK）；微软雅黑有版权、勿随工程分发", "字体（留空 = 系统字体 / 内置兜底）"),
     };
 
     readonly HashSet<string> _handled = new HashSet<string>();

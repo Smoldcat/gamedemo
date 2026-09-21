@@ -481,6 +481,7 @@ public class BackpackPanel : MonoBehaviour
         _root.SetActive(true);
         Sfx.OpenInventory();
         if (Crosshair.InstanceUI != null) Crosshair.InstanceUI.SetVisible(false);
+        HUD.SetContentVisible(false);   // 隐藏整块 HUD：避免与左侧背包面板重叠（且信息重复）
         ResetDropConfirm();
         Refresh();
     }
@@ -496,6 +497,7 @@ public class BackpackPanel : MonoBehaviour
         _root.SetActive(false);
         Sfx.CloseInventory();
         if (Crosshair.InstanceUI != null) Crosshair.InstanceUI.SetVisible(true);
+        HUD.SetContentVisible(true);    // 恢复整块 HUD
         ResetDropConfirm();
     }
 

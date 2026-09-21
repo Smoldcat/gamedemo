@@ -65,8 +65,13 @@ public class HUD : MonoBehaviour
     // 实现思路：**单实例气泡 + 世界坐标投影** —— 只建一个气泡，每帧把目标物体的世界坐标投影成屏幕坐标摆过去。
     // 好处：不必给每个拾取物挂 World Space Canvas（省对象）、天然正对相机、不受物体旋转/缩放影响。
     // 投影写法与"受伤方向箭头"同一套：Camera.WorldToScreenPoint → RectTransformUtility.ScreenPointToLocalPointInRectangle。
+    // 界面来源**双轨**（2026-09-21 起）：
+    //   ① **场景预置**（推荐）：HUD 上那组「拾取气泡」引用拖了就用它们 —— 颜色 / 字号 / 图片 / 内部尺寸
+    //      以**节点上的组件**为准，代码只填「名称 / 按键字母」+ 每帧屏幕位置（+ 下面几个布局数字）。
+    //      于是**没进 Play、在编辑器里就能直接调**。场景里没有时用菜单 `Tools/游戏/生成拾取气泡到场景` 一键生成并接线。
+    //   ② **代码生成（兜底）**：引用留空 / 不完整 → 运行时自建（与历史版本逐位一致），游戏始终能跑。
     RectTransform _bubbleRect;     // 气泡根（锚在 Canvas 中心）
-    Image _bubbleEdge;             // 外圈描边（比气泡大 2px，压在底下）
+    Image _bubbleEdge;             // 外圈描边（比气泡大 3px，压在底下）
     Image _bubbleBg;               // 内层填充（浅色圆角）
     Text _bubbleName;              // 物品名
     Image _bubbleKeyBg;            // 按键圆标底（圆形）
@@ -74,23 +79,43 @@ public class HUD : MonoBehaviour
     Transform _bubbleTarget;       // 当前被标注的物体（null = 不显示）
     string _bubbleLabel;           // 当前名称（变了才重排宽度）
     string _bubbleKeyChar = "E";
-    float _bubbleHeight = 0.9f;    // 相对物体原点的世界高度偏移
+    float _bubbleHeight = 0.5f;    // 本次显示的世界高度偏移（由 ShowPickupBubble 写入）
     float _bubbleUntil;            // 过期时刻（调用方每帧续期）
+    bool _bubbleAuthored;          // true = 用的是场景预置节点（代码只填数据、**不改内部布局**）
 
-    // 气泡样式（想调外观改这里；也可后续挪进 GameAssets）
-    static readonly Color BubbleBgColor      = new Color(0.93f, 0.94f, 0.96f, 0.97f);
-    static readonly Color BubbleEdgeColor    = new Color(0.55f, 0.58f, 0.63f, 0.9f);
-    static readonly Color BubbleTextColor    = new Color(0.11f, 0.13f, 0.17f);
-    static readonly Color BubbleKeyBgColor   = new Color(1f, 1f, 1f, 1f);
-    static readonly Color BubbleKeyTextColor = new Color(0.15f, 0.17f, 0.22f);
-    const int BubbleFontSize = 20;
-    const float BubbleHeight = 38f;    // 气泡高
-    const float BubblePadX = 16f;      // 左右内边距
-    const float BubbleKeyD = 24f;      // 按键圆标直径
-    /// <summary>气泡相对物体的**屏幕**偏移（像素，按参考分辨率 720 屏高等比缩放）。
-    /// 往右推一段 → 气泡贴在物体**右侧**、不遮挡物体本身。
-    /// ⚠️ 刻意用"屏幕偏移"而不是"世界偏移"：与相机朝向解耦，永远落在屏幕右边（相机以后转角度也不用改）。</summary>
-    const float BubbleScreenOffsetX = 78f;
+    // 气泡样式（**只用于「代码生成」兜底路径**；场景预置时以节点上的组件为准）
+    public static readonly Color BubbleBgColor      = new Color(0.93f, 0.94f, 0.96f, 0.97f);
+    public static readonly Color BubbleEdgeColor    = new Color(0.55f, 0.58f, 0.63f, 0.9f);
+    public static readonly Color BubbleTextColor    = new Color(0.11f, 0.13f, 0.17f);
+    public static readonly Color BubbleKeyBgColor   = new Color(1f, 1f, 1f, 1f);
+    public static readonly Color BubbleKeyTextColor = new Color(0.15f, 0.17f, 0.22f);
+    public const int BubbleFontSize = 20;
+
+    [Header("拾取气泡（留空 = 运行时自动生成；可用菜单 Tools/游戏/生成拾取气泡到场景 一键预置）")]
+    [Tooltip("气泡根节点（场景预置，挂在 HUD 的 Canvas 下）。\n配了就用它 —— 颜色 / 字号 / 图片 / 内部尺寸以**节点上的组件**为准（编辑期就能调），代码只填「名称 / 按键字母」+ 每帧屏幕位置。\n留空 → 运行时用代码生成一个（与历史版本一致）")]
+    public RectTransform pickupBubble;
+    [Tooltip("气泡外圈描边（可留空，运行时自动补圆角图；配了真图不覆盖）")]
+    public Image pickupBubbleEdge;
+    [Tooltip("气泡内层填充（可留空，运行时自动补圆角图）")]
+    public Image pickupBubbleBg;
+    [Tooltip("物品名文本（配了气泡根节点时**必填**；缺了会自动退回代码生成）")]
+    public Text pickupBubbleName;
+    [Tooltip("按键圆标底（可留空，运行时自动补圆图）")]
+    public Image pickupBubbleKeyBg;
+    [Tooltip("按键字母文本（配了气泡根节点时**必填**）")]
+    public Text pickupBubbleKeyText;
+    [Tooltip("气泡高度（px，参考分辨率 1280×720）。宽度按名字长度自适应，不用手填")]
+    public float pickupBubbleHeight = 38f;
+    [Tooltip("气泡左右内边距（px）")]
+    public float pickupBubblePadX = 16f;
+    [Tooltip("物品名与按键圆标之间的间距（px）")]
+    public float pickupBubbleGap = 8f;
+    [Tooltip("按键圆标直径（px）")]
+    public float pickupBubbleKeyDiameter = 24f;
+    [Tooltip("气泡相对物体的**屏幕右移**距离（px，按 720 屏高等比缩放）—— 贴到物体右侧、不遮挡物体本身")]
+    public float pickupBubbleScreenOffsetX = 78f;
+    [Tooltip("气泡相对物体原点的**世界高度偏移**（往上抬一点，避免压住物体本身）")]
+    public float pickupBubbleWorldHeight = 0.5f;
 
     // ---- 血条平滑显示（文字仍显示精确血量）----
     Vector2 _hpFullSize;
@@ -114,14 +139,15 @@ public class HUD : MonoBehaviour
     /// 显示"拾取气泡"：在**物体旁边**显示一个气泡（物品名 + 按键圆标，如 `AK74 ⓔ`）。
     /// 调用方**每帧调用续期**（超过 0.12s 不调即自动消失），语义与已被它取代的"底部一行提示"一致。
     /// 实现 = 单实例气泡 + 世界坐标投影（见 <see cref="BuildPickupBubble"/> / <see cref="UpdatePickupBubble"/>）；
-    /// 投影之后还会**往屏幕右侧推一段**（`BubbleScreenOffsetX`），所以气泡贴在物体右边、不遮挡物体。
-    /// `worldHeight` = 相对物体原点的**世界高度偏移**（往上抬一点，避免压住物体本身）。
+    /// 投影之后还会**往屏幕右侧推一段**（`pickupBubbleScreenOffsetX`），所以气泡贴在物体右边、不遮挡物体。
+    /// `worldHeight` = 相对物体原点的**世界高度偏移**（往上抬一点，避免压住物体本身）；
+    /// 传负数（默认）则用 HUD 上的 `pickupBubbleWorldHeight` —— 于是它能在 Inspector 里调。
     /// </summary>
-    public static void ShowPickupBubble(Transform target, string label, string key = "E", float worldHeight = 0.5f)
+    public static void ShowPickupBubble(Transform target, string label, string key = "E", float worldHeight = -1f)
     {
         if (Instance == null || target == null) return;
         Instance._bubbleTarget = target;
-        Instance._bubbleHeight = worldHeight;
+        Instance._bubbleHeight = worldHeight >= 0f ? worldHeight : Instance.pickupBubbleWorldHeight;
         Instance._bubbleKeyChar = string.IsNullOrEmpty(key) ? "E" : key;
         if (!string.Equals(Instance._bubbleLabel, label))
         {
@@ -140,6 +166,23 @@ public class HUD : MonoBehaviour
         Instance._announceUntil = Time.time + duration;
         Instance._announceSize = size;
         Instance._announceColor = color ?? new Color(1f, 0.92f, 0.55f);
+    }
+
+    /// <summary>
+    /// 整块 HUD 的显隐（打开背包时用）。
+    /// 为什么需要：背包面板是**贴屏幕左侧的竖排面板**（约 400×660），会和 HUD 的**左下角信息块**
+    /// （血条 / 弹药 / 武器 / 模式）重叠；而那块信息在背包里本来就是**重复的**（面板自己会显示
+    /// 当前武器 / 弹匣 / 血包数）。隐藏后画面也更像"一个独立的背包菜单"。
+    /// ⚠️ HUD 组件就挂在**场景那块 Canvas 的根**上 → 这里切的就是那块 Canvas 根，所以整块 HUD
+    ///   （含运行时 new 出来的红晕 / 受伤箭头 / 拾取气泡）会一起隐藏；
+    ///   **准星 / 背包 / 击杀反馈 / 飘字各自有独立 Canvas，不受影响**。
+    /// 恢复由背包关闭时调用；死亡时背包会自动关闭 → 会一并恢复，死亡结算面板照常显示。
+    /// </summary>
+    public static void SetContentVisible(bool visible)
+    {
+        if (Instance == null) return;
+        var root = Instance._canvas != null ? Instance._canvas.gameObject : Instance.gameObject;
+        if (root.activeSelf != visible) root.SetActive(visible);
     }
 
     void Awake()
@@ -475,19 +518,52 @@ public class HUD : MonoBehaviour
     // ==================== 拾取气泡 ====================
 
     /// <summary>
-    /// 创建拾取气泡（默认隐藏）。样式照参考图：**浅色圆角气泡 + 深色名称 + 右侧圆形按键标**，
-    /// 外圈一层很淡的描边，再叠一个 UGUI `Shadow` 做投影。只建这一个气泡，
-    /// 位置每帧由 <see cref="UpdatePickupBubble"/> 投影得到。
+    /// 拾取气泡初始化（**双轨**）：
+    ///   ① **场景预置**（推荐）：上面那组引用拖了就用它们 —— 颜色 / 字号 / 图片 / 尺寸以**节点上的组件为准**，
+    ///      代码只填文本与位置（`ApplyBubbleText` 对预置节点**不改布局**）。于是**没进 Play 也能在编辑器里调**。
+    ///   ② **代码生成（兜底）**：引用留空 / 不完整 → 运行时自建（与历史版本逐位一致），游戏始终能跑。
+    /// 样式照参考图：浅色圆角气泡 + 深色名称 + 右侧圆形按键标 + 外圈淡描边 + UGUI `Shadow` 投影。
     /// </summary>
     void BuildPickupBubble()
     {
+        // ---- ① 场景预置 ----
+        if (pickupBubble != null && pickupBubbleName != null && pickupBubbleKeyText != null)
+        {
+            _bubbleAuthored = true;
+            _bubbleRect = pickupBubble;
+            _bubbleEdge = pickupBubbleEdge;
+            _bubbleBg = pickupBubbleBg;
+            _bubbleName = pickupBubbleName;
+            _bubbleKeyBg = pickupBubbleKeyBg;
+            _bubbleKeyText = pickupBubbleKeyText;
+
+            // "运行时生成的图存不进场景" → 只给**还空着**的 Image 补占位图（你在节点上配了真图就不动它）
+            FillSprite(_bubbleEdge, UIUtil.RoundedRectSprite(64, 12f, 2f), true);
+            FillSprite(_bubbleBg, UIUtil.RoundedRectSprite(64, 12f, 0f), true);
+            FillSprite(_bubbleKeyBg, UIUtil.CircleSprite(48), false);
+
+            // 字体统一由代码注入（项目共用字体，保证中文正常）；节点上只调字号 / 颜色
+            var f = fallbackFont != null ? fallbackFont : UIUtil.Font;
+            if (_bubbleName != null) _bubbleName.font = f;
+            if (_bubbleKeyText != null) _bubbleKeyText.font = f;
+
+            pickupBubble.gameObject.SetActive(false);   // 运行时先隐藏，Update 按需显示
+            _bubbleLabel = null;
+            return;
+        }
+
+        if (pickupBubble != null)
+            Debug.LogWarning("[HUD] 拾取气泡节点不完整（缺「物品名文本 pickupBubbleName」或「按键字母文本 pickupBubbleKeyText」）" +
+                             "→ 已退回代码生成。请检查 HUD 上「拾取气泡」那组引用。");
+
+        // ---- ② 代码生成（兜底，与历史版本一致）----
         if (_canvas == null) return;
 
         var go = new GameObject("PickupBubble");
         go.transform.SetParent(_canvas.transform, false);
         _bubbleRect = go.AddComponent<RectTransform>();
         _bubbleRect.anchorMin = _bubbleRect.anchorMax = _bubbleRect.pivot = new Vector2(0.5f, 0.5f);
-        _bubbleRect.sizeDelta = new Vector2(140f, BubbleHeight);
+        _bubbleRect.sizeDelta = new Vector2(140f, pickupBubbleHeight);
 
         // 外圈描边（比气泡大 3px，压在底层）
         _bubbleEdge = AddBubbleImage(go.transform, "Edge", UIUtil.RoundedRectSprite(64, 12f, 2f), BubbleEdgeColor, 140f);
@@ -501,12 +577,20 @@ public class HUD : MonoBehaviour
         // 物品名（靠左）
         _bubbleName = AddBubbleText(go.transform, "Name", BubbleFontSize, BubbleTextColor, TextAnchor.MiddleLeft);
         // 按键圆标（圆形底 + 字母，靠右）
-        _bubbleKeyBg = AddBubbleImage(go.transform, "KeyBg", UIUtil.CircleSprite(48), BubbleKeyBgColor, BubbleKeyD);
+        _bubbleKeyBg = AddBubbleImage(go.transform, "KeyBg", UIUtil.CircleSprite(48), BubbleKeyBgColor, pickupBubbleKeyDiameter);
         _bubbleKeyText = AddBubbleText(go.transform, "KeyText", BubbleFontSize - 2, BubbleKeyTextColor, TextAnchor.MiddleCenter);
-        if (_bubbleKeyText != null) _bubbleKeyText.rectTransform.sizeDelta = new Vector2(BubbleKeyD, BubbleKeyD);
+        if (_bubbleKeyText != null) _bubbleKeyText.rectTransform.sizeDelta = new Vector2(pickupBubbleKeyDiameter, pickupBubbleKeyDiameter);
 
         go.SetActive(false);
         _bubbleLabel = null;
+    }
+
+    /// <summary>只给"图还空着"的 Image 补占位图（配了真图不覆盖）。场景预置节点用它补齐"运行时才生成的圆角图"。</summary>
+    static void FillSprite(Image img, Sprite fallback, bool sliced)
+    {
+        if (img == null || img.sprite != null || fallback == null) return;
+        img.sprite = fallback;
+        if (sliced) img.type = Image.Type.Sliced;
     }
 
     Image AddBubbleImage(Transform parent, string name, Sprite sprite, Color color, float w)
@@ -515,7 +599,7 @@ public class HUD : MonoBehaviour
         go.transform.SetParent(parent, false);
         var rt = go.AddComponent<RectTransform>();
         rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(w, BubbleHeight);
+        rt.sizeDelta = new Vector2(w, pickupBubbleHeight);
         var img = go.AddComponent<Image>();
         img.sprite = sprite;
         img.type = Image.Type.Sliced;
@@ -530,7 +614,7 @@ public class HUD : MonoBehaviour
         go.transform.SetParent(parent, false);
         var rt = go.AddComponent<RectTransform>();
         rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(80f, BubbleHeight - 4f);
+        rt.sizeDelta = new Vector2(80f, pickupBubbleHeight - 4f);
         var t = go.AddComponent<Text>();
         t.font = fallbackFont != null ? fallbackFont : UIUtil.Font;
         t.fontSize = size;
@@ -541,7 +625,10 @@ public class HUD : MonoBehaviour
         return t;
     }
 
-    /// <summary>按当前名称重排气泡：名称宽度决定气泡整体宽度（左内边距 + 名称 + 间隙 + 按键圆标 + 右内边距）。</summary>
+    /// <summary>按当前名称重排气泡（**只用于「代码生成」兜底路径**）。
+    /// 气泡整体宽 = 左内边距 + 名称宽 + 间距 + 按键圆标直径 + 右内边距。
+    /// ⚠️ **场景预置节点不走这里**：预置模式下布局以节点上的组件为准（用 `HorizontalLayoutGroup` + `ContentSizeFitter` 自动撑宽），
+    ///    代码只填文字 —— 否则"你在编辑器里摆好的布局"会被每次改名字时覆盖掉。</summary>
     void ApplyBubbleText()
     {
         if (_bubbleRect == null || _bubbleName == null) return;
@@ -549,16 +636,18 @@ public class HUD : MonoBehaviour
         _bubbleName.text = _bubbleLabel;
         if (_bubbleKeyText != null) _bubbleKeyText.text = _bubbleKeyChar;
 
+        if (_bubbleAuthored) return;   // 场景预置：不改布局（位置 / 尺寸以节点为准）
+
         float nameW = Mathf.Max(_bubbleName.preferredWidth, 28f);
-        float w = BubblePadX + nameW + 8f + BubbleKeyD + BubblePadX;
-        _bubbleRect.sizeDelta = new Vector2(w, BubbleHeight);
-        if (_bubbleEdge != null) _bubbleEdge.rectTransform.sizeDelta = new Vector2(w + 3f, BubbleHeight + 3f);
-        if (_bubbleBg != null) _bubbleBg.rectTransform.sizeDelta = new Vector2(w, BubbleHeight);
+        float w = pickupBubblePadX + nameW + pickupBubbleGap + pickupBubbleKeyDiameter + pickupBubblePadX;
+        _bubbleRect.sizeDelta = new Vector2(w, pickupBubbleHeight);
+        if (_bubbleEdge != null) _bubbleEdge.rectTransform.sizeDelta = new Vector2(w + 3f, pickupBubbleHeight + 3f);
+        if (_bubbleBg != null) _bubbleBg.rectTransform.sizeDelta = new Vector2(w, pickupBubbleHeight);
 
-        _bubbleName.rectTransform.sizeDelta = new Vector2(nameW, BubbleHeight - 4f);
-        _bubbleName.rectTransform.anchoredPosition = new Vector2(-w * 0.5f + BubblePadX + nameW * 0.5f, 0f);
+        _bubbleName.rectTransform.sizeDelta = new Vector2(nameW, pickupBubbleHeight - 4f);
+        _bubbleName.rectTransform.anchoredPosition = new Vector2(-w * 0.5f + pickupBubblePadX + nameW * 0.5f, 0f);
 
-        Vector2 keyPos = new Vector2(w * 0.5f - BubblePadX - BubbleKeyD * 0.5f, 0f);
+        Vector2 keyPos = new Vector2(w * 0.5f - pickupBubblePadX - pickupBubbleKeyDiameter * 0.5f, 0f);
         if (_bubbleKeyBg != null) _bubbleKeyBg.rectTransform.anchoredPosition = keyPos;
         if (_bubbleKeyText != null) _bubbleKeyText.rectTransform.anchoredPosition = keyPos;
     }
@@ -583,7 +672,7 @@ public class HUD : MonoBehaviour
         if (sp.z <= 0f) { _bubbleRect.gameObject.SetActive(false); return; }   // 相机后方：投影无效
 
         // 贴到物体**右侧**：投影之后再加屏幕空间偏移（与相机朝向解耦，永远是屏幕右边）
-        sp.x += BubbleScreenOffsetX * (Screen.height / 720f);   // 按参考分辨率 720 等比缩放
+        sp.x += pickupBubbleScreenOffsetX * (Screen.height / 720f);   // 按参考分辨率 720 等比缩放
 
         float sf = _canvas != null && _canvas.scaleFactor > 0f ? _canvas.scaleFactor : 1f;
         float halfW = _bubbleRect.sizeDelta.x * 0.5f * sf + 8f;

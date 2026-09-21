@@ -496,7 +496,7 @@ public class PlayerController : MonoBehaviour
             if (t > 0f) _aimPoint = ray.origin + ray.direction * t;
         }
 
-        // 实测该点处的 像素/米（沿相机右方向量 1 米的投影长度；俯角 70° 下纵横差异 ~6%，手感无感）
+        // 实测该点处的 像素/米（沿相机右方向量 1 米的投影长度；俯角 60° 下纵横差异 ~6%，手感无感）
         Vector3 rightG = cam.transform.right; rightG.y = 0f;
         if (rightG.sqrMagnitude > 0.0001f)
         {

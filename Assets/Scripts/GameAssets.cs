@@ -103,6 +103,16 @@ public class GameAssets : ScriptableObject
     [Tooltip("背包 UI 整套界面 Prefab（Canvas + 面板结构）。拖入后背包完全用这个 Prefab（可在编辑器里拖拽改布局）；留空用代码生成。⚠️ 节点名有约定，见 BackpackPanel 类注释")]
     public GameObject backpackUIPrefab;
 
+    // ---------------- 字体（2026-09-21 新增：让编辑器与运行时用同一份字体） ----------------
+    // ⚠️ 这里**刻意不加 `[Header]` 特性**：GameAssets 的分组标题由 `GameAssetsEditor` 的 Fields 表统一画，
+    //    脚本里再写一遍会重复两行（与 2026-09-20 修过的 WeaponData「外观」是同一类问题）。
+    [Tooltip("界面统一字体（把 .ttf/.otf 拖进来即可）。\n" +
+             "  · 留空 → 回落系统「微软雅黑」→ 再回落引擎内置字体。\n" +
+             "  · 填了 → **编辑器与运行时都用它**，于是「编辑期看到的 UI」就是「运行时的样子」（解决「编辑器里用内置占位字体、运行时用系统雅黑 → 两个字体基线不同、文字垂直位置对不上」）。\n" +
+             "  · ⚠️ 建议用**开源可商用**字体（如思源黑体 / Noto Sans CJK，OFL）；微软雅黑有版权，不要随工程分发。\n" +
+             "  · ⚠️ 换字体会改变 UI 的垂直基线，可能需要微调一次文本的垂直位置。")]
+    public Font uiFont;
+
     const string ResourcePath = "GameAssets";
 
     static GameAssets _instance;
