@@ -12,7 +12,7 @@ using UnityEngine.UI;
 ///   所以下面的像素值都是「参考分辨率 1280×720」下的值，运行时按屏幕等比缩放 ——
 ///   不同分辨率下观感一致（这也是"按比例"的实现方式，与项目其它 UI 完全同源）。
 /// - **数据驱动**：图标走 `GameAssets`（配了就用、留空用程序生成的占位），显示参数也都在 `GameAssets` 里可调。
-/// - **动画**：从左滑入 → 停留 → 向右滑出 + 淡出（"从左到右"）。
+/// - **动画**：入场「吸到屏幕上」（**原地**由大变小 + 半透明→不透明，**无横向滑入**）→ 停留 → 向右滑出 + 淡出。
 /// - **触发**：`EnemyAI.OnDead`；**自杀不触发**（自爆兵自爆走 `Health.TakeDamage(creditKill: false)`）。
 /// </summary>
 public static class KillFeed
@@ -23,9 +23,18 @@ public static class KillFeed
     /// 下面所有像素常量都是这个基准下的值，运行时由 CanvasScaler 按屏幕等比缩放。</summary>
     static readonly Vector2 RefResolution = new Vector2(1280f, 720f);
 
+    // ⚠️ 下面这几个是**兜底默认值**：优先读 `GameAssets` 里同名参数（Inspector「击杀反馈 · 出现 / 消失动画」，
+    //    2026-09-22 起可调）；资源表缺失或字段没填时才用这里的值。它们同时是那些 Inspector 字段的初值
+    //    → **两处请成对修改**（改这里等于改新工程的默认值，不影响已存 asset）。
     const float BottomOffset = 96f;    // 整组距屏幕底部（参考分辨率像素）
-    const float SlideDistance = 40f;   // 入场/消失的横向位移（参考分辨率像素）：左滑入、右滑出
-    const float InDuration = 0.15f;    // 入场动画时长（秒）
+    const float SlideDistance = 40f;   // 消失时向右滑出的横向距离（参考分辨率像素）——⚠️ 入场已改为原地缩放，不再横滑
+    const float InDuration = 0.12f;    // 入场动画时长（秒）
+
+    // 入场「吸到屏幕上」的**起始**状态（收束后的目标恒定：缩放 1、完全不透明）
+    // ⚠️ 名字带 Start 前缀：给下面那组 `internal` 访问器（`InScale` / `InAlpha`）腾出名字，
+    //    与既有 `SlideDistance → Slide` / `InDuration → InDur` 同一套写法。
+    const float StartScale = 1.6f;     // 起始放大倍数（由大 → 小）
+    const float StartAlpha = 0.5f;     // 起始透明度（半透明 → 不透明）
     const float OutDuration = 0.30f;   // 消失动画时长（秒，含淡出）
     const float RelayoutSpeed = 900f;  // 其余条目重新居中时的挪动速度（参考分辨率像素/秒）
 
@@ -33,10 +42,19 @@ public static class KillFeed
     internal static readonly Color HeadshotIconColor = new Color(1f, 0.42f, 0.10f);  // 爆头击杀：橙红（与爆头飘字同色）
     internal static readonly Color NameColor = new Color(0.96f, 0.96f, 0.96f);
 
-    internal static float Slide => SlideDistance;
-    internal static float InDur => InDuration;
-    internal static float OutDur => OutDuration;
-    internal static float RelayoutSpd => RelayoutSpeed;
+    /// <summary>资源表（可能为 null：没放资源表时全部走本文件里的兜底常量）</summary>
+    static GameAssets Asset => GameAssets.I;
+
+    // ⚠️ `KillFeedItem` 是**另一个类**，读不到 `KillFeed` 的私有 const（const 默认 private）
+    //    → 所有需要被它读的值都在这里开一个 `internal` 访问器，别在 `KillFeedItem` 里另写一份值。
+    // ⚠️ 这些值**优先读 `GameAssets`（Inspector 可实时调）**，资源表缺失 → 回落上面的兜底常量；
+    //    右侧的 `min`/`Clamp01` 是安全下限（防止 0 或负数导致除零 / 物体被缩没 / 透明度非法）。
+    internal static float Slide       => Asset != null ? Mathf.Max(Asset.killFeedSlideDistance, 0f)    : SlideDistance;
+    internal static float InDur       => Asset != null ? Mathf.Max(Asset.killFeedInDuration,    0.01f) : InDuration;
+    internal static float OutDur      => Asset != null ? Mathf.Max(Asset.killFeedOutDuration,   0.01f) : OutDuration;
+    internal static float RelayoutSpd => Asset != null ? Mathf.Max(Asset.killFeedRelayoutSpeed, 1f)    : RelayoutSpeed;
+    internal static float InScale     => Asset != null ? Mathf.Max(Asset.killFeedInScale,       0.01f) : StartScale;
+    internal static float InAlpha     => Asset != null ? Mathf.Clamp01(Asset.killFeedInAlpha)          : StartAlpha;
 
     static Canvas _canvas;
     static RectTransform _root;
@@ -144,7 +162,8 @@ public static class KillFeed
         root.transform.SetParent(go.transform, false);
         _root = root.AddComponent<RectTransform>();
         _root.anchorMin = _root.anchorMax = _root.pivot = new Vector2(0.5f, 0f);
-        _root.anchoredPosition = new Vector2(0f, BottomOffset);
+        // ⚠️ 只在**建 Canvas 的那一次**读 → 运行中改 Inspector 的「距屏幕底部」不会即时生效（重进 Play 才生效）
+        _root.anchoredPosition = new Vector2(0f, Asset != null ? Mathf.Max(Asset.killFeedBottomOffset, 0f) : BottomOffset);
         _root.sizeDelta = Vector2.zero;
 
         UIUtil.SetLayerRecursively(go, UIUtil.UILayer);
@@ -155,7 +174,10 @@ public static class KillFeed
         var go = new GameObject("KillFeedItem");
         go.transform.SetParent(_root, false);
         var rt = go.AddComponent<RectTransform>();
-        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0f);
+        // ⚠️ pivot 取**条目中心**（而非底边）：入场"由大变小"要围绕中心对称收缩，才像"贴到屏幕上"。
+        //    anchor 仍是「底部中心」→ 由 Apply() 里的 `anchoredPosition.y = 半高` 把底边钉回原位，视觉位置与改前完全一致。
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
 
         var cg = go.AddComponent<CanvasGroup>();
         cg.blocksRaycasts = false;
@@ -268,6 +290,7 @@ public class KillFeedItem : MonoBehaviour
     RectTransform _iconRt, _nameRt, _rt;
 
     float _width = 64f;
+    float _height = 64f;   // 条目高度（图标 + 名字）：pivot 在中心 → 需要半高把底边钉回原位
     float _targetX;
     float _baseX;        // 布局基准 x：平滑追 _targetX（其余条目重新居中时"平滑挪动"）
     float _lifetime = 2f;
@@ -304,13 +327,14 @@ public class KillFeedItem : MonoBehaviour
         _width = w + 8f;
 
         float totalH = iconSize + 4f + nameH;
+        _height = totalH;
         _rt.sizeDelta = new Vector2(_width, totalH);
         _iconRt.anchoredPosition = new Vector2(0f, totalH - iconSize * 0.5f);   // 图标在上
         _nameRt.sizeDelta = new Vector2(_width, nameH);
         _nameRt.anchoredPosition = new Vector2(0f, nameH * 0.5f);               // 名字在下
     }
 
-    /// <summary>开始播放：计时归零，基准位置直接落在最终位置（入场只有 -Slide 的横向偏移）</summary>
+    /// <summary>开始播放：计时归零，基准位置直接落在最终位置（入场是**原地**缩放 + 透明度，无横向位移）</summary>
     internal void Play()
     {
         _t = 0f;
@@ -352,11 +376,19 @@ public class KillFeedItem : MonoBehaviour
         float outStart = Mathf.Max(_lifetime - KillFeed.OutDur, KillFeed.InDur);
         float outK = Mathf.Clamp01((_t - outStart) / KillFeed.OutDur);                    // 0 → 1
 
-        // 「从左到右」：入场从左侧滑入到位，消失继续向右滑出
-        float x = _baseX - KillFeed.Slide * (1f - inK) + KillFeed.Slide * outK;
-        _rt.anchoredPosition = new Vector2(x, 0f);
+        // 入场「吸到屏幕上」：**原地**由大变小 + 半透明→不透明（无横向位移）。
+        // ease-out（先快后慢）= 被吸过来"啪"地贴住并稳住，而不是匀速线性地缩。
+        float k = 1f - (1f - inK) * (1f - inK);
+        float s = Mathf.Lerp(KillFeed.InScale, 1f, k);
+        _rt.localScale = new Vector3(s, s, 1f);
 
-        // 入场淡入 + 消失淡出
-        if (_cg != null) _cg.alpha = Mathf.Clamp01(Mathf.Min(inK, 1f - outK));
+        // 消失：保持原有的「向右滑出」（横向位移只剩这一段）
+        float x = _baseX + KillFeed.Slide * outK;
+        // ⚠️ pivot 在中心 → y 补**半高**，底边才落在原位（改 pivot 之前这里是 y = 0）
+        _rt.anchoredPosition = new Vector2(x, _height * 0.5f);
+
+        // 入场：从"半透明"渐显到"不透明"；消失：淡出（两者取小）
+        if (_cg != null)
+            _cg.alpha = Mathf.Clamp01(Mathf.Min(Mathf.Lerp(KillFeed.InAlpha, 1f, inK), 1f - outK));
     }
 }

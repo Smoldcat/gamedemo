@@ -193,7 +193,13 @@ public class PlayerController : MonoBehaviour
 
         _rb = GetComponent<Rigidbody>();
         if (_rb != null)
-            _rb.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionY;
+        {
+            // 允许**绕 Y 旋转**（MoveRotation 需要它），仍冻结 X/Z 旋转与 Y 位移：
+            // 玩家模型是"绕 Y 对称的胶囊"，所以放开 Y 不会影响物理外观，但让"朝向"能走物理接口。
+            _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ | RigidbodyConstraints.FreezePositionY;
+            // 明确开启插值：物理 50Hz、渲染帧率更高 → 不开插值位置就是"每 1/50 秒跳一次"（看起来像小范围瞬移/掉帧）
+            _rb.interpolation = RigidbodyInterpolation.Interpolate;
+        }
 
         _lastMousePos = Input.mousePosition;
         // 开局：准星落在一个**明确**的位置（之后只由"增量"驱动，绝对位置不再影响准星）。
@@ -376,7 +382,15 @@ public class PlayerController : MonoBehaviour
         Vector3 aimDir = _aimPoint - transform.position;
         aimDir.y = 0f;
         if (aimDir.sqrMagnitude > 0.001f)
-            transform.rotation = Quaternion.LookRotation(aimDir.normalized);
+        {
+            // ⚠️ **不要用 `transform.rotation = ...`**：刚体开了插值后"物理系统接管 transform"，
+            //    每帧直接写 transform 会被当作"外部改动/瞬移"，**把位置插值打断** → 位置退化成
+            //    "每 1/50 秒跳一次"（玩家看起来就是"小范围瞬移 + 掉帧感"，实测报障）。
+            //    正确接口是 `Rigidbody.MoveRotation` —— 官方说明它"符合刚体的插值设置"，会渲染中间帧的平滑过渡。
+            var look = Quaternion.LookRotation(aimDir.normalized);
+            if (_rb != null) _rb.MoveRotation(look);
+            else transform.rotation = look;
+        }
 
         // ---- 回正标记点 + 回正任务（必须放在 HandleFire 之前：标记点/静默期/横向基准都要用"开火前"的状态）----
         UpdateRecoveryTask(Input.GetMouseButtonDown(0), Input.GetMouseButton(0), mouseDisturbed);

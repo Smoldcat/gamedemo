@@ -64,6 +64,10 @@ public static class DamageText
         }
         go.layer = UIUtil.UILayer;   // 统一 UI 层（Overlay 下不影响渲染）
 
+        // ⚠️ 不截断（含「资源总表里配的飘字 Prefab」这条路径）：见 CreateDefault 的注释
+        var safeTxt = go.GetComponentInChildren<Text>(true);
+        if (safeTxt != null) safeTxt.verticalOverflow = VerticalWrapMode.Overflow;
+
         var popup = go.GetComponent<DamagePopup>();
         if (popup == null) popup = go.AddComponent<DamagePopup>();
         popup.poolKey = PoolKey;   // 覆盖 Prefab 里的默认值，保证回池键一致
@@ -93,6 +97,8 @@ public static class DamageText
         txt.font = UIUtil.Font;
         txt.alignment = TextAnchor.MiddleCenter;
         txt.raycastTarget = false;   // 纯显示，不挡任何点击
+        // ⚠️ 不截断：Truncate + 换字体后行高变大 → 大字号飘字（爆头 40）可能整段不显示（同 HUD 的注释）
+        txt.verticalOverflow = VerticalWrapMode.Overflow;
         go.AddComponent<DamagePopup>();
         return go;
     }

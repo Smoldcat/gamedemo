@@ -21,6 +21,18 @@ public static class SpawnPosition
     /// <summary>地图 XZ 半宽（每局从地面读取；没拖地面引用则保持默认 15）</summary>
     public static Vector2 MapHalfSize = new Vector2(DefaultMapHalfSize, DefaultMapHalfSize);
 
+    /// <summary>地图可用的"生成半径"（米）= 地图 XZ 短边的一半（由地面尺寸算出，见 <see cref="BindMapBounds"/>）。
+    /// ⚠️ 它比**围墙内侧**还大一点点（`MapHalfSize` 是"地面半宽 − 1"，而墙内侧约"地面半宽 − 2.5"），
+    ///    所以下面的生成半径都**乘了 &lt;1 的比例**，保证敌人不会刷到墙外。</summary>
+    public static float Radius => Mathf.Min(MapHalfSize.x, MapHalfSize.y);
+
+    /// <summary>敌人生成半径（米）= 地图半径 × 0.85（最大的一档，但仍在围墙内侧）</summary>
+    public static float RangeEnemy => Radius * 0.85f;
+    /// <summary>血包生成半径（米）= 地图半径 × 0.75</summary>
+    public static float RangeMedkit => Radius * 0.75f;
+    /// <summary>武器生成半径（米）= 地图半径 × 0.65</summary>
+    public static float RangeWeapon => Radius * 0.65f;
+
     /// <summary>静态状态清理（供 StaticReset 调用）：把地图边界复位为默认值。
     /// 否则关闭 Reload Domain 时，「先拖了地面、后又取消引用」会让上一局按地面算出的边界残留到下一局
     ///（表现为刷怪范围突然变得和当前地图不匹配，且没有任何报错）。</summary>
@@ -76,7 +88,7 @@ public static class SpawnPosition
     /// <summary>在某个玩家周围 10~13 米处找一个空位（僵局兜底把敌人传送过来用）</summary>
     public static Vector3 NearPlayer(Transform playerTransform)
     {
-        if (playerTransform == null) return FindOpenSpot(8f, 14f);
+        if (playerTransform == null) return FindOpenSpot(8f, RangeMedkit);
 
         for (int i = 0; i < 40; i++)
         {
@@ -87,7 +99,7 @@ public static class SpawnPosition
 
             if (!OverlapsPoint(p, ProbeRadius)) return p;
         }
-        return FindOpenSpot(8f, 14f);
+        return FindOpenSpot(8f, RangeMedkit);
     }
 
     /// <summary>给敌人生成 4 个巡逻点：优先在出生点附近随机取，被挡住则改用全图随机点</summary>
@@ -96,7 +108,7 @@ public static class SpawnPosition
         var list = new List<Vector3>();
         for (int i = 0; i < 4; i++)
         {
-            Vector3 fallback = FindOpenSpot(0f, 15f);
+            Vector3 fallback = FindOpenSpot(0f, RangeEnemy);
             Vector2 offset = Random.insideUnitCircle * 6f;
             Vector3 candidate = new Vector3(
                 Mathf.Clamp(around.x + offset.x, -MapHalfSize.x, MapHalfSize.x), GameConst.EntityPlaneY,

@@ -32,6 +32,14 @@ public class GameAssetsEditor : Editor
         ("killFeedNameFontSize", "击杀名字字号",       "名字文本的字号（参考分辨率下）。默认 20", null),
         ("killFeedMaxCount",     "最多显示条数",       "同时最多显示几条；0 = 不限（默认 0）", null),
 
+        ("killFeedInScale",      "入场起始放大倍数",   "入场「吸到屏幕上」的起始放大倍数（由大 → 小、收束到 1）。越大越有冲击力、越小越含蓄。默认 1.6", "击杀反馈 · 出现 / 消失动画（2026-09-22 起可调）"),
+        ("killFeedInAlpha",      "入场起始透明度",     "入场起始透明度（半透明 → 不透明）。0 = 从全透明淡入；1 = 一开始就不透明（只剩缩放）。默认 0.5", null),
+        ("killFeedInDuration",   "入场时长(秒)",       "「吸到屏幕上」那一下用时。越短越干脆、越长越明显。默认 0.12", null),
+        ("killFeedOutDuration",  "消失时长(秒)",       "存活时间到后「向右滑出 + 淡出」用时。默认 0.3", null),
+        ("killFeedSlideDistance","消失滑出距离(px)",   "消失时向右滑出的距离（参考分辨率 1280×720 下）。默认 40", null),
+        ("killFeedRelayoutSpeed","重居中速度(px/秒)",  "其余条目因重新居中而挪动的速度。默认 900", null),
+        ("killFeedBottomOffset", "距屏幕底部(px)",     "整组距屏幕底部的距离。⚠️ 只在建 Canvas 时读一次，运行中改要重进 Play。默认 96", null),
+
         ("backpackInventorySlots",  "库存格数",        "同类武器在同一格里叠加，所以等于「最多能装几种武器」。默认 20", "背包（留空 = 代码生成占位）"),
         ("backpackPanelSprite",     "面板底图",        "背包面板底图（Sprite，九宫格）。留空用代码生成的圆角面板。建议白色/浅色 + 透明", null),
         ("backpackFrameSprite",     "描边/格子边框",   "库存格子与丢弃按钮的边框（Sprite，九宫格）。留空用代码生成", null),

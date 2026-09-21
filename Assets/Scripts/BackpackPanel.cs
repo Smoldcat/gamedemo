@@ -992,6 +992,8 @@ public class BackpackPanel : MonoBehaviour
         t.color = color;
         t.text = content;
         t.raycastTarget = false;
+        // ⚠️ 不截断：Text 默认 Vertical Overflow = Truncate，换行高更大的字体后容易"整段不画"（同 HUD 的注释）
+        t.verticalOverflow = VerticalWrapMode.Overflow;
         return t;
     }
 

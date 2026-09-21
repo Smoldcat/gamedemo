@@ -113,6 +113,25 @@ public class GameAssets : ScriptableObject
              "  · ⚠️ 换字体会改变 UI 的垂直基线，可能需要微调一次文本的垂直位置。")]
     public Font uiFont;
 
+    // ---------------- 击杀反馈 · 出现 / 消失动画（2026-09-22 新增：从 `KillFeed.cs` 的代码常量搬过来，做成 Inspector 可调） ----------------
+    // ⚠️ 物理位置在**末尾**（§6.8「新字段只能在已有字段之后追加」）；但 Inspector 里的分组/顺序由
+    //    `GameAssetsEditor.Fields` 决定 → 这几个字段**显示在「击杀反馈」那一组里**，不会跑到最后。
+    // 默认值与 `KillFeed.cs` 里的兜底常量**一一对应** → 行为与搬之前完全一致（§4 #10：已存 asset 没这些 key，加载时按代码默认值补齐）。
+    [Tooltip("入场「吸到屏幕上」的起始放大倍数（由大 → 小，收束到 1）。越大越有冲击力、越小越含蓄。默认 1.6")]
+    [Min(0.01f)] public float killFeedInScale = 1.6f;
+    [Tooltip("入场起始透明度（半透明 → 不透明）。0 = 从全透明淡入；1 = 一开始就不透明（只剩缩放）。默认 0.5")]
+    [Min(0f)] public float killFeedInAlpha = 0.5f;
+    [Tooltip("入场「吸到屏幕上」的时长（秒）。越短越干脆、越长越明显。默认 0.12")]
+    [Min(0.01f)] public float killFeedInDuration = 0.12f;
+    [Tooltip("消失时长（秒）：存活时间到后「向右滑出 + 淡出」用时。默认 0.3")]
+    [Min(0.01f)] public float killFeedOutDuration = 0.3f;
+    [Tooltip("消失时向右滑出的距离（px，参考分辨率 1280×720 下，运行时按屏幕等比缩放）。默认 40")]
+    [Min(0f)] public float killFeedSlideDistance = 40f;
+    [Tooltip("其余条目因重新居中而挪动的速度（px/秒，参考分辨率下）。默认 900")]
+    [Min(1f)] public float killFeedRelayoutSpeed = 900f;
+    [Tooltip("整组距屏幕底部的距离（px，参考分辨率下）。⚠️ 只在建 Canvas 时读一次 → 运行中改它要重进 Play。默认 96")]
+    [Min(0f)] public float killFeedBottomOffset = 96f;
+
     const string ResourcePath = "GameAssets";
 
     static GameAssets _instance;

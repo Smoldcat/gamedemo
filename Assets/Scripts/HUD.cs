@@ -311,9 +311,17 @@ public class HUD : MonoBehaviour
 
     void SetAllTextFont(Font f)
     {
-        if (f == null) return;
         foreach (var t in new Text[] { hpText, weaponText, modeText, waveText, killText, announceText, deathStat, restartBtnLabel })
-            if (t != null) t.font = f;
+        {
+            if (t == null) continue;
+            if (f != null) t.font = f;
+            // ⚠️ **强制不截断**：`Text` 默认 `Vertical Overflow = Truncate`，而"行高"是随**字体**变的
+            //    （换字体后行高会变大，如思源黑体明显大于内置 Arial）→ 一旦「行高 > 文本框高度」，
+            //    Truncate 会把**整段文字一个字都不画**（症状：部分 HUD 文字整条消失、另一些正常 ——
+            //    场景里那些文本框的高度是按旧字体摆的，正好卡在临界）。
+            //    HUD 上这些都是"要么完整显示"的标签，所以统一设成 Overflow。
+            t.verticalOverflow = VerticalWrapMode.Overflow;
+        }
     }
 
     /// <summary>死亡后点「重新开始」：重载当前场景，开始新一局</summary>
@@ -543,9 +551,10 @@ public class HUD : MonoBehaviour
             FillSprite(_bubbleKeyBg, UIUtil.CircleSprite(48), false);
 
             // 字体统一由代码注入（项目共用字体，保证中文正常）；节点上只调字号 / 颜色
+            // ⚠️ 同时强制 Vertical Overflow = Overflow：不然"按键字母 E"会因行高 > 圆标高度被 Truncate 掉（踩过）
             var f = fallbackFont != null ? fallbackFont : UIUtil.Font;
-            if (_bubbleName != null) _bubbleName.font = f;
-            if (_bubbleKeyText != null) _bubbleKeyText.font = f;
+            if (_bubbleName != null) { _bubbleName.font = f; _bubbleName.verticalOverflow = VerticalWrapMode.Overflow; }
+            if (_bubbleKeyText != null) { _bubbleKeyText.font = f; _bubbleKeyText.verticalOverflow = VerticalWrapMode.Overflow; }
 
             pickupBubble.gameObject.SetActive(false);   // 运行时先隐藏，Update 按需显示
             _bubbleLabel = null;

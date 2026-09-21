@@ -46,7 +46,9 @@ public class WaveManager : MonoBehaviour
     public WaveConfig waveConfig;
 
     [Header("地图（可选）")]
-    [Tooltip("地面物体（带 Collider）。拖入后生成边界自动按它大小计算；留空用默认 30×30")]
+    [Tooltip("地面物体（带 Collider，一般拖场景里的 Ground）。拖入后每局按它尺寸算出「地图边界」，\n" +
+             "**刷怪范围 / 巡逻点 / 僵局传送落点**都按这个边界换算（2026-09-22 起刷怪范围也跟随它）。\n" +
+             "⚠️ 留空 → 用默认边界 15（即 30×30），此时刷怪范围会比接上时小一圈")]
     public Transform mapGround;
     [Tooltip("地面物体的 Tag。每局按它重新查找地面（场景重载后旧引用会失效，必须重绑）。留空则不重新绑定")]
     public string mapGroundTag = "";
@@ -180,11 +182,11 @@ public class WaveManager : MonoBehaviour
         // 初始武器：从武器池随机挑几把铺在地上（彼此拉开距离）。池空则用代码内置 4 把默认枪兜底
         var weapons = PickInitialWeapons();
         foreach (var w in weapons)
-            WeaponPickup.Create(w, SpawnPosition.FindOpenSpot(3f, 13f, spawned));
+            WeaponPickup.Create(w, SpawnPosition.FindOpenSpot(3f, SpawnPosition.RangeWeapon, spawned));
 
         // 初始血包：3个，随机落点
         for (int i = 0; i < 3; i++)
-            HealthPack.Create(SpawnPosition.FindOpenSpot(4f, 14f, spawned));
+            HealthPack.Create(SpawnPosition.FindOpenSpot(4f, SpawnPosition.RangeMedkit, spawned));
 
         // 初始敌人：从敌人池随机挑（池里几种就随机几种），数量按波次配置，随机落点且彼此拉开
         for (int i = 0; i < WC.initialEnemies; i++)
@@ -287,7 +289,7 @@ public class WaveManager : MonoBehaviour
                 if (Time.time >= _medkitRespawnAt[i])
                 {
                     if (HealthPack.All.Count < 3)
-                        HealthPack.Create(SpawnPosition.FindOpenSpot(4f, 14f));
+                        HealthPack.Create(SpawnPosition.FindOpenSpot(4f, SpawnPosition.RangeMedkit));
                     _medkitRespawnAt.RemoveAt(i);
                 }
     }
@@ -384,7 +386,7 @@ public class WaveManager : MonoBehaviour
     {
         if (cfg == null) cfg = EnemyConfig.Melee();   // 极端兜底：保证永远能生成
 
-        Vector3 pos = SpawnPosition.FindOpenSpot(6f, 16f, occupied);
+        Vector3 pos = SpawnPosition.FindOpenSpot(6f, SpawnPosition.RangeEnemy, occupied);
         var e = new GameObject("Enemy_" + cfg.displayName + "_W" + GameState.Wave);
         e.transform.position = pos;
         // 统一进「敌人」层：供 EnemyAI 视线射线排除（否则敌人互相挡视线，后排会"站着不动"）。
