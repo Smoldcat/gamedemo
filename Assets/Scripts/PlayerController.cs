@@ -169,10 +169,18 @@ public class PlayerController : MonoBehaviour
     /// <summary>是否正按住右键瞄准（腰射 ↔ 瞄准）。</summary>
     public bool Aiming => _aiming;
 
-    /// <summary>当前移动速度上限（米/秒）。**优先级：瞄准 &gt; 跑 &gt; 走**。
+    /// <summary>当前移动速度上限（米/秒）= **基准档 × 当前武器的速度系数**。**优先级：瞄准 &gt; 跑 &gt; 走**。
     /// 设计意图：让「瞄准」有代价（移动变慢），否则全程瞄准就是最优解；
-    /// 而「开枪会退出奔跑」（见 <see cref="Fire"/>）保证腰射时也不会一边冲刺一边输出。</summary>
-    public float CurrentMoveSpeed => _aiming ? aimSpeed : (running ? runSpeed : walkSpeed);
+    /// 而「开枪会退出奔跑」（见 <see cref="Fire"/>）保证腰射时也不会一边冲刺一边输出。
+    /// 武器系数（`WeaponData`）：`moveSpeedMultiplier` 只管**行走 / 奔跑**，`aimMoveSpeedMultiplier` 只管**瞄准**
+    /// —— 两档**互不叠加**（各管一档）；空手 / 缺省 = 1 = 纯基准速度。
+    /// ⚠️ **唯一入口**：别在别处再写一遍"哪档 × 什么速度"（将来若改成"负重公式"，也只改这一行）。
+    /// ⚠️ 系数**没有上限**（设计自由），但请守住不变量：`aimSpeed × aimMoveSpeedMultiplier ≤ walkSpeed × moveSpeedMultiplier`
+    ///    —— 否则某把枪"按住右键"既更准又更快，腰射对它形同虚设（§3.11 的设计意图）。
+    /// ⚠️ 取用时 `Mathf.Max(0f, ...)` 是**兜底**：手改 YAML 塞进负数会让移动方向反掉（`OnValidate` 只在编辑器生效）。</summary>
+    public float CurrentMoveSpeed => _aiming
+        ? aimSpeed * (weapon != null ? Mathf.Max(0f, weapon.aimMoveSpeedMultiplier) : 1f)
+        : (running ? runSpeed : walkSpeed) * (weapon != null ? Mathf.Max(0f, weapon.moveSpeedMultiplier) : 1f);
 
     /// <summary>「腰射 ↔ 瞄准」的散布过渡进度：0 = 完全腰射，1 = 完全瞄准。
     /// 由 <see cref="AdvanceAds"/> 每帧按 `WeaponData.hipToAimTime` / `aimToHipTime` 定速推进；

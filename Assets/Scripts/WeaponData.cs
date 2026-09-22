@@ -53,6 +53,19 @@ public class WeaponData : ScriptableObject
     [Header("手感与表现")]
     public float gunLength = 0.55f;   // 持枪/拾取模型的枪身长度（狙击最长）
     public float shake = 0.07f;       // 开火镜头震动强度
+    [Tooltip("移动速度系数：**拿这把枪时**「行走 / 奔跑」速度的倍率（1 = 不带任何影响）。\n" +
+             "  · 只作用于**没瞄准**时的两档（走 / 跑）；**不作用于瞄准速度**（那个看「瞄准移动系数」）。\n" +
+             "  · 空手 / 缺省 = 1（纯基准速度）。示例：机枪 0.85 = 比基准慢 15%。\n" +
+             "  · 下限 0.1（0 会让角色完全动不了）；**没有上限**。\n" +
+             "  · ⚠️ 请守住不变量：「瞄准速度 × 瞄准移动系数 ≤ 行走速度 × 本系数」——\n" +
+             "    否则某把枪按住右键既更准又更快，「腰射」对它就没意义了（§3.11 的设计意图）。")]
+    [Min(0.1f)]
+    public float moveSpeedMultiplier = 1f;
+    [Tooltip("瞄准移动系数：**拿这把枪且按住右键瞄准时**「瞄准速度」的倍率（1 = 不带任何影响）。\n" +
+             "  · 只作用于**瞄准**那一档，与「移动速度系数」**互不叠加**（各管一档）。\n" +
+             "  · 经验上一般 ≤ 1（瞄准本来就该更慢）；想设 > 1 请先确认上面那条不变量。")]
+    [Min(0.1f)]
+    public float aimMoveSpeedMultiplier = 1f;
     public SoundKind sound = SoundKind.Normal;   // Normal=普通枪声, Shotgun=霰弹, Sniper=狙击
 
     [Header("后坐力（纯屏幕系，可压枪）")]
@@ -129,6 +142,8 @@ public class WeaponData : ScriptableObject
     ///   recoilRecover = 0 → 后坐永不回正（准星与弹道持续错位）
     ///   hipSpread/aimSpread 为负 → 散布区间反向
     ///   hipToAimTime/aimToHipTime 为负 → 过渡方向反向（会「瞬间倒退」到目标，等于瞬时切换）
+    ///   moveSpeedMultiplier/aimMoveSpeedMultiplier < 0.1 → 角色几乎无法移动（0 = 完全钉死在原地）
+    ///     ⚠️ **刻意不设上限**（速度系数没有设计天花板，见字段 Tooltip 里的那条不变量）
     ///   maxHp 见 EnemyConfig 的同类处理（0 会让血条算出 NaN）
     /// 只用 if 判断而不是无条件赋值，避免把合法值也标成「已修改」而脏化资源。
     /// </summary>
@@ -140,6 +155,10 @@ public class WeaponData : ScriptableObject
         if (aimSpread < 0f) aimSpread = 0f;
         if (hipToAimTime < 0f) hipToAimTime = 0f;   // 0 = 瞬时切换（旧行为）
         if (aimToHipTime < 0f) aimToHipTime = 0f;
+        // 速度系数：只兜下限（0 = 完全动不了 = 静默卡死）；**上限不设** —— 自由度交给设计者，
+        // 不变量（瞄准 ≤ 行走）写在字段 Tooltip 里作为调参提醒，不在这里硬挡。
+        if (moveSpeedMultiplier < 0.1f) moveSpeedMultiplier = 0.1f;
+        if (aimMoveSpeedMultiplier < 0.1f) aimMoveSpeedMultiplier = 0.1f;
         if (bulletSpeed < 0.1f) bulletSpeed = 0.1f;
         if (bulletLife < 0.01f) bulletLife = 0.01f;
         if (magSize < 1) magSize = 1;
@@ -194,6 +213,7 @@ public class WeaponData : ScriptableObject
         w.bulletSpeed = 32f; w.magSize = 12; w.reloadTime = 1.0f;
         w.tracerColor = new Color(1f, 0.92f, 0.35f); w.pickupColor = Color.yellow;
         w.gunLength = 0.45f; w.shake = 0.07f; w.sound = SoundKind.Normal;
+        w.moveSpeedMultiplier = 1f; w.aimMoveSpeedMultiplier = 1f;   // = 字段默认（显式写出，避免以后改默认值时这条链被静默影响）
         _cachedPistol = w;
         return w;
     }
@@ -209,6 +229,7 @@ public class WeaponData : ScriptableObject
         w.bulletSpeed = 36f; w.magSize = 30; w.reloadTime = 1.5f;
         w.tracerColor = new Color(0.5f, 1f, 1f); w.pickupColor = Color.cyan;
         w.gunLength = 0.55f; w.shake = 0.05f; w.sound = SoundKind.Normal;
+        w.moveSpeedMultiplier = 1f; w.aimMoveSpeedMultiplier = 1f;
         _cachedSMG = w;
         return w;
     }
@@ -224,6 +245,7 @@ public class WeaponData : ScriptableObject
         w.bulletSpeed = 26f; w.magSize = 6; w.reloadTime = 1.8f;
         w.tracerColor = new Color(1f, 0.55f, 0.25f); w.pickupColor = new Color(1f, 0.5f, 0.1f);
         w.gunLength = 0.72f; w.shake = 0.20f; w.sound = SoundKind.Shotgun;
+        w.moveSpeedMultiplier = 1f; w.aimMoveSpeedMultiplier = 1f;
         _cachedShotgun = w;
         return w;
     }
@@ -239,6 +261,7 @@ public class WeaponData : ScriptableObject
         w.bulletSpeed = 55f; w.magSize = 4; w.reloadTime = 2.2f;
         w.tracerColor = new Color(0.85f, 0.45f, 1f); w.pickupColor = new Color(0.8f, 0.4f, 1f);
         w.gunLength = 0.95f; w.shake = 0.30f; w.sound = SoundKind.Sniper;
+        w.moveSpeedMultiplier = 1f; w.aimMoveSpeedMultiplier = 1f;   // 基准速度（狙击的"慢"由射击节奏体现，暂不额外减速）
         _cachedSniper = w;
         return w;
     }

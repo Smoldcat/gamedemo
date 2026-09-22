@@ -48,6 +48,10 @@ public class BackpackPanel : MonoBehaviour
     const float GridW = 364f, GridH = 290f;  // 库存网格整块（5 列 × 4 行）
     const float CellW = 68f, CellH = 68f, CellGap = 6f;
     const float BarW = 300f, BarH = 14f;     // 底部占用条
+    // Tooltip（悬停武器属性）尺寸：⚠️ **两条路径必须一致** —— 这里只是"代码生成"兜底路径用的值，
+    // 而**实际生效的是 prefab 里 `Backpack/Tooltip`（+ 子节点 `/Txt`）的 sizeDelta**（背包走 prefab 双轨，见类注释；
+    // `TryBuildFromPrefab` 刻意不改预置节点的布局）。**加/删信息行时两处都要改**（每行约 20px）。
+    const float TipW = 260f, TipH = 216f;
 
     // ---- 快捷槽元素 ----
     RectTransform[] _slotCell = new RectTransform[SlotCount];
@@ -433,14 +437,14 @@ public class BackpackPanel : MonoBehaviour
         _tooltipGo = new GameObject("Tooltip");
         _tooltipGo.transform.SetParent(_root.transform, false);
         var ttRt = _tooltipGo.AddComponent<RectTransform>();
-        ttRt.sizeDelta = new Vector2(260f, 152f);
+        ttRt.sizeDelta = new Vector2(TipW, TipH);
         ttRt.anchorMin = ttRt.anchorMax = ttRt.pivot = new Vector2(0f, 0.5f);   // 锚在左边：位置按"左边缘 + 垂直中心"给（方便放到鼠标右侧）
         var ttImg = _tooltipGo.AddComponent<Image>();
         ttImg.sprite = sprPanel;
         ttImg.type = Image.Type.Sliced;
         ttImg.color = new Color(0.06f, 0.08f, 0.13f, 0.96f);
         ttImg.raycastTarget = false;
-        _tooltipText = AddText(_tooltipGo.transform, "Txt", new Vector2(244f, 140f), "", 12, Color.white);
+        _tooltipText = AddText(_tooltipGo.transform, "Txt", new Vector2(TipW - 16f, TipH - 12f), "", 12, Color.white);
         _tooltipText.rectTransform.anchoredPosition = new Vector2(0f, 0f);
         _tooltipText.alignment = TextAnchor.MiddleLeft;
         _tooltipText.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -771,11 +775,25 @@ public class BackpackPanel : MonoBehaviour
     {
         if (w == null) return "";
         // 格式约定：**每行只放一项数据**（好扫读，以后加/删条目也不用重排整块）。
-        // 散布用 0.##（最多 2 位小数）：瞄准散布可能很小（如 RPG7 的 0.15°），
-        // 用 0.#（1 位）会把它显示成 0.2° —— 显示值与实际值不符会误导调参。
-        // 行数/行高要和 tooltip 的尺寸（BuildUI 里的 sizeDelta）配套，加行时记得一起调。
-        return string.Format("{0}\n伤害 {1}\n弹匣 {2}\n射速 {3:0.00}s\n腰射散布 {4:0.##}°\n瞄准散布 {5:0.##}°\n换弹 {6:0.0}s",
-            w.weaponName, w.damage, w.magSize, w.fireInterval, w.hipSpread, w.aimSpread, w.reloadTime);
+        // 单位必须写清（§9 #18 踩过"两个参数单位不同"的坑）：后坐是**米**、散布是**度**、
+        // 速度系数是**倍率**、射速给"发/分"。
+        // 小数位：散布 0.##、后坐 0.###（瞄准散布 / 瞄准后坐可能很小，如 RPG7 瞄准散布 0.15°、
+        // M1911 瞄准横向后坐 0.018m —— 位数不够时显示值会与实际值对不上，误导调参）。
+        // 「后坐·瞄准」那行 = 腰射值 × 瞄准倍率（即**乘倍率以后**的实际值）。
+        // ⚠️ 行数要和 tooltip 的高度配套：代码侧 = `TipH`，prefab 侧 = `Backpack/Tooltip` 的 sizeDelta，**两处一起改**。
+        float rpm = 60f / Mathf.Max(w.fireInterval, 0.001f);
+        float aimRecoilUp = w.hipRecoilUp * Mathf.Max(0f, w.aimRecoilUpMultiplier);
+        float aimRecoilJitter = w.hipRecoilJitter * Mathf.Max(0f, w.aimRecoilJitterMultiplier);
+        return string.Format(
+            "{0}\n伤害 {1}\n爆头倍率 {2:0.##}×\n弹匣 {3}\n射速 {4:0}/分（{5:0.00}s）\n换弹 {6:0.0}s\n" +
+            "腰射散布 {7:0.##}°\n瞄准散布 {8:0.##}°\n" +
+            "后坐·腰射  纵 {9:0.###}m / 横 {10:0.###}m\n后坐·瞄准  纵 {11:0.###}m / 横 {12:0.###}m\n" +
+            "瞄准过渡  {13:0.00}s 进 / {14:0.00}s 出\n移动系数  {15:0.00} / 瞄准移动 {16:0.00}",
+            w.weaponName, w.damage, w.headshotMultiplier, w.magSize, rpm, w.fireInterval, w.reloadTime,
+            w.hipSpread, w.aimSpread,
+            w.hipRecoilUp, w.hipRecoilJitter, aimRecoilUp, aimRecoilJitter,
+            w.hipToAimTime, w.aimToHipTime,
+            w.moveSpeedMultiplier, w.aimMoveSpeedMultiplier);
     }
 
     // ==================== 共享资源：贴图 / 图标 / 字体 ====================
