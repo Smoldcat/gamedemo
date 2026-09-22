@@ -35,7 +35,8 @@ public static class InspectorLabelTable
         { "PlayerController.recoilScreenMargin",        "屏幕边缘余量" },
         { "PlayerController.recoilRecoverMaxTime",      "回正时长上限" },
         { "PlayerController.recoilRecoverJitterRatio",  "回正手抖余量" },
-        { "PlayerController.headshotRadiusRatio",       "爆头判定半径" },
+        { "PlayerController.headshotGateScale",        "爆头判定圈倍率" },
+        { "PlayerController.headshotRadiusRatio",       "爆头判定半径（旧口径）" },
         { "PlayerController.bodyAimRadius",             "身体瞄准半径" },
 
         // -------------------------------- Crosshair --------------------------------
@@ -50,6 +51,13 @@ public static class InspectorLabelTable
         { "Crosshair.colorHitFlash",     "命中闪白颜色" },
         { "Crosshair.spreadRingAlpha",   "散布圈透明度" },
         { "Crosshair.useVirtualCursor",  "虚拟光标（非游玩态）" },
+
+        // -------------------------------- CameraRig --------------------------------
+        // ⚠️ 别和 [Header]（"跟谁" / "相机参数"）写成一样，否则 Inspector 上会有两行一样的字
+        { "CameraRig.target",          "跟随目标" },
+        { "CameraRig.followLerp",      "相机跟随速度" },
+        { "CameraRig.aimLeadRatio",    "镜头前探比例" },
+        { "CameraRig.maxAimLead",      "镜头前探上限（米）" },
     };
 
     /// <summary>取中文标签；没登记返回 null（调用方负责回落英文标签）</summary>

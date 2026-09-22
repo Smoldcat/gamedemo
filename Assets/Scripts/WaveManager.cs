@@ -500,6 +500,7 @@ public class WaveManager : MonoBehaviour
         faceGo.GetComponent<MeshRenderer>().sharedMaterial = Effects.Shared(cfg.faceColor);
 
         var head = headGo.AddComponent<EnemyHead>();
+        head.radius = r;   // 爆头判定圈按它投影到屏幕：与上面画出来的球同源（改 FOV/分辨率不影响爆头平衡）
         return head;
     }
 

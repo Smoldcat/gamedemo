@@ -12,17 +12,17 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "GameAssets", menuName = "游戏/资源总表", order = 0)]
 public class GameAssets : ScriptableObject
 {
-    [Header("敌人模型（留空 = 用代码生成的胶囊体）")]
+    // ⚠️ **本类的字段一律不要写 `[Header]`**：分组标题由 `GameAssetsEditor.Fields` 表统一画
+    //    （类里再写一遍 = **每组标题重复两行** —— 2026-09-23 修过一次）。
+    //    想加/改分组标题 → 改 `GameAssetsEditor` 那张表里的最后一列。
     [Tooltip("敌人的通用身体模型 Prefab（各敌人可单独在 EnemyConfig.bodyPrefab 里覆盖）")]
     public GameObject enemyMeleePrefab;
     [Tooltip("远程敌人手里那把枪的模型 Prefab")]
     public GameObject enemyGunPrefab;
 
-    [Header("道具模型（留空 = 用代码生成的默认外观）")]
     [Tooltip("血包模型 Prefab")]
     public GameObject healthPackPrefab;
 
-    [Header("特效（留空 = 用代码生成的默认特效）")]
     [Tooltip("命中火花。建议放带 ParticleSystem 的 Prefab，会自动播完即销毁")]
     public GameObject impactPrefab;
     [Tooltip("枪口火光")]
@@ -30,13 +30,11 @@ public class GameAssets : ScriptableObject
     [Tooltip("地面弹孔/血迹")]
     public GameObject decalPrefab;
 
-    [Header("UI 特效（留空 = 用代码生成的默认样式）")]
     [Tooltip("伤害飘字 Prefab：含 Text 组件的 UI 物体（可自定义字体/样式/动画）。留空则用代码生成默认文字")]
     public GameObject damageTextPrefab;
     [Tooltip("准星图片（Sprite）。全局默认准星外观；Crosshair 组件上单独拖了则优先用组件的。留空用代码生成的十字")]
     public Sprite crosshairSprite;
 
-    [Header("音效（留空 = 用代码合成的默认音效）")]
     public AudioClip shot;          // 普通枪声（手枪/冲锋枪）
     public AudioClip shotgun;       // 霰弹枪声
     public AudioClip sniper;        // 狙击枪声
@@ -50,7 +48,6 @@ public class GameAssets : ScriptableObject
     public AudioClip pump;          // 霰弹枪泵动
     public AudioClip bolt;          // 狙击枪拉栓
 
-    [Header("背包 UI 音效（留空 = 用代码合成的默认音效）")]
     [Tooltip("打开背包")]
     public AudioClip invOpen;
     [Tooltip("关闭背包")]
@@ -62,7 +59,6 @@ public class GameAssets : ScriptableObject
 
     // ---------------- 击杀反馈（2026-09-20 新增：屏幕下方中央的「击杀图标 + 名字」） ----------------
     // ⚠️ 新字段一律追加在末尾（见交接文档 §6.8）：Unity 按字段名序列化，追加不会影响已存数值。
-    [Header("击杀反馈（留空 = 代码生成的占位）")]
     [Tooltip("普通击杀图标（Sprite）。击杀敌人时显示在屏幕下方中央。留空用代码生成的占位（四角星）")]
     public Sprite killIcon;
     [Tooltip("爆头击杀图标（Sprite）。最后致命一击是爆头时用它替换普通图标。留空用代码生成的占位（靶心）")]
@@ -81,7 +77,6 @@ public class GameAssets : ScriptableObject
     public AudioClip headshotHit;
 
     // ---------------- 背包（2026-09-20 新增：外观资源槽 + 颜色参数，让背包样式不用改代码） ----------------
-    [Header("背包（留空 = 代码生成的占位）")]
     [Tooltip("库存格数（同类武器在同一格里叠加 → 等于「最多能装几种武器」）。默认 20")]
     public int backpackInventorySlots = 20;
     [Tooltip("背包面板底图（Sprite，九宫格）。留空用代码生成的圆角面板。⚠️ 建议白色/浅色 + 透明（颜色由代码控制）")]

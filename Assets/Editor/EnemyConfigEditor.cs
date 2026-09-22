@@ -114,9 +114,9 @@ public class EnemyConfigEditor : Editor
             EditorGUILayout.PropertyField(p, new GUIContent(label, tip));
         }
 
-        // 头部 / 面部 / 爆头（单独成组，方便像 GameAssets 那样一眼找到）
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField("头部与面部（外观，也是爆头判定的锚点；留默认即可）", EditorStyles.boldLabel);
+        // 头部 / 面部 / 爆头（单独成组，方便一眼找到）
+        // ⚠️ **不要在这里手画标题**：`EnemyConfig` 上已经有 `[Header("头部与爆头（外观 + 爆头判定锚点）")]`，
+        //    而 `PropertyField` 会自动把 `[Header]` 画出来 → 再画一遍就是**两行标题**（2026-09-23 修）。
         foreach (var (propName, label, tip) in HeadFields)
         {
             var p = serializedObject.FindProperty(propName);

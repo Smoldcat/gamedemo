@@ -82,12 +82,23 @@ public class PlayerController : MonoBehaviour
     [Range(0f, 0.05f)] public float recoilRecoverJitterRatio = 0f;
 
     [Header("瞄准判定（头部 / 身体）")]
-    [Tooltip("【头部 · 单位=屏幕高度的比例】爆头判定圆的屏幕半径 = 屏幕高度 × 本值。\n" +
-             "  · 0.0125 = 720p 屏幕下约 9 像素（默认）；值越大 → 判定圈越大 → 越好爆头。\n" +
+    [Tooltip("【头部 · 判定圈口径】默认 1 = 判定圈**恰好等于屏幕上画出来的那个头球**（所见即所判）。\n" +
+             "  · 怎么算：把「敌人头心」与「头心 + 相机右方向 × 头半径」各投影到屏幕，取两点像素距离 = 头在屏幕上的可见半径；\n" +
+             "    再乘本值就是判定圈半径。所以准星压在头上（哪怕只压在头的边缘）就必定爆头。\n" +
+             "  · 为什么不用固定像素圈：固定像素圈**不随相机 FOV 变**，而敌人的头在屏幕上会随 FOV 变大变小 →\n" +
+             "    两者必然越差越远（FOV 45 时判定圈只有可见头的 ~60%，出现「准星明明压在头上却不爆头」）。\n" +
+             "    现在判定圈与头**同源** → 改 FOV / 分辨率 / 宽高比 / 距离都**不会**改变爆头平衡。\n" +
              "  · 判定时机：**开火那一瞬间**（之后敌人怎么移动都不改变结果，只会变成打空）。\n" +
-             "  · 为什么用「屏幕比例」而不是米：子弹是水平直线、3D 上打不到头顶，判定只能跟着「屏幕上看到的头」走；\n" +
+             "  · <1（如 0.6）= 要求比看到的头更精准 → 难度更高；\n" +
+             "  · ≤0 = **回退旧口径**（全敌人共用一个固定像素圈 = 屏幕高 × headshotRadiusRatio），此时本值失效。\n" +
+             "  · ⚠️ 上限 1.5：头心与敌人中心在屏幕上的间距 ≈ 头可见半径 ÷ 0.645，再大就会把「瞄准身体中心」也判成爆头。")]
+    public float headshotGateScale = 1f;
+
+    [Tooltip("【头部 · 旧口径（仅在 headshotGateScale ≤ 0 时生效）】爆头判定圆的屏幕半径 = 屏幕高度 × 本值。\n" +
+             "  · 0.0125 = 720p 屏幕下约 9 像素；值越大 → 判定圈越大 → 越好爆头。\n" +
+             "  · 当初为什么用「屏幕比例」而不是米：子弹是水平直线、3D 上打不到头顶，判定只能跟着「屏幕上看到的头」走；\n" +
              "    好处是与距离、分辨率都无关（远处不会更难，距离的难度由武器散射自然提供）。\n" +
-             "  · 上限提醒：头部与身体中心在屏幕上的间距约 0.039 × 屏幕高，本值超过 ~0.03 就会把「瞄准身体中心」也判成爆头。")]
+             "  · 代价：它**不跟随相机 FOV**，且恒小于「屏幕上看到的头」→ 已被 headshotGateScale 取代，这里只作回退。")]
     public float headshotRadiusRatio = 0.0125f;
 
     [Tooltip("【身体 · 单位=世界米数】判定「准星指着的这发子弹会打中它的身体」：\n" +
@@ -360,6 +371,8 @@ public class PlayerController : MonoBehaviour
         if (recoilRecoverMaxTime < 0.05f) recoilRecoverMaxTime = 0.05f;
         if (recoilRecoverJitterRatio < 0f) recoilRecoverJitterRatio = 0f;
         if (recoilRecoverJitterRatio > 0.05f) recoilRecoverJitterRatio = 0.05f;
+        if (headshotGateScale < 0f) headshotGateScale = 0f;
+        if (headshotGateScale > 1.5f) headshotGateScale = 1.5f;   // 再大就会把「瞄准身体中心」也判成爆头（见字段说明）
         if (headshotRadiusRatio < 0f) headshotRadiusRatio = 0f;
         if (bodyAimRadius < 0.05f) bodyAimRadius = 0.05f;
     }
@@ -814,8 +827,10 @@ public class PlayerController : MonoBehaviour
     /// 开火爆头判定（`Fire`）和准星颜色（`Crosshair`）都调这里，所以"看到的颜色 = 打出的伤害"，永不脱节。
     ///
     /// 规则：
-    /// - **头部（屏幕空间）**：准星屏幕坐标 与 敌人头部投影到屏幕的位置 的距离 ≤ 屏幕高 × `headshotRadiusRatio`
-    ///   → 与距离、分辨率都无关；多个敌人同时满足取**屏幕距离最小**者。
+    /// - **头部（屏幕空间）**：判定圈半径 = **该敌人头部在屏幕上的投影半径** × `headshotGateScale`（默认 1 = 所见即所判），
+    ///   准星屏幕坐标落在圈内即判爆头 —— 判定圈与"屏幕上看到的头"同源，FOV / 分辨率 / 宽高比 / 距离怎么变都同步。
+    ///   （`headshotGateScale ≤ 0` 时回退旧口径：全敌人共用一个固定像素圈 = 屏幕高 × `headshotRadiusRatio`。）
+    ///   多个敌人同时满足取**屏幕距离最小**者。
     /// - **身体（世界空间 · 按弹道判定）**：从枪口沿「枪口 → 瞄准点」方向的**射线**，到敌人**中心的垂直距离** ≤ `bodyAimRadius`（米）。
     ///   ⚠️ 这里用的是「点到直线（射线）的距离」，**不是**「点到点的距离」—— 那才是"红了却打不中"的根源（见 §4 #26）；
     ///   与 `Bullet` 的直击命中共用**同一个判据**，所以 `bodyAimRadius = 0.4`（碰撞体半径）时"红 ⟺ 这一枪会命中"成立。
@@ -841,9 +856,12 @@ public class PlayerController : MonoBehaviour
         if (bulletDir.sqrMagnitude < 0.0001f) bulletDir = Vector3.forward; else bulletDir.Normalize();
         Vector3 muzzleXZ = new Vector3(muzzle.x, 0f, muzzle.z);
 
-        float headR = Screen.height * Mathf.Max(headshotRadiusRatio, 0f);
-        bool headOn = headR >= 0.5f;          // 半径太小直接关掉（避免"必中"）
-        float headRSq = headR * headR;
+        // 判定圈口径（二选一）：
+        //  · gateOnVisual（默认）：贴合可见头 —— 每个敌人各自算「屏幕投影半径 × headshotGateScale」；
+        //  · 回退：全敌人共用一个固定像素圈 = 屏幕高 × headshotRadiusRatio（旧行为）。
+        bool gateOnVisual = headshotGateScale > 0f;
+        float gateLegacy = Screen.height * Mathf.Max(headshotRadiusRatio, 0f);
+        bool headOn = gateOnVisual || gateLegacy >= 0.5f;   // 半径太小直接关掉（避免"必中"）
         float headBestSq = float.MaxValue;
         EnemyAI headBest = null;
 
@@ -860,15 +878,20 @@ public class PlayerController : MonoBehaviour
             var h = e.HealthRef;                   // EnemyAI 已缓存，不必逐个 GetComponent
             if (h == null || !h.alive) continue;   // 跳过尸体
 
-            // ① 头部（屏幕空间）
+            // ① 头部（屏幕空间）：判定圈 = 头在屏幕上的可见半径 × 倍率（默认 1 = 所见即所判）
             var head = e.head;
             if (headOn && head != null)
             {
-                Vector3 sp = cam.WorldToScreenPoint(head.WorldPosition);
-                if (sp.z > 0f)                     // 相机后方：投影结果无效
+                Vector2 hc;
+                float visibleR;
+                if (HeadScreenCircle(cam, head, out hc, out visibleR))
                 {
-                    float dSq = (new Vector2(sp.x, sp.y) - _crosshairEff).sqrMagnitude;
-                    if (dSq <= headRSq && dSq < headBestSq) { headBestSq = dSq; headBest = e; }
+                    float gate = gateOnVisual ? visibleR * headshotGateScale : gateLegacy;
+                    if (gate >= 0.5f)
+                    {
+                        float dSq = (hc - _crosshairEff).sqrMagnitude;
+                        if (dSq <= gate * gate && dSq < headBestSq) { headBestSq = dSq; headBest = e; }
+                    }
                 }
             }
 
@@ -885,6 +908,29 @@ public class PlayerController : MonoBehaviour
         if (headBest != null) { target = headBest; return AimState.Head; }
         if (bodyBest != null) { target = bodyBest; return AimState.Body; }
         return AimState.None;
+    }
+
+    /// <summary>
+    /// 头部在屏幕上的**圆心**与**可见半径（像素）** —— 爆头判定圈的来源，唯一实现。
+    ///
+    /// 半径怎么来：把「头心」与「头心 + 相机右方向 × 头半径」各投影到屏幕，取两点的像素距离。
+    /// 相机右方向天然垂直于视线，所以这个距离就是**该深度处一个世界半径对应多少像素** ——
+    /// 与 `UpdateAimPoint` 里实测 `_pxPerM` 用的是同一套手法，因此判定圈与渲染出来的头球恒等，
+    /// FOV / 分辨率 / 宽高比 / 距离怎么变都同步（这是 2026-09-23 从「固定像素圈」改过来的原因）。
+    /// 返回 false = 头部在相机后方或退化，调用方应跳过。
+    /// </summary>
+    static bool HeadScreenCircle(Camera cam, EnemyHead head, out Vector2 center, out float radiusPx)
+    {
+        center = Vector2.zero;
+        radiusPx = 0f;
+        Vector3 c = head.WorldPosition;
+        Vector3 a = cam.WorldToScreenPoint(c);
+        if (a.z <= 0f) return false;                                  // 相机后方：投影结果无效
+        Vector3 b = cam.WorldToScreenPoint(c + cam.transform.right * Mathf.Max(head.radius, 0.01f));
+        if (b.z <= 0f) return false;
+        center = new Vector2(a.x, a.y);
+        radiusPx = new Vector2(b.x - a.x, b.y - a.y).magnitude;
+        return radiusPx > 0.0001f;
     }
 
     void StartReload()

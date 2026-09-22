@@ -47,7 +47,8 @@ public class Crosshair : MonoBehaviour
              "⚠️ 它比真实命中范围（碰撞体半径 0.4）大，所以旧版存在「红了却打不中」的环带；想一致就把它调到 0.4~0.5。")]
     public Color colorBody = new Color(1f, 0.25f, 0.2f);
     [Tooltip("【指着头部】准星指在敌人头部上时的颜色（默认绿）。\n" +
-             "范围由 PlayerController 的「爆头判定半径 headshotRadiusRatio」（屏幕高度比例，默认 0.0125）决定 —— 调它就能校准绿圈。\n" +
+             "范围 = PlayerController 的「爆头判定圈」：默认就是**屏幕上画出来的那个头球**\n" +
+             "（headshotGateScale = 1，所见即所判）—— 想让绿圈比看到的头更小/更大，调 PlayerController.headshotGateScale。\n" +
              "绿色 = 此刻开枪必定爆头（2 倍伤害），所以这个颜色就是「爆头可用」的提示。")]
     public Color colorHead = new Color(0.35f, 1f, 0.45f);
     [Tooltip("【命中闪白】打中敌人瞬间的反馈色（默认纯白，约 0.08 秒）。\n" +
