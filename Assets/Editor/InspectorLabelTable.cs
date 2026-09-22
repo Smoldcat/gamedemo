@@ -58,6 +58,8 @@ public static class InspectorLabelTable
         { "CameraRig.followLerp",      "相机跟随速度" },
         { "CameraRig.aimLeadRatio",    "镜头前探比例" },
         { "CameraRig.maxAimLead",      "镜头前探上限（米）" },
+        { "CameraRig.aimFovNarrow",    "瞄准收窄视角（度）" },
+        { "CameraRig.aimLeadExtra",    "瞄准前探增量（米）" },
     };
 
     /// <summary>取中文标签；没登记返回 null（调用方负责回落英文标签）</summary>

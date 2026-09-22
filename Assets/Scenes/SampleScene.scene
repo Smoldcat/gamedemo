@@ -2862,7 +2862,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 50
+  field of view: 45
   orthographic: 0
   orthographic size: 5
   m_Depth: -1
@@ -2910,9 +2910,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   target: {fileID: 1472077873}
-  followLerp: 8
-  aimLeadRatio: 0.18
-  maxAimLead: 2.5
+  followLerp: 6
+  aimLeadRatio: 0.2
+  maxAimLead: 2
+  aimFovNarrow: 2
+  aimLeadExtra: 1.8
 --- !u!1 &986419450
 GameObject:
   m_ObjectHideFlags: 0
@@ -5883,11 +5885,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8946929374040157659, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
       propertyPath: mousePixelScale
-      value: 20.01
+      value: 25
       objectReference: {fileID: 0}
     - target: {fileID: 8946929374040157659, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
       propertyPath: recoilKickSpeed
-      value: 16
+      value: 18
       objectReference: {fileID: 0}
     - target: {fileID: 8946929374040157659, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
       propertyPath: recoilScreenMargin
@@ -5895,11 +5897,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8946929374040157659, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
       propertyPath: recoilRecoverMaxTime
-      value: 0.4
+      value: 0.3
       objectReference: {fileID: 0}
     - target: {fileID: 8946929374040157659, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
       propertyPath: recoilRecoverJitterRatio
-      value: 0.01
+      value: 0.03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
