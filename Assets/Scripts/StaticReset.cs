@@ -49,6 +49,7 @@ public static class StaticReset
         Crosshair.ResetStatics();
         BackpackPanel.ResetStatics();
         KillFeed.ResetStatics();
+        VirtualCursor.ResetStatics();
         WeaponData.ResetStatics();
 
         CameraCache.Clear();

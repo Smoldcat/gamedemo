@@ -701,7 +701,10 @@ public class BackpackPanel : MonoBehaviour
     {
         if (_pc == null) _pc = PlayerController.Instance;
         var bp = _pc != null ? _pc.backpack : null;
-        Vector2 mouse = Input.mousePosition;
+        // ⚠️ 鼠标位置统一走 `VirtualCursor.MousePosition`（非游玩态 = 虚拟光标的位置，继承准星）。
+        //    直接读 `Input.mousePosition` 会按"被锁在屏幕中心的系统光标"判定悬停 → 光标画在一处、
+        //    tooltip 却出现在另一处（2026-09-22 加虚拟光标时一并改掉）。
+        Vector2 mouse = VirtualCursor.MousePosition;
 
         WeaponData hover = null;
         // 快捷槽

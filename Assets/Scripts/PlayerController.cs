@@ -141,6 +141,26 @@ public class PlayerController : MonoBehaviour
     /// **单向数据源**：准星显示、瞄准点、弹道都由它派生 —— 不存在第二个"锚点"，所以永远不会出现"准星与光标错位"。</summary>
     public Vector2 CrosshairScreenPos => _crosshairEff;
 
+    /// <summary>把准星**直接搬到**指定屏幕坐标（供 `Crosshair` 在"关闭背包"时继承虚拟光标的位置）。
+    /// 这是合法路径 —— 开局也是直接设 `_crosshairTarget/_crosshairEff`（见 `Awake`）。
+    /// ⚠️ **必须同时清掉下面这 5 个状态**，否则准星会自己朝"旧标记点"跑回去：
+    ///    `_markValid`（回正标记点）／`_recovering`（回正进行中）／`_mouseDeviation`（手抖余量的累计净位移）／
+    ///    `_latAccum`（本梭子横向账本）／`_undisturbedSince`（静置期从现在起算）。
+    /// 位置会走准星自己的安全区夹取（与每帧那两行同一个 `ClampToSafeRect`）→ 摆不到屏幕外。
+    /// ⚠️ 刻意不动 `_aiming`：暂停分支本来每帧就复位它，按住/松开右键的真实状态会在恢复的下一帧自己接上。</summary>
+    public void SetCrosshairScreenPos(Vector2 screenPos)
+    {
+        float m = Mathf.Min(Screen.width, Screen.height) * Mathf.Clamp(recoilScreenMargin, 0f, 0.45f);
+        _crosshairTarget = ClampToSafeRect(screenPos, m);
+        _crosshairEff = _crosshairTarget;      // 目标值 = 过渡值 → 不产生任何"追赶"位移
+
+        _markValid = false;
+        _recovering = false;
+        _mouseDeviation = Vector2.zero;
+        _latAccum = 0f;
+        _undisturbedSince = Time.time;
+    }
+
     /// 当前准星指向的世界坐标（供相机前探使用）
     public Vector3 AimPoint => _aimPoint;
 

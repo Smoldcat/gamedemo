@@ -71,6 +71,9 @@ public class GameAssetsEditor : Editor
         ("invDrop",       "丢弃武器",   "丢弃武器时的音效", null),
 
         ("uiFont",        "界面字体",   "界面统一字体（.ttf/.otf）。留空 → 系统雅黑 → 内置兜底。\n填了则**编辑器与运行时同源**（编辑期所见即运行所得）。建议用开源可商用字体（思源黑体 / Noto Sans CJK）；微软雅黑有版权、勿随工程分发", "字体（留空 = 系统字体 / 内置兜底）"),
+
+        ("virtualCursorSprite", "光标图片",     "虚拟光标（打开背包 / 死亡结算时显示的那个指针）。留空 = 代码生成的白色箭头（白箭头 + 深色描边）。\n⚠️ 导入设置必须是 Sprite；切成多张时取第一张。\n⚠️ 热点（指针尖）取 **Sprite 自己的 pivot** —— 在 Sprite Editor 里把 pivot 拖到箭头尖端；不设则按图片中心。\n⚠️ 只在建画布时读一次 → 换图要重进 Play", "虚拟光标（留空 = 程序生成的箭头）"),
+        ("virtualCursorSize",   "光标大小(px)", "显示宽度（参考分辨率 1280×720 下，运行时随 UI 等比缩放）；高度按图片宽高比自动算。默认 24", null),
     };
 
     readonly HashSet<string> _handled = new HashSet<string>();

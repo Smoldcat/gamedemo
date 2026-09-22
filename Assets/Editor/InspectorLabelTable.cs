@@ -49,6 +49,7 @@ public static class InspectorLabelTable
         { "Crosshair.colorHead",         "指着头部颜色" },
         { "Crosshair.colorHitFlash",     "命中闪白颜色" },
         { "Crosshair.spreadRingAlpha",   "散布圈透明度" },
+        { "Crosshair.useVirtualCursor",  "虚拟光标（非游玩态）" },
     };
 
     /// <summary>取中文标签；没登记返回 null（调用方负责回落英文标签）</summary>

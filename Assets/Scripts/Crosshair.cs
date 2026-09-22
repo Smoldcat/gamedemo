@@ -5,7 +5,7 @@ using UnityEngine.UI;
 /// 鼠标准星：隐藏系统光标，用 UGUI 自绘十字（4 条线 + 中心点，跟随鼠标）。
 /// 命中敌人时闪白；按瞄准状态自动变色（未瞄准=白 / 指着身体=红 / 指着头部=绿，颜色与判定范围都可在 Inspector 调）；
 /// 换弹时整块准星替换为「圆形换弹进度环」。
-/// 死亡后隐藏准星并恢复系统光标（否则结算面板看不到鼠标指针）。
+/// 死亡 / 背包等非游玩态隐藏准星并切换到**虚拟光标**（位置继承准星 → 不会从屏幕中心冒出来，见 `VirtualCursor`）。
 /// 完全代码生成：运行时自建一个 Overlay Canvas（带与主 HUD 同参数的 CanvasScaler），不需要手动搭 UI。
 /// </summary>
 public class Crosshair : MonoBehaviour
@@ -58,6 +58,12 @@ public class Crosshair : MonoBehaviour
     [Tooltip("散布圈透明度（0~1）。圈 = 当前武器散布角在瞄准距离上的实际落点范围（散布楔形的内切圆），越远越大；散布=0 时隐藏")]
     [Range(0f, 1f)] public float spreadRingAlpha = 0.55f;
 
+    [Header("光标（非游玩态：背包 / 死亡结算）")]
+    [Tooltip("【虚拟光标】非游玩态用一个自绘光标代替系统光标，且**位置继承准星**（打开背包那一刻准星在哪，光标就从哪出现）。\n" +
+             "关掉 = 回到旧行为：解锁 + 显示系统光标（光标从屏幕中心出现，与准星无关）。\n" +
+             "⚠️ 这是逃生开关：万一虚拟光标让 UI 点不了（背包打开时游戏是暂停的），在 Inspector 里当场关掉它、下一帧即恢复可点。")]
+    public bool useVirtualCursor = true;
+
     Canvas _canvas;
     RectTransform _root;
     Image[] _bars;                 // 0-3 四根线 + 4 中心点
@@ -82,7 +88,8 @@ public class Crosshair : MonoBehaviour
         // 准星图片优先级：组件上拖的（本地覆盖）> GameAssets 资源表（全局默认）> 代码生成的十字
         if (crosshairSprite == null && GameAssets.I != null)
             crosshairSprite = GameAssets.I.crosshairSprite;
-        SetCursorMode(true);       // 游玩：锁定 + 隐藏系统光标（_cursorGameplay 初值即 true，这里直接设一次）
+        ApplyCursorModeNow(true);  // 游玩：锁定 + 隐藏系统光标（_cursorGameplay 初值即 true，这里直接设一次）
+                                   // 顺带 `VirtualCursor.Deactivate()` —— 覆盖"重开场景后静态状态还留着"的情况
         BuildUI();
 
         // 受击反馈：玩家受伤时准星短暂抖动（Crosshair 与 Health 同挂在 Player 上）
@@ -119,13 +126,31 @@ public class Crosshair : MonoBehaviour
         ApplyCursorMode(crosshairVisible);
     }
 
-    /// <summary>统一切换光标状态：
-    /// 游玩 = **锁定 + 隐藏**（锁定后鼠标增量不受光标位置限制 = 无限行程；也没有可见光标可跟准星"错位"）；
-    /// 非游玩（暂停 / 背包 / 死亡结算）= **解锁 + 显示**（否则 UI 点不了）。</summary>
-    static void SetCursorMode(bool gameplay)
+    /// <summary>统一切换光标状态（**唯一实现**，别在别处再写 `Cursor.lockState / Cursor.visible`）：
+    /// **游玩** = 锁定 + 隐藏（锁定后鼠标增量不受光标位置限制 = 无限行程；也没有可见光标可跟准星"错位"）；
+    /// **非游玩**（背包 / 死亡结算）= 解锁 + **仍然隐藏系统光标** + 显示**虚拟光标**（`VirtualCursor`）
+    ///   —— 虚拟光标的位置**继承准星**，于是"准星消失、光标在同一处出现"，不再是"无论准星在哪都从屏幕中心冒出来"。
+    /// ⚠️ `useVirtualCursor = false` 时回落旧行为（解锁 + 显示系统光标）：那是出问题时的逃生开关。</summary>
+    void ApplyCursorModeNow(bool gameplay)
     {
-        Cursor.lockState = gameplay ? CursorLockMode.Locked : CursorLockMode.None;
-        Cursor.visible = !gameplay;
+        if (gameplay)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            VirtualCursor.Deactivate();
+        }
+        else if (useVirtualCursor)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = false;      // 系统光标也藏起来：否则会出现"两个光标"（屏幕中心一个 + 准星处一个）
+            VirtualCursor.Activate();    // 位置 = 当前准星屏幕坐标（连续感的关键）
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;       // 逃生路径：回到 2026-09-22 之前的行为
+            VirtualCursor.Deactivate();
+        }
     }
 
     /// <summary>只在状态**变化**时切换光标模式。
@@ -134,8 +159,23 @@ public class Crosshair : MonoBehaviour
     void ApplyCursorMode(bool gameplay)
     {
         if (_cursorGameplay == gameplay) return;
+        // 非游玩 → 游玩：把"玩家在背包里把指针放到了哪"继承给准星
+        //（对称于打开背包时"光标继承准星"；用户 2026-09-22 选定 = **无条件继承**）
+        if (gameplay) InheritCursorPosToCrosshair();
         _cursorGameplay = gameplay;
-        SetCursorMode(gameplay);
+        ApplyCursorModeNow(gameplay);
+    }
+
+    /// <summary>关闭背包（含"死亡时背包自动关闭"那一下）时，把准星搬到虚拟光标当前所在的位置
+    /// —— 于是"光标消失、准星在同一处出现"，开关两个方向都有连续感。
+    /// ⚠️ **只挂在这个"状态变化"包装里，绝不能放进 `ApplyCursorModeNow`**：`Awake` 也调后者，
+    ///    而场景重载那一刻把"上一局的光标位置"灌进新准星是错的（那一帧的准星位置该由 `PlayerController.Awake` 决定）。
+    /// ⚠️ 逃生开关关掉 / 光标未激活时 `VirtualCursor.Active == false` → 自动跳过，无需额外判断。</summary>
+    void InheritCursorPosToCrosshair()
+    {
+        if (!VirtualCursor.Active) return;
+        var pc = PlayerController.Instance;
+        if (pc != null) pc.SetCrosshairScreenPos(VirtualCursor.ScreenPos);
     }
 
     /// <summary>运行时创建准星 UI：独立 Overlay Canvas（带缩放器）+ 4 条线 + 中心点 + 换弹圆环</summary>
@@ -242,8 +282,10 @@ public class Crosshair : MonoBehaviour
         if (GameState.GameOver)
         {
             if (_root != null && _root.gameObject.activeSelf) _root.gameObject.SetActive(false);
-            SetCursorMode(false);   // 解锁 + 显示（此时 _cursorGameplay 可能是 true，必须无条件设置一次）
+            // 解锁 + 显示光标（此时 _cursorGameplay 可能是 true，必须无条件设置一次）
+            // → 走虚拟光标：位置继承准星，结算面板上的「重新开始」按钮照样能点
             _cursorGameplay = false;
+            ApplyCursorModeNow(false);
             return;
         }
         if (_root != null && !_root.gameObject.activeSelf) _root.gameObject.SetActive(true);

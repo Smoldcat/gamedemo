@@ -134,6 +134,21 @@ public class GameAssets : ScriptableObject
     [Tooltip("整组距屏幕底部的距离（px，参考分辨率下）。⚠️ 只在建 Canvas 时读一次 → 运行中改它要重进 Play。默认 150（2026-09-22 由 96 上移：给底部中央的 HUD「快捷栏」腾位）")]
     [Min(0f)] public float killFeedBottomOffset = 150f;
 
+    // ---------------- 虚拟光标（2026-09-22 新增：非游玩态那个自绘指针的外观） ----------------
+    // 与 Hotbar / 拾取气泡同一套路：**资源优先 + 代码兜底**（留空就用程序生成的箭头）。
+    // ⚠️ 物理位置在**末尾**（§6.8）；Inspector 分组由 `GameAssetsEditor.Fields` 决定。
+    // ⚠️ 这两个值**只在建画布时读一次** → 改完要重进 Play（与 `killFeedBottomOffset` 同理）。
+    [Tooltip("虚拟光标（打开背包 / 死亡结算时显示的那个指针）的外观图片。\n" +
+             "  · 留空 → 用代码生成的白色箭头（白箭头 + 深色描边）。\n" +
+             "  · 拖入 → 用你的图。⚠️ 导入设置必须是 **Sprite**（不是 Texture）；若切成多张，取第一张。\n" +
+             "  · 【热点 = 指针尖在哪】取 **Sprite 自己的 pivot** —— 在 Sprite Editor 里把 pivot 拖到箭头尖端即可；\n" +
+             "    不设（默认 Center）就是「图片中心对准位置」，也完全可用。\n" +
+             "  · ⚠️ 只在建画布时读一次 → 换图要重进 Play。")]
+    public Sprite virtualCursorSprite;
+    [Tooltip("虚拟光标的显示宽度（px，按参考分辨率 1280×720 填，运行时随 UI 等比缩放）。\n" +
+             "高度按图片宽高比自动算 → 非正方形的图不会变形。默认 24")]
+    [Min(1f)] public float virtualCursorSize = 24f;
+
     const string ResourcePath = "GameAssets";
 
     static GameAssets _instance;
