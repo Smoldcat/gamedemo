@@ -33,6 +33,15 @@ public class WeaponData : ScriptableObject
     [Tooltip("瞄准散布（度）：**按住右键瞄准**时的弹道散布角。与腰射完全独立配置\n" +
              "（散布是个角度，不同枪瞄准后收紧的幅度差异很大，写成倍率反而不直观）")]
     public float aimSpread = 1f;
+    [Tooltip("【腰射 → 瞄准】的散布过渡时间（秒）：按下右键后，散布从「腰射散布」**线性**过渡到「瞄准散布」所需的时间。\n" +
+             "  · 0 = 瞬时切换（旧行为）。\n" +
+             "  · 语义 = **定速**推进：过渡到一半就松开，回落只用「过渡时间 × 剩余比例」——按得越浅回得越快。\n" +
+             "  · ⚠️ 只有**散布**走过渡；后坐倍率 / 横向闸门 / 移动速度仍是按下右键**立即**生效。")]
+    public float hipToAimTime = 0.3f;
+    [Tooltip("【瞄准 → 腰射】的散布过渡时间（秒）：松开右键后，散布从「瞄准散布」**线性**回到「腰射散布」所需的时间。\n" +
+             "  · 0 = 瞬时切换（旧行为）。\n" +
+             "  · 它是**上界**（不是「每次都要等满」）：过渡到一半就松开时，按剩余比例缩短（只探了半个头就收回 → 只用一半时间）。")]
+    public float aimToHipTime = 0.1f;
     public float bulletSpeed = 30f;   // 子弹速度
     [Tooltip("子弹存活时间（秒）。射程 = 子弹速度 × 存活时间")]
     public float bulletLife = 0.6f;   // 子弹存活时间（默认 0.6s：提速后缩短飞行时间，滞后感消失，射程=速度×0.6）
@@ -119,6 +128,7 @@ public class WeaponData : ScriptableObject
     ///   pellets = 0      → 扣弹药、播音效、加后坐都走了，但一发子弹都不出
     ///   recoilRecover = 0 → 后坐永不回正（准星与弹道持续错位）
     ///   hipSpread/aimSpread 为负 → 散布区间反向
+    ///   hipToAimTime/aimToHipTime 为负 → 过渡方向反向（会「瞬间倒退」到目标，等于瞬时切换）
     ///   maxHp 见 EnemyConfig 的同类处理（0 会让血条算出 NaN）
     /// 只用 if 判断而不是无条件赋值，避免把合法值也标成「已修改」而脏化资源。
     /// </summary>
@@ -128,6 +138,8 @@ public class WeaponData : ScriptableObject
         if (pellets < 1) pellets = 1;
         if (hipSpread < 0f) hipSpread = 0f;
         if (aimSpread < 0f) aimSpread = 0f;
+        if (hipToAimTime < 0f) hipToAimTime = 0f;   // 0 = 瞬时切换（旧行为）
+        if (aimToHipTime < 0f) aimToHipTime = 0f;
         if (bulletSpeed < 0.1f) bulletSpeed = 0.1f;
         if (bulletLife < 0.01f) bulletLife = 0.01f;
         if (magSize < 1) magSize = 1;
@@ -177,6 +189,7 @@ public class WeaponData : ScriptableObject
         w.weaponName = "手枪"; w.damage = 32f; w.fireInterval = 0.24f; w.pellets = 1;
         w.headshotMultiplier = 2f;
         w.hipSpread = 1.5f; w.aimSpread = 0.6f;
+        w.hipToAimTime = 0.3f; w.aimToHipTime = 0.1f;   // 与字段默认值一致（显式写出，避免以后改默认值时这条链被静默影响）
         w.aimRecoilUpMultiplier = 0.6f; w.aimRecoilJitterMultiplier = 0.6f;
         w.bulletSpeed = 32f; w.magSize = 12; w.reloadTime = 1.0f;
         w.tracerColor = new Color(1f, 0.92f, 0.35f); w.pickupColor = Color.yellow;
@@ -191,6 +204,7 @@ public class WeaponData : ScriptableObject
         w.weaponName = "冲锋枪"; w.damage = 13f; w.fireInterval = 0.09f; w.pellets = 1;
         w.headshotMultiplier = 2f;
         w.hipSpread = 4.5f; w.aimSpread = 1.8f;
+        w.hipToAimTime = 0.3f; w.aimToHipTime = 0.1f;
         w.aimRecoilUpMultiplier = 0.6f; w.aimRecoilJitterMultiplier = 0.6f;
         w.bulletSpeed = 36f; w.magSize = 30; w.reloadTime = 1.5f;
         w.tracerColor = new Color(0.5f, 1f, 1f); w.pickupColor = Color.cyan;
@@ -205,6 +219,7 @@ public class WeaponData : ScriptableObject
         w.weaponName = "霰弹枪"; w.damage = 11f; w.fireInterval = 0.75f; w.pellets = 7;
         w.headshotMultiplier = 2f;
         w.hipSpread = 9f; w.aimSpread = 3.5f;
+        w.hipToAimTime = 0.3f; w.aimToHipTime = 0.1f;
         w.aimRecoilUpMultiplier = 0.6f; w.aimRecoilJitterMultiplier = 0.6f;
         w.bulletSpeed = 26f; w.magSize = 6; w.reloadTime = 1.8f;
         w.tracerColor = new Color(1f, 0.55f, 0.25f); w.pickupColor = new Color(1f, 0.5f, 0.1f);
@@ -219,6 +234,7 @@ public class WeaponData : ScriptableObject
         w.weaponName = "狙击枪"; w.damage = 120f; w.fireInterval = 1.1f; w.pellets = 1;
         w.headshotMultiplier = 2f;
         w.hipSpread = 0f; w.aimSpread = 0f;   // 狙击本来就完美精度，瞄准不改变散布
+        w.hipToAimTime = 0.3f; w.aimToHipTime = 0.1f;   // 0→0：过渡不可见，仅为配置一致性显式写出
         w.aimRecoilUpMultiplier = 0.6f; w.aimRecoilJitterMultiplier = 0.6f;
         w.bulletSpeed = 55f; w.magSize = 4; w.reloadTime = 2.2f;
         w.tracerColor = new Color(0.85f, 0.45f, 1f); w.pickupColor = new Color(0.8f, 0.4f, 1f);

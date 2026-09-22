@@ -124,7 +124,9 @@ public class PlayerController : MonoBehaviour
     bool _recovering;           // 是否正处于一次回正过程中（决定 _recoverSpeed 要不要重新取值）
     float _recoverSpeed;        // 本次回正的速度（像素/秒）：在"回正开始"那一刻算一次并锁住，见 UpdateCrosshair
     float _undisturbedSince;    // 「最后一次扰动」的时刻（开火 / 鼠标移动 / 换弹）。静置满 recoilRecoverDelay 才允许开始回正
-    bool _aiming;               // 是否正按住右键瞄准（腰射 ↔ 瞄准：只影响「当前散布 / 当前后坐」，不改弹道算法）
+    bool _aiming;               // 是否正按住右键瞄准（腰射 ↔ 瞄准）：决定「散布过渡的目标方向 / 当前后坐 / 移速」，不改弹道算法
+    float _adsProgress;         // 「腰射 ↔ 瞄准」的**散布过渡进度** 0~1（0 = 完全腰射，1 = 完全瞄准），由 AdvanceAds 每帧定速推进
+                                // ⚠️ 只有 `CurrentSpread` 由它派生；后坐 / 移速 / 横向闸门仍按 `_aiming` **瞬间**切换（本轮刻意如此）
 
     /// <summary>鼠标增量的「噪声死区」（平方像素）：小于它的单帧增量当作浮点噪声，不计入净位移。
     /// ⚠️ 它**只是死区**，不是"是否在动"的判据 —— 判据是 `recoilRecoverJitterRatio`（**累计净位移** vs 屏幕短边比例，帧率/分辨率无关）。
@@ -172,11 +174,20 @@ public class PlayerController : MonoBehaviour
     /// 而「开枪会退出奔跑」（见 <see cref="Fire"/>）保证腰射时也不会一边冲刺一边输出。</summary>
     public float CurrentMoveSpeed => _aiming ? aimSpeed : (running ? runSpeed : walkSpeed);
 
-    /// <summary>当前散布角（度）：**未瞄准用「腰射散布」、瞄准用「瞄准散布」**。
+    /// <summary>「腰射 ↔ 瞄准」的散布过渡进度：0 = 完全腰射，1 = 完全瞄准。
+    /// 由 <see cref="AdvanceAds"/> 每帧按 `WeaponData.hipToAimTime` / `aimToHipTime` 定速推进；
+    /// 对外暴露只为"将来做抬枪动画 / HUD 提示"用。
+    /// ⚠️ 后坐倍率 / 移动速度 / 横向闸门**不看它**（仍看 `_aiming`，瞬间切换）。</summary>
+    public float AdsProgress01 => _adsProgress;
+
+    /// <summary>当前散布角（度）：在「腰射散布」与「瞄准散布」之间按**过渡进度**插值。
     /// ⚠️ **唯一入口**：开火（`Fire`）与散布圈（`Crosshair`）都读这里 —— 不要在别处各自读
     ///    `weapon.hipSpread` / `weapon.aimSpread`，否则"画出来的圈"与"实际弹道"会脱节
-    ///    （与 §3.3「准星画在哪子弹就落在哪」是同一条原则）。</summary>
-    public float CurrentSpread => weapon == null ? 0f : (_aiming ? weapon.aimSpread : weapon.hipSpread);
+    ///    （与 §3.3「准星画在哪子弹就落在哪」是同一条原则）。
+    /// ✅ 过渡**只有这一份实现**（`_adsProgress`）→ "屏幕上的圈在收缩"与"子弹在变准"天然同步。</summary>
+    public float CurrentSpread => weapon == null
+        ? 0f
+        : Mathf.Lerp(weapon.hipSpread, weapon.aimSpread, _adsProgress);
 
     /// <summary>当前纵向后坐（米）= 腰射纵向后坐 × 瞄准倍率（未瞄准时倍率 = 1）。</summary>
     public float CurrentRecoilUp => weapon == null ? 0f : weapon.hipRecoilUp * RecoilUpMultiplier;
@@ -278,8 +289,16 @@ public class PlayerController : MonoBehaviour
                  && backpack.currentSlot < backpack.slots.Length)
             ? backpack.slots[backpack.currentSlot] : null;
 
+        var prevWeapon = weapon;
         weapon = s != null ? s.weapon : null;
         magAmmo = s != null ? s.magAmmo : 0;
+
+        // 换枪（或变成空手）→ 瞄准过渡进度归零：**换枪 = 重新举枪**。
+        // 于是"按住右键换枪"不会白嫖满瞄准精度（新枪要从腰射散布重新过渡一遍），也避免了
+        // "进度停在 1 时切枪 → 新枪直接以完全瞄准态出现、连过渡都没有"的自相矛盾。
+        // ⚠️ 判据是**武器实例是否变化**：捡到同类武器只是进库存、手上那把没换（引用不变）时，
+        //    不会莫名打断正在进行的瞄准。
+        if (!ReferenceEquals(weapon, prevWeapon)) _adsProgress = 0f;
 
         // 任何分支都要刷枪模型：否则「丢掉手上的枪 / 空手」时旧模型会留在 gunVisual 上一直显示
         UpdateGunVisual();
@@ -345,6 +364,7 @@ public class PlayerController : MonoBehaviour
             _lastMousePos = Input.mousePosition;   // 刷新基准：否则暂停期间鼠标的移动会在恢复那一帧变成巨大增量、把准星甩飞
             _mouseDelta = Vector2.zero;
             _aiming = false;                       // 暂停/死亡时退出瞄准：否则恢复后残留瞄准态（右键状态在暂停期间读不到）
+            _adsProgress = 0f;                     // 散布过渡进度一并归零：恢复后不会残留"半瞄准"的散布
             return;
         }
 
@@ -365,6 +385,9 @@ public class PlayerController : MonoBehaviour
         // ---- 鼠标右键：瞄准（腰射 ↔ 瞄准）。只改「当前散布 / 当前后坐」，弹道算法完全不变 ----
         // 用 GetMouseButton（按住才算瞄准）。暂停/死亡分支已在上面 early-return 并把 _aiming 复位。
         _aiming = Input.GetMouseButton(1);
+        // 散布过渡推进：**必须在本帧开火（HandleFire）与准星绘制（Crosshair.LateUpdate）之前** ——
+        // 这样"这一枪用的散布"和"屏幕上画出来的圈"是同一个值（同源原则）。
+        AdvanceAds(Time.deltaTime);
 
         // ---- Q 使用血包（未满血才可用；无血包/满血给提示，不静默）----
         if (Input.GetKeyDown(KeyCode.Q))
@@ -635,6 +658,24 @@ public class PlayerController : MonoBehaviour
         Vector2 d = _crosshairEff - new Vector2(ps.x, ps.y);
         if (d.sqrMagnitude < 4f) return;      // 距离 < 2px：方向无意义，沿用上次
         _latRefDir = d.normalized;
+    }
+
+    /// <summary>
+    /// 推进「腰射 ↔ 瞄准」的散布过渡（**定速线性**，唯一实现）。
+    ///
+    /// 为什么是 `MoveTowards` 定速、而不是"按剩余距离重算时间"：
+    ///   定速 ⇔ **剩余时间 = 过渡时间 × 剩余比例** —— 半途松开时"按得越浅回得越快"，
+    ///   于是 `aimToHipTime` 是**上界**（不是"每次都要等满"）。这正是设计要的语义，
+    ///   而且天然支持"半途打断继续"：从当前进度往反方向走，不跳变、不重置。
+    /// ⚠️ 时间 ≤ 0 → 直接取目标值 = **瞬时切换（旧行为）**，也就是"想回到改动前"的开关。
+    /// ⚠️ 只驱动 `CurrentSpread`；后坐倍率 / 横向闸门 / 移动速度仍按 `_aiming` 瞬间切换。
+    /// </summary>
+    void AdvanceAds(float dt)
+    {
+        if (weapon == null) { _adsProgress = 0f; return; }   // 空手：没有"抬枪"这件事
+        float target = _aiming ? 1f : 0f;
+        float time = _aiming ? weapon.hipToAimTime : weapon.aimToHipTime;
+        _adsProgress = time > 0f ? Mathf.MoveTowards(_adsProgress, target, dt / time) : target;
     }
 
     void HandleFire()
