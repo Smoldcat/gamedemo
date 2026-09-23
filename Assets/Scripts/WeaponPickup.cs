@@ -1,8 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
 /// 地上的武器拾取物：上下浮动旋转，靠近时提示，按 E 拾取。
-public class WeaponPickup : MonoBehaviour
+///
+/// 2026-09-24 起交互改成走 <see cref="InteractFocus"/>（"单一交互焦点"）：
+///   本类只负责"我是什么、我在哪、按键时做什么"，**不再自己每帧扫描 + 自己检测按键** ——
+///   否则它和血包 / 箱子会互相抢那唯一一个气泡（详见 <see cref="IInteractable"/> 的注释）。
+/// </summary>
+public class WeaponPickup : MonoBehaviour, IInteractable
 {
     /// <summary>全场武器拾取物注册表。用列表代替每帧 FindObjectsOfType 全场景搜索。</summary>
     public static readonly List<WeaponPickup> All = new List<WeaponPickup>();
@@ -10,10 +16,22 @@ public class WeaponPickup : MonoBehaviour
     /// <summary>这把拾取物对应的武器数据</summary>
     public WeaponData data;
 
+    /// <summary>拾取距离（米）。与"交互焦点"用同一个值。</summary>
+    public const float PickupRange = 1.6f;
+
     float _baseY, _t;
 
-    void Awake() { All.Add(this); }
-    void OnDestroy() { All.Remove(this); }
+    void Awake()
+    {
+        All.Add(this);
+        InteractFocus.Register(this);
+    }
+
+    void OnDestroy()
+    {
+        All.Remove(this);
+        InteractFocus.Unregister(this);   // 注册配注销（场景重载后焦点表里不会留死引用）
+    }
 
     /// <summary>在指定位置创建一个武器拾取物（优先用武器资源里配的模型，否则代码生成默认外观）</summary>
     public static WeaponPickup Create(WeaponData w, Vector3 pos)
@@ -69,44 +87,30 @@ public class WeaponPickup : MonoBehaviour
         transform.Rotate(Vector3.up, 60f * Time.deltaTime);
     }
 
-    /// 由玩家每帧调用：找最近拾取物，按 E 拾取（每帧全扫；用平方距离避免开方）
-    /// 注意：不要加"扫描降频"，否则按 E 的按键检测会被锁在扫描帧里漏掉（GetKeyDown 只在按下帧有效）。
-    public static void TryPickup(PlayerController player)
+    // ==================== IInteractable ====================
+
+    public Transform InteractAnchor => transform;
+    public string InteractLabel => data != null ? data.DisplayName : "武器";
+    public string InteractKey => "E";
+    public float InteractRange => PickupRange;
+
+    /// <summary>按键拾取（由交互焦点调用）。满了就把枪留在原地并提示"背包已满"。</summary>
+    public void Interact(PlayerController player)
     {
-        if (GameState.GameOver || GameState.Paused) return;
+        if (player == null || data == null) return;
 
-        WeaponPickup nearest = null;
-        float bestSq = 1.6f * 1.6f;
-        foreach (var p in All)
+        var bp = player.backpack;
+        if (bp != null && !bp.CanAddWeapon(data))
         {
-            if (p == null) continue;
-            float dSq = (p.transform.position - player.transform.position).sqrMagnitude;
-            if (dSq < bestSq) { bestSq = dSq; nearest = p; }
+            HUD.AnnounceBackpackFull();
+            return;
         }
 
-        if (nearest != null)
-        {
-            // 物体旁边的气泡（名称 + 按键圆标）：比原来屏幕上固定的一行字更直观，
-            // 而且能一眼看出"气泡指着的是哪把枪"。
-            HUD.ShowPickupBubble(nearest.transform, nearest.data != null ? nearest.data.weaponName : "武器");
-            if (Input.GetKeyDown(KeyCode.E) && GameState.PickupEConsumedFrame != Time.frameCount)
-            {
-                GameState.PickupEConsumedFrame = Time.frameCount; // 占掉本帧 E 键，防止与血包同帧双拾取
-
-                var bp = player.backpack;
-                if (bp != null && !bp.CanAddWeapon(nearest.data))
-                {
-                    // 快捷槽满 + 库存满且无同类 → 捡不了，枪留在原地（"背包已满"）
-                    HUD.AnnounceBackpackFull();
-                    return;
-                }
-
-                bool intoSlot = bp != null && bp.HasEmptySlot();
-                player.Equip(nearest.data);
-                HUD.Announce(intoSlot ? "拾取  " + nearest.data.weaponName : nearest.data.weaponName + " 收入背包", 1.0f, 28, nearest.data.pickupColor);
-                Sfx.Pickup();
-                Destroy(nearest.gameObject);
-            }
-        }
+        bool intoSlot = bp != null && bp.HasEmptySlot();
+        player.Equip(data);
+        HUD.Announce(intoSlot ? "拾取  " + data.DisplayName : data.DisplayName + " 收入背包",
+                     1.0f, 28, data.pickupColor);
+        Sfx.Pickup();
+        Destroy(gameObject);
     }
 }

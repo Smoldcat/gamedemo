@@ -147,8 +147,9 @@ public class PlayerController : MonoBehaviour
     /// <summary>单帧鼠标位移的合理上限（平方）。只用来挡住"垃圾坐标"造成的甩飞，正常越快的手也远达不到。</summary>
     static float MaxMouseDeltaSq => (Screen.width + Screen.height) * (Screen.width + Screen.height);
 
-    /// <summary>一个血包的回血量。提示文案引用它，避免改数值时忘了改显示（两者不同步的隐蔽 Bug）</summary>
-    const float MedkitHealAmount = 50f;
+    // 血包的回血量已改为**数据驱动**：从 `MedkitData.healAmount` 读
+    // （`PlayerBackpack.UseMedkit()` 会把用掉的那张定义卡返回给调用方）。
+    // ⚠️ 不要再在这里加回写死的常量 —— 那就是"同一个量两处定义"的老坑（§4 #15）。
 
     /// <summary>准星在屏幕上的实际位置（左下角原点，像素）＝过渡值。
     /// **单向数据源**：准星显示、瞄准点、弹道都由它派生 —— 不存在第二个"锚点"，所以永远不会出现"准星与光标错位"。</summary>
@@ -420,12 +421,17 @@ public class PlayerController : MonoBehaviour
                     HUD.Announce("生命值已满", 1.0f, 26, new Color(0.7f, 0.7f, 0.7f));
                 else if (backpack == null || backpack.Medkits <= 0)
                     HUD.Announce("没有血包了", 1.0f, 26, new Color(0.9f, 0.7f, 0.4f));
-                else if (backpack.UseMedkit())
+                else
                 {
-                    h.Heal(MedkitHealAmount);
-                    DamageText.Spawn(transform.position + Vector3.up * 1.2f, MedkitHealAmount, DamageText.Kind.Heal);
-                    Sfx.Heal();
-                    HUD.Announce($"+{MedkitHealAmount:0} 生命值", 1.0f, 28, new Color(0.4f, 1f, 0.5f));
+                    // 用掉那一格并把**它的定义卡**拿回来 → 回血量从卡里读（数据驱动，不再写死 50）
+                    var used = backpack.UseMedkit();
+                    if (used != null)
+                    {
+                        h.Heal(used.healAmount);
+                        DamageText.Spawn(transform.position + Vector3.up * 1.2f, used.healAmount, DamageText.Kind.Heal);
+                        Sfx.Heal();
+                        HUD.Announce($"+{used.healAmount:0} 生命值", 1.0f, 28, new Color(0.4f, 1f, 0.5f));
+                    }
                 }
             }
         }
@@ -467,8 +473,9 @@ public class PlayerController : MonoBehaviour
             StartReload();
         if (reloading && Time.time >= _reloadUntil) FinishReload();
 
-        // ---- 拾取武器 ----
-        WeaponPickup.TryPickup(this);
+        // ---- 交互（**单一交互焦点**）：地上的武器 / 血包 / 箱子中"离玩家最近的那个"显示气泡并响应按键 ----
+        //    ⚠️ 唯一入口：别在别的脚本里再自己扫一遍 —— 那会抢 HUD 里那唯一一个气泡
+        InteractFocus.Tick(this);
     }
 
     void FixedUpdate()
@@ -972,12 +979,14 @@ public class PlayerController : MonoBehaviour
         return ok;
     }
 
-    /// 从背包库存装备一把武器（背包面板点击时调用）：优先空槽,全满则替换当前槽,原武器下放进库存
-    public void EquipFromInventory(string weaponName)
+    /// 从背包库存装备一把武器（背包面板点击时调用）：优先空槽，全满则替换当前槽，原武器下放进库存。
+    /// `stackId` = 物品**身份证**（`ItemStack.def.StackId`）—— **不能用武器名/对象引用**：
+    /// 敌人掉落的枪是 `Clone()` 出来的副本，按名字或按引用匹配都会出现"看起来一样却对不上"的静默 bug。
+    public void EquipFromInventory(string stackId)
     {
         if (backpack == null) return;
         SaveCurrentSlotAmmo();   // 先把当前槽弹匣写回
-        if (backpack.EquipFromInventory(weaponName, out WeaponData displaced))
+        if (backpack.EquipFromInventory(stackId, out WeaponData displaced))
         {
             if (displaced != null)
                 WeaponPickup.Create(displaced, FindDropPos());   // 被挤下的武器掉到地上

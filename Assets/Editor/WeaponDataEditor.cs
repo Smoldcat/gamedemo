@@ -47,6 +47,12 @@ public class WeaponDataEditor : Editor
         ("explosionRadius", "爆炸半径（米）", "子弹命中/到点后的爆炸半径。0 = 普通子弹无爆炸"),
         ("explosionDamage", "爆炸伤害",      "爆炸对范围内敌人造成的伤害（仅爆炸半径 > 0 时生效）"),
         ("iconKind",        "图标类型",       "背包里的图标形状。Auto = 按武器名/枪身长度自动推测"),
+
+        // ---- 物品通用字段（定义在**基类 ItemData** 上，所有物品共有；这里只是登记中文名）----
+        ("canStack",    "可否堆叠",         "同类是否允许叠在一格里。\n⚠️ 武器建议关闭：将来加配件后「两把同款枪」可能完全不是一回事，叠加会把它们混成一格"),
+        ("maxStack",    "单格上限",         "一格最多叠几个（仅「可堆叠」时生效）。1 = 等同于不可堆叠"),
+        ("stackId",     "身份证(stackId)",  "判断「是不是同一种东西」只认它（**不认对象地址** —— 敌人掉落的枪是运行时副本）。\n留空则武器自动用「weapon:武器名」"),
+        ("description", "说明文字",         "悬停说明（背包 / 箱子 tooltip 里显示）"),
     };
 
     /// <summary>所有已被手动绘制的字段名（Fields + 外观三个），用于筛出漏配的新字段</summary>
@@ -86,10 +92,14 @@ public class WeaponDataEditor : Editor
         // ⚠️ 这里**不要**再画一条「外观（留空 = 用代码生成的默认外观）」标题：
         //    WeaponData.cs 上已经有同名的 [Header]，而 PropertyField 会自动把它画出来 → 再画一遍就是两行（2026-09-20 修）。
         EditorGUILayout.Space();
-        EditorGUILayout.PropertyField(_pickupModel, new GUIContent("地上模型 Prefab", "这把枪掉在地上时的模型 Prefab"));
-        EditorGUILayout.PropertyField(_heldModel,   new GUIContent("手持模型 Prefab", "拿在玩家手里时的模型。留空则自动复用「地上模型」，通常只配一个就够"));
+        // ⚠️ 这一段的**绘制顺序是刻意的**，别随手调换：
+        //    `WeaponData.cs` 里的 `[Header("外观（留空 = ...）")]` 挂在 **heldModelPrefab** 上，而
+        //    `PropertyField` 会把这个标题画在**该字段之前** → 必须先画 heldModelPrefab，标题才落在这一段开头。
+        //    （`pickupModelPrefab` 已于 2026-09-24 上移到基类 ItemData，不再是本类第一个外观字段。）
+        EditorGUILayout.PropertyField(_heldModel,   new GUIContent("手持模型 Prefab", "拿在玩家手里时的模型。留空则自动复用基类的「世界模型（地上外观）」，通常只配一个就够"));
         EditorGUILayout.PropertyField(_bulletModel, new GUIContent("子弹模型 Prefab", "子弹/曳光模型。留空则用代码生成的曳光条，颜色跟随「曳光颜色」"));
-        EditorGUILayout.PropertyField(_icon, new GUIContent("武器图标 Sprite", "背包/HUD 显示的武器图标。留空则用程序生成的形状图标"));
+        EditorGUILayout.PropertyField(_icon, new GUIContent("武器图标 Sprite", "背包/HUD 显示的武器图标。留空则用程序生成的形状图标\n（它和颜色一样是所有物品共有的字段，登记在基类 ItemData 上）"));
+        EditorGUILayout.PropertyField(_pickupModel, new GUIContent("地上模型 Prefab", "这把枪掉在地上时的模型 Prefab。留空则用代码生成的占位外观\n（同样是所有物品共有的字段，登记在基类 ItemData 上）"));
 
         // 兜底：漏配中文标签的新字段，自动以默认英文标签显示，保证绝不凭空消失
         DrawUnmappedFields();

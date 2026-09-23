@@ -74,7 +74,17 @@ public abstract class LocalizedInspectorEditor : Editor
     {
         string typeName = target.GetType().Name;
 
+        // 查中文名：先查本类型，**查不到就逐层往上找基类** ——
+        // 这样「所有子类共有的字段」（如物品基类 ItemData 的 icon / canStack / description）只要在基类上登记一次，
+        // 武器 / 血包 / 以后的子弹就都能共用同一份中文名，不必给每个子类重复登记一行（漏一个就静默变英文）。
         string zh = InspectorLabelTable.Label(typeName, fieldName);
+        var baseType = target.GetType().BaseType;
+        while (zh == null && baseType != null && baseType != typeof(object))
+        {
+            zh = InspectorLabelTable.Label(baseType.Name, fieldName);
+            baseType = baseType.BaseType;
+        }
+
         string label = zh != null ? zh : ObjectNames.NicifyVariableName(fieldName);   // 回落 Unity 默认英文标签
 
         var sb = new System.Text.StringBuilder();

@@ -7,7 +7,7 @@ using UnityEngine;
 /// - 代码兜底：Pistol()/SMG()/Shotgun()/Sniper() 提供一份内置默认值，即使一个资源都没有，项目也能正常跑。
 /// </summary>
 [CreateAssetMenu(fileName = "Weapon_新武器", menuName = "游戏/武器数据", order = 0)]
-public class WeaponData : ScriptableObject
+public class WeaponData : ItemData
 {
     public enum SoundKind
     {
@@ -48,7 +48,8 @@ public class WeaponData : ScriptableObject
     public int magSize = 12;          // 弹匣容量
     public float reloadTime = 1.2f;   // 换弹时间
     public Color tracerColor = new Color(1f, 0.9f, 0.3f); // 曳光颜色
-    public Color pickupColor = Color.yellow;              // 拾取物高亮色
+    // ⚠️ `pickupColor`（拾取物高亮色）已于 2026-09-24 **上移到基类 ItemData** —— 它是所有物品共有的字段。
+    //    上移**不改字段名** → 8 个武器资源里已存的颜色值照旧读得到（零迁移）。
 
     [Header("手感与表现")]
     public float gunLength = 0.55f;   // 持枪/拾取模型的枪身长度（狙击最长）
@@ -104,20 +105,31 @@ public class WeaponData : ScriptableObject
     [Tooltip("爆炸对范围内敌人造成的伤害（仅 explosionRadius > 0 时生效）")]
     public float explosionDamage = 0f;
 
+    // ⚠️ 外观字段的分工（2026-09-24 起）：
+    //   · `pickupModelPrefab` / `pickupColor` / `icon` **在基类 ItemData 上**（所有物品共有；字段名一个都没改 → 已有资源零迁移）
+    //   · 下面两个是**武器独有**的外观字段
+    // ⚠️ 这条 `[Header]` 必须挂在**本类第一个外观字段**（heldModelPrefab）上：`PropertyField` 会自动把标题画在
+    //    那个字段之前 → `WeaponDataEditor` 也必须**先画 heldModelPrefab**，标题才落在这一段开头（见那边的注释）。
     [Header("外观（留空 = 用代码生成的默认外观）")]
-    [Tooltip("这把枪掉在地上时的模型 Prefab")]
-    public GameObject pickupModelPrefab;
-    [Tooltip("这把枪拿在玩家手里时的模型 Prefab。留空则直接复用上面的「拾取模型」，所以通常只配一个就够了")]
+    [Tooltip("这把枪拿在玩家手里时的模型 Prefab。留空则直接复用基类里的「世界模型（地上外观）」，所以通常只配一个就够了")]
     public GameObject heldModelPrefab;
     [Tooltip("这把枪的子弹/曳光模型 Prefab。留空则用代码生成的曳光条，颜色跟随 tracerColor")]
     public GameObject bulletPrefab;
-    [Tooltip("武器图标（背包/HUD 显示用 Sprite）。留空则用程序生成的形状图标")]
-    public Sprite icon;
 
     /// <summary>背包里武器形状图标的类型。Auto = 按武器名/枪身长度自动推测。</summary>
     public enum IconKind { Auto, Handgun, SMG, Shotgun, Sniper, Rifle, Generic }
     [Tooltip("背包里的图标形状。Auto = 按武器名/枪身长度自动推测")]
     public IconKind iconKind = IconKind.Auto;
+
+    // ---- ItemData 桥接（⚠️ 刻意用「属性桥接」而不是改字段名：改字段名会让 8 个武器资源里已存的值静默丢失）----
+
+    /// <summary>显示名：武器用自己**已有的** `weaponName` 字段实现它（不改名 → 零迁移）。</summary>
+    public override string DisplayName => string.IsNullOrEmpty(weaponName) ? name : weaponName;
+
+    /// <summary>身份证：武器用 `weaponName` 而不是资源名 ——
+    /// 因为敌人掉落的枪是 `Clone()` 出来的**运行时副本**，而 `Clone()` 会把副本的名字设成 `weaponName`；
+    /// 若拿资源名当身份证，「原枪」与「副本」会被判成两样东西（叠加 / 去重就会出错）。</summary>
+    public override string StackId => string.IsNullOrEmpty(stackId) ? ("weapon:" + weaponName) : stackId;
 
     /// <summary>
     /// 运行时复制一份。
@@ -147,8 +159,9 @@ public class WeaponData : ScriptableObject
     ///   maxHp 见 EnemyConfig 的同类处理（0 会让血条算出 NaN）
     /// 只用 if 判断而不是无条件赋值，避免把合法值也标成「已修改」而脏化资源。
     /// </summary>
-    void OnValidate()
+    protected override void OnValidate()
     {
+        base.OnValidate();   // ⚠️ 必须调：否则基类（ItemData）对「可否堆叠 / 单格上限」的兜底会被这里覆盖掉
         if (fireInterval < 0.01f) fireInterval = 0.01f;
         if (pellets < 1) pellets = 1;
         if (hipSpread < 0f) hipSpread = 0f;

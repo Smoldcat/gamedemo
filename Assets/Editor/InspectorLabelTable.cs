@@ -60,6 +60,31 @@ public static class InspectorLabelTable
         { "CameraRig.maxAimLead",      "镜头前探上限（米）" },
         { "CameraRig.aimFovNarrow",    "瞄准收窄视角（度）" },
         { "CameraRig.aimLeadExtra",    "瞄准前探增量（米）" },
+
+        // ------------------- ItemData（物品定义基类：所有物品共有）-------------------
+        // ⚠️ 登记在**基类**上就够了：`LocalizedInspectorEditor` 查不到本类型时会**逐层往上找基类**，
+        //    所以武器 / 血包 / 以后的子弹都能共用这一份中文名，不必给每个子类重复登记一行。
+        { "ItemData.icon",              "图标" },
+        { "ItemData.pickupColor",       "物品颜色" },
+        { "ItemData.pickupModelPrefab", "世界模型（地上外观）" },
+        { "ItemData.canStack",          "可否堆叠" },
+        { "ItemData.maxStack",          "单格上限" },
+        { "ItemData.stackId",           "身份证(stackId)" },
+        { "ItemData.description",       "说明文字" },
+
+        // -------------------------------- MedkitData --------------------------------
+        { "MedkitData.itemName",        "显示名" },
+        { "MedkitData.healAmount",      "回血量" },
+
+        // --------------------------------- Chest（箱子）---------------------------------
+        // ⚠️ 别和 [Header]（"箱子" / "交互" / "行为开关"）写成一样，否则 Inspector 上会出现两行一样的字
+        { "Chest.promptLabel",        "箱子名字" },
+        { "Chest.config",             "箱子配方（刷什么）" },
+        { "Chest.interactKey",        "交互按键" },
+        { "Chest.interactRange",      "交互距离（米）" },
+        { "Chest.solid",              "是实体（挡路 / 挡子弹）" },
+        { "Chest.disappearWhenEmpty", "拿完消失" },
+        { "Chest.promptWhenEmpty",    "空了也提示气泡" },
     };
 
     /// <summary>取中文标签；没登记返回 null（调用方负责回落英文标签）</summary>

@@ -2,19 +2,24 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 玩家背包（方案 B）：3 个快捷武器槽 + 背包库存（**武器与血包共用这 Capacity 格**）。
-/// 叠加规则：同类武器在一格里叠加计数；**血包不叠加，一个血包独占一格**（有几个一目了然）。
-/// 纯数据 + 增删逻辑，挂载在 Player 物体上；视图名（手上枪模型、HUD）由 PlayerController 驱动。
-/// 命中规则里用在刀刃上：敌人掉落的枪是 Clone 副本（不同引用实例），所以库存去重按 weaponName 而不是引用。
+/// 玩家背包：3 个快捷武器槽 + 库存（**固定 Capacity 格，各类物品共用**）。
+///
+/// 2026-09-24 起库存改成**通用物品格**（<see cref="ItemStack"/> = 物品定义 + 数量）：
+///   · 武器 / 血包 / 以后的子弹，走的是**同一套**"收下 / 移除 / 排序"逻辑 → **加新物品种类不用改本文件**
+///   · 叠加规则 = **「该物品允许堆叠」且「身份证相同」**（`ItemData.canStack` + `ItemData.StackId`）
+///   · ⚠️ 武器默认**不可堆叠**（一件占一格）—— 用户 2026-09-24 定：将来加配件后
+///     "两把同款枪"可能完全不是一回事，叠加会把它们混成一格
+///   · ⚠️ 血包也**不可堆叠**（一格一个，有几个一目了然，用户 2026-09-22 定）
+///
+/// ⚠️ **快捷武器槽（slots）仍然只放武器**（`WeaponData`）：它就是"手上的枪"，按 1/2/3 切；
+///    子弹 / 血包放进去没有意义。将来要加"装备槽"（头盔 / 防弹衣…）时，那是**另一组带类型限制的槽**，
+///    不是把这里改成通用 —— 所以本文件不需要为那件事提前抽象（改起来很便宜）。
+///
+/// 纯数据 + 增删逻辑，挂在 Player 物体上；视图（枪模型 / HUD / 面板）由其它组件驱动。
+/// 库存去重/叠加按 `StackId` 而不是对象引用 —— 敌人掉落的枪是 `Clone()` 出来的副本，地址和资源不一样。
 /// </summary>
 public class PlayerBackpack : MonoBehaviour
 {
-    /// <summary>背包物品类型：武器 / 血包（两者都是**占格物品**；血包一格一个，不叠加）</summary>
-    public enum ItemKind { Weapon, Medkit }
-
-    /// <summary>血包在库存里的显示名（背包格子 / 排序都用它）</summary>
-    public const string MedkitItemName = "血包";
-
     /// <summary>一个快捷武器槽：武器 + 该槽独立的弹匣余量</summary>
     [System.Serializable]
     public class Slot
@@ -23,29 +28,12 @@ public class PlayerBackpack : MonoBehaviour
         public int magAmmo;
     }
 
-    /// <summary>背包库存里的一格物品：武器（带 WeaponData）或血包（消耗品）。
-    /// 武器同类叠加计数（count = 叠了几把）；**血包不叠加，count 恒为 1**（有几个血包就是几格）。</summary>
-    [System.Serializable]
-    public class InvItem
-    {
-        public ItemKind kind = ItemKind.Weapon;
-        public string weaponName;   // 武器名；血包格为 null
-        public WeaponData weapon;   // 武器数据；血包格为 null（用到它的地方一律先看 IsMedkit）
-        public int count;           // 武器 = 叠了几把；血包恒为 1
-
-        /// <summary>是不是血包格</summary>
-        public bool IsMedkit => kind == ItemKind.Medkit;
-
-        /// <summary>显示名（血包格 = "血包"，武器格 = 武器名）</summary>
-        public string DisplayName => IsMedkit ? MedkitItemName : weaponName;
-    }
-
-    [Header("快捷武器槽")]
+    [Header("快捷武器槽（只放武器）")]
     public Slot[] slots = new Slot[3];
-    public int currentSlot;   // 当前使用中的槽位 0..2（-1 表示空手）
+    public int currentSlot;   // 当前使用中的槽位 0..2（-1 = 空手）
 
-    [Header("背包库存（武器与血包共用这些格子）")]
-    public List<InvItem> inventory = new List<InvItem>();
+    [Header("背包库存（通用物品格）")]
+    public List<ItemStack> inventory = new List<ItemStack>();
 
     [Header("开局自带")]
     [Tooltip("开局自带的血包数量（每局开始由 Awake 放进库存；一个血包占一格）")]
@@ -55,8 +43,18 @@ public class PlayerBackpack : MonoBehaviour
     {
         EnsureSlots();
         currentSlot = -1;
-        if (startMedkits > 0) AddMedkit(startMedkits);   // 开局自带血包（一个占一格）
+
+        if (startMedkits > 0)
+        {
+            var medkit = MedkitDef();
+            if (medkit != null) AddItems(medkit, startMedkits);
+            else Debug.LogWarning("[PlayerBackpack] 找不到「血包定义卡」→ 开局自带血包没有生效。" +
+                                  "请检查 Assets/Items/Consumables/Medkit.asset 是否存在，并跑一次菜单 Tools/游戏/重建物品清单。");
+        }
     }
+
+    /// <summary>从物品清单里取"血包"这张定义卡（世界里那些只认类型、不认具体哪张卡的地方用它）。</summary>
+    public static MedkitData MedkitDef() => ItemDatabase.FirstOfType<MedkitData>();
 
     /// <summary>确保快捷槽数组元素已创建（编辑器里新挂组件时字段为 null；也防 AddComponent 顺序导致 Awake 前被调用）</summary>
     void EnsureSlots()
@@ -88,40 +86,94 @@ public class PlayerBackpack : MonoBehaviour
         }
     }
 
-    /// <summary>背包里的血包总数（**派生值**：血包是占格物品，不再单独存计数）。
-    /// 一个血包独占一格 → 数一数有几格血包就是几个。</summary>
+    /// <summary>背包里的血包总数（**派生值**：数一数有几格血包）。
+    /// 血包不可堆叠 → 每格恒为 1，所以直接按格计数。</summary>
     public int Medkits
     {
         get
         {
             int n = 0;
             for (int i = 0; i < inventory.Count; i++)
-                if (inventory[i] != null && inventory[i].kind == ItemKind.Medkit) n++;
+            {
+                var s = inventory[i];
+                if (s == null || s.def == null) continue;
+                if (s.def is MedkitData) n += Mathf.Max(1, s.count);
+            }
             return n;
         }
     }
 
-    /// <summary>能不能再收下这把武器（拾取前判断用，不实际加入）。规则与 <see cref="AddWeapon"/> 完全一致：
-    /// 有空快捷槽 → 能；库存已有同类 → 能（叠加）；库存还有空格 → 能；否则不能（背包已满）。</summary>
+    // ==================== 通用物品（库存） ====================
+
+    /// <summary>能不能再收下任意一种物品（至少 1 个）。规则与 <see cref="AddItems"/> 一致。</summary>
+    public bool CanAdd(ItemData def)
+    {
+        if (def == null) return false;
+        EnsureSlots();
+
+        // 可堆叠：已有同类格且没满 → 能
+        if (def.canStack)
+            for (int i = 0; i < inventory.Count; i++)
+            {
+                var s = inventory[i];
+                if (s == null || s.def == null) continue;
+                if (s.def.CanMergeWith(def) && s.count < s.MaxStack) return true;
+            }
+        // 还有空格 → 能
+        return inventory.Count < Capacity;
+    }
+
+    /// <summary>
+    /// 尽量收下某样物品；返回**真正收下的数量**（0 = 一点都收不下）。
+    /// 这是库存的**唯一入口**（武器 / 血包 / 以后的子弹都走它），所以"能不能堆叠"只需要在物品定义卡上配一次。
+    /// </summary>
+    public int AddItems(ItemData def, int count)
+    {
+        if (def == null || count <= 0) return 0;
+        EnsureSlots();
+        int left = count;
+
+        // ① 可堆叠：先塞进已有的同类格（可能跨多格）
+        if (def.canStack)
+            for (int i = 0; i < inventory.Count && left > 0; i++)
+            {
+                var s = inventory[i];
+                if (s == null || s.def == null) continue;
+                if (!s.def.CanMergeWith(def)) continue;
+                left = s.Add(left);
+            }
+
+        // ② 还有剩 → 一格一格地开新格（不可堆叠的物品每格只收 1 个）
+        while (left > 0 && inventory.Count < Capacity)
+        {
+            var s = new ItemStack();
+            s.def = def;
+            s.count = 0;
+            left = s.Add(left);
+            if (s.count > 0) inventory.Add(s);
+            else break;   // 兜底：一格都收不下（正常不会发生）
+        }
+
+        return count - left;
+    }
+
+    /// <summary>能不能再收下这把武器：有空快捷槽 → 能；否则看库存还有没有空格（武器不可堆叠 → 一把占一格）。</summary>
     public bool CanAddWeapon(WeaponData w)
     {
         if (w == null) return false;
         EnsureSlots();
         for (int i = 0; i < slots.Length; i++)
             if (slots[i].weapon == null) return true;
-        for (int i = 0; i < inventory.Count; i++)
-            if (!inventory[i].IsMedkit && inventory[i].weaponName == w.weaponName) return true;
         return inventory.Count < Capacity;
     }
 
-    /// <summary>捡到一把武器：优先自动装进空快捷槽并成为当前武器；满了则进库存（同类叠加、一格一种）。</summary>
-    /// <returns>true = 已收下；false = 快捷槽与库存都放不下（背包已满，枪留在原地）</returns>
+    /// <summary>捡到一把武器：**优先自动装进空快捷槽并成为当前武器**；快捷槽满了则进库存。
+    /// <returns>true = 已收下；false = 快捷槽与库存都放不下（背包已满，枪留在原地）</returns></summary>
     public bool AddWeapon(WeaponData w)
     {
         if (w == null) return false;
         EnsureSlots();
 
-        // 优先自动装备：找一个空快捷槽,并设为当前槽
         for (int i = 0; i < slots.Length; i++)
         {
             if (slots[i].weapon == null)
@@ -133,68 +185,53 @@ public class PlayerBackpack : MonoBehaviour
             }
         }
 
-        // 快捷槽已满 → 进库存（按名字叠加；血包格不参与武器去重）
-        for (int i = 0; i < inventory.Count; i++)
-            if (!inventory[i].IsMedkit && inventory[i].weaponName == w.weaponName)
-            {
-                inventory[i].count += 1;
-                return true;
-            }
-
-        // 库存还有空格 → 新占一格（血包格也占格，所以这里跟血包抢格子）
-        if (inventory.Count < Capacity)
-        {
-            inventory.Add(new InvItem { kind = ItemKind.Weapon, weaponName = w.weaponName, weapon = w, count = 1 });
-            return true;
-        }
-
-        // 快捷槽满 + 库存满且无同类 → 收不下（背包已满）
-        return false;
+        return AddItems(w, 1) > 0;   // 快捷槽满 → 进库存（武器不可堆叠 → 新占一格）
     }
 
-    /// <summary>从背包库存「装备」一把武器：装到指定的空槽，若没空槽则替换当前槽，原武器下放进库存。</summary>
-    public bool EquipFromInventory(string weaponName, out WeaponData displaced)
+    /// <summary>从库存「装备」一把武器：装到空槽，全满则替换当前槽，原武器下放进库存。
+    /// `stackId` = 物品身份证（由 `ItemStack.def.StackId` 得到；**不能**用对象引用 —— 敌人掉落的枪是副本）。</summary>
+    public bool EquipFromInventory(string stackId, out WeaponData displaced)
     {
         displaced = null;
         EnsureSlots();
-        // 找到了库存项（血包格不是武器，不参与）
-        int idx = -1;
-        for (int i = 0; i < inventory.Count; i++)
-            if (!inventory[i].IsMedkit && inventory[i].weaponName == weaponName) { idx = i; break; }
-        if (idx < 0) return false;
+        if (string.IsNullOrEmpty(stackId)) return false;
 
-        var item = inventory[idx];
-        // 优先空槽
+        int idx = -1;
+        WeaponData weapon = null;
+        for (int i = 0; i < inventory.Count; i++)
+        {
+            var s = inventory[i];
+            if (s == null || s.def == null) continue;
+            var w = s.def as WeaponData;
+            if (w == null) continue;                 // 血包 / 子弹不是武器 → 不能装到快捷槽
+            if (w.StackId != stackId) continue;
+            idx = i; weapon = w; break;
+        }
+        if (idx < 0 || weapon == null) return false;
+
         int target = -1;
         for (int i = 0; i < slots.Length; i++)
             if (slots[i].weapon == null) { target = i; break; }
+
         if (target >= 0)
         {
-            slots[target].weapon = item.weapon;
-            slots[target].magAmmo = item.weapon.magSize;
+            slots[target].weapon = weapon;
+            slots[target].magAmmo = weapon.magSize;
         }
         else
         {
-            // 全满 → 替换当前槽,原武器进库存
             target = currentSlot >= 0 ? currentSlot : 0;
             displaced = slots[target].weapon;
-            slots[target].weapon = item.weapon;
-            slots[target].magAmmo = item.weapon.magSize;
-            AddToInventory(displaced);
+            slots[target].weapon = weapon;
+            slots[target].magAmmo = weapon.magSize;
+            if (displaced != null) AddItems(displaced, 1);   // 原武器下放进库存（走通用流程）
         }
 
+        var item = inventory[idx];
         item.count -= 1;
         if (item.count <= 0) inventory.RemoveAt(idx);
         currentSlot = target;
         return true;
-    }
-
-    void AddToInventory(WeaponData w)
-    {
-        if (w == null) return;
-        for (int i = 0; i < inventory.Count; i++)
-            if (!inventory[i].IsMedkit && inventory[i].weaponName == w.weaponName) { inventory[i].count += 1; return; }
-        inventory.Add(new InvItem { kind = ItemKind.Weapon, weaponName = w.weaponName, weapon = w, count = 1 });
     }
 
     /// <summary>从快捷槽丢弃一把武器（掉回地面后由调用方创建 WeaponPickup）。返回被丢弃的数据，空槽返回 null。</summary>
@@ -220,28 +257,21 @@ public class PlayerBackpack : MonoBehaviour
         });
     }
 
-    /// <summary>使用一个血包（未满血才可,由调用方判断）,成功则移除那一格并返回 true（用掉一格、空出一格）。</summary>
-    public bool UseMedkit()
+    /// <summary>使用一个血包（未满血才可，由调用方判断）。
+    /// 成功 → 用掉一格并返回它的**定义卡**（调用方从卡里读回血量，不再写死 50）；没有血包返回 null。</summary>
+    public MedkitData UseMedkit()
     {
         for (int i = 0; i < inventory.Count; i++)
-            if (inventory[i] != null && inventory[i].kind == ItemKind.Medkit)
-            {
-                inventory.RemoveAt(i);   // 一个血包占一格：用掉就把这一格腾出来
-                return true;
-            }
-        return false;
-    }
+        {
+            var s = inventory[i];
+            if (s == null || s.def == null) continue;
+            var m = s.def as MedkitData;
+            if (m == null) continue;
 
-    /// <summary>把血包收进背包（血包拾取调用）：**一个血包占一格**（不叠加），有几个血包就占几格。
-    /// 返回 false = 一个都没装下（背包已满）—— 调用方应让药箱留在原地并提示。
-    /// n 大于剩余空格时只装得下几个算几个（拾取时 n = 1，不会出现这种情况）。</summary>
-    public bool AddMedkit(int n = 1)
-    {
-        if (n <= 0) return true;
-        int room = Mathf.Max(Capacity - inventory.Count, 0);   // 还剩几个空格
-        int can = Mathf.Min(n, room);                          // 一格装一个血包
-        for (int i = 0; i < can; i++)
-            inventory.Add(new InvItem { kind = ItemKind.Medkit, count = 1 });   // weaponName/weapon 均为 null
-        return can > 0;
+            s.count -= 1;
+            if (s.count <= 0) inventory.RemoveAt(i);   // 一格一个：用掉就把这一格腾出来
+            return m;
+        }
+        return null;
     }
 }

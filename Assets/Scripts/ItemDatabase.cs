@@ -64,6 +64,22 @@ public class ItemDatabase : ScriptableObject
         return null;
     }
 
+    /// <summary>取清单里**第一个指定类型**的物品定义（例：取"血包定义卡"）。
+    /// 用途：世界里那些"只认类型、不认具体哪一张卡"的地方（血迹包 → 随便哪张 MedkitData 都行）。
+    /// 静态入口（内部走 `I`，所以调用方不用先判空清单）；找不到返回 null
+    /// （调用方**要判空并给告警**，不要静默什么都不做）。</summary>
+    public static T FirstOfType<T>() where T : ItemData
+    {
+        var db = I;
+        if (db == null || db.all == null) return null;
+        for (int i = 0; i < db.all.Count; i++)
+        {
+            var t = db.all[i] as T;
+            if (t != null) return t;
+        }
+        return null;
+    }
+
     /// <summary>清单里有几件物品。</summary>
     public int Count => all != null ? all.Count : 0;
 }

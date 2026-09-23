@@ -87,15 +87,22 @@ public class BackpackPanel : MonoBehaviour
     GameObject _tooltipGo;
     RectTransform _tooltipRect;   // tooltip 的 RectTransform（BuildUI 缓存，避免每帧 GetComponent）
     RectTransform _rootRect;      // 面板根的 RectTransform（tooltip 位置换算要用）
-    WeaponData _lastHoverWeapon;  // 上次显示 tooltip 的武器（鼠标没换武器就不重建字符串）
+    ItemData _lastHoverDef;       // 上次显示 tooltip 的物品定义（鼠标没换东西就不重建字符串）
 
     // ---- 丢弃二次确认 ----
     int _dropConfirmSlot = -1;      // -1 = 无确认中；否则是槽位号
     float _dropConfirmUntil;
 
-    /// <summary>本次暂停是不是自己申请的。只有自己申请过才在关闭时释放，
-    /// 避免把别的系统（将来的 ESC 暂停菜单 / 结算页）的暂停一起解掉。</summary>
-    bool _pausedByMe;
+    /// <summary>本面板当前是否开着。**替代了旧的 `_pausedByMe`**：
+    /// 现在"暂停 / 隐藏整块 HUD / 隐藏准星"三件事统一交给 `UIState` 记账（它支持多个面板共存），
+    /// 本面板只记自己开没开 —— 开关键判断、死亡自动关闭、与箱子面板互联都靠它。</summary>
+    bool _opened;
+
+    /// <summary>唯一实例（箱子面板要与它"绑成一体"，所以需要从外部访问）。可能为 null（还没创建）。</summary>
+    public static BackpackPanel Instance => _inst;
+
+    /// <summary>面板当前是否开着。</summary>
+    public bool IsOpen => _opened;
 
     // ---- 缓存（跨实例，只生成一次）----
     // 字体已改用 UIUtil 的**全局共用字体**（原来这里也自己造一份动态字体，见 UIUtil 的注释）
@@ -144,25 +151,28 @@ public class BackpackPanel : MonoBehaviour
     void Update()
     {
         // 死亡时若背包还开着 → 强制关闭（避免重开一局卡在暂停，同时把光标还给结算面板）
-        if (GameState.GameOver && _pausedByMe) { Close(); return; }
+        if (GameState.GameOver && _opened) { Close(); return; }
 
-        // 开关键：Tab/B 开关（游戏中打开、暂停中关闭）；Esc 仅关闭
+        // 开关键：Tab/B 开关；Esc 仅关闭。
+        // ⚠️ 判据用**本面板自己的 `_opened`**，不要用 `GameState.Paused` ——
+        //    暂停现在是"多个界面共用"的（箱子面板也会让它是 true），用 Paused 判断会出现
+        //    「只开了箱子、按 Tab 却去关背包（而背包本来就没开）」这种错配。
         bool toggleKey = Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.B);
         bool escKey = Input.GetKeyDown(KeyCode.Escape);
         if (toggleKey)
         {
-            if (GameState.Paused) Close();
+            if (_opened) Close();
             else if (!GameState.GameOver) Open();
         }
-        else if (escKey && GameState.Paused)
+        else if (escKey && _opened)
             Close();
 
         // 丢弃二次确认超时还原
         if (_dropConfirmSlot >= 0 && Time.unscaledTime >= _dropConfirmUntil)
             ResetDropConfirm();
 
-        // 背包打开时：悬停 tooltip + 确认态按钮文字维护（用 _pausedByMe 判断，别被别的系统的暂停干扰）
-        if (_pausedByMe)
+        // 背包打开时：悬停 tooltip（用自己的 `_opened` 判断，别被其它界面的暂停干扰）
+        if (_opened)
             UpdateTooltip();
     }
 
@@ -462,30 +472,27 @@ public class BackpackPanel : MonoBehaviour
 
     public void Open()
     {
-        if (_pausedByMe) return;          // 已经开着，避免重复申请暂停
-        _pausedByMe = true;
-        GameState.SetPaused(true);        // 统一暂停入口（内部置 Paused + Time.timeScale=0）
+        if (_opened) return;      // 已经开着（幂等）
+        _opened = true;
+        UIState.Push();           // 暂停 + 隐藏整块 HUD + 隐藏准星（**唯一出口**，支持多界面共存）
         _root.SetActive(true);
         Sfx.OpenInventory();
-        if (Crosshair.InstanceUI != null) Crosshair.InstanceUI.SetVisible(false);
-        HUD.SetContentVisible(false);   // 隐藏整块 HUD：避免与左侧背包面板重叠（且信息重复）
         ResetDropConfirm();
         Refresh();
     }
 
     public void Close()
     {
-        // 只释放自己申请的暂停：写死 timeScale=1 会把别的系统的暂停一起解掉
-        if (_pausedByMe)
-        {
-            _pausedByMe = false;
-            GameState.SetPaused(false);
-        }
+        if (!_opened) return;     // 幂等：重复调用无副作用（与箱子面板互联时会互相调）
+        _opened = false;
         _root.SetActive(false);
         Sfx.CloseInventory();
-        if (Crosshair.InstanceUI != null) Crosshair.InstanceUI.SetVisible(true);
-        HUD.SetContentVisible(true);    // 恢复整块 HUD
+        UIState.Pop();
         ResetDropConfirm();
+
+        // 与箱子面板"绑成一个整体"：任意一方关闭 → 两个一起关
+        //（对方内部也有幂等守卫，所以不会递归打转）
+        if (ChestPanel.Instance != null && ChestPanel.Instance.IsOpen) ChestPanel.Instance.Close();
     }
 
     // ==================== 数据刷新 ====================
@@ -567,7 +574,11 @@ public class BackpackPanel : MonoBehaviour
         for (int i = 0; i < cap; i++)
         {
             int row = i / cols, col = i % cols;
+            // 库存格现在是**通用物品格**（ItemStack = 物品定义 + 数量）：武器 / 血包 / 以后的子弹都走这里，
+            // 所以下面一律用 `item.def`，**不要**再假设它一定是武器（旧版这里就在 `item.weapon` 上写死了）
             var item = (bp != null && i < bp.inventory.Count) ? bp.inventory[i] : null;
+            bool hasItem = item != null && item.def != null && !item.IsEmpty;
+            string cellName = hasItem ? "Inv_" + item.DisplayName : "InvEmpty";
 
             // 格子来源：有模板就实例化（样式全部来自 prefab），否则代码生成
             GameObject cell;
@@ -575,14 +586,14 @@ public class BackpackPanel : MonoBehaviour
             if (_cellTemplate != null)
             {
                 cell = Instantiate(_cellTemplate, _invGrid.transform);
-                cell.name = item != null ? "Inv_" + item.DisplayName : "InvEmpty";
+                cell.name = cellName;
                 cell.SetActive(true);
                 cellImg = cell.GetComponent<Image>();
                 if (cellImg == null) { cellImg = cell.AddComponent<Image>(); cellImg.color = CellColor(); }
             }
             else
             {
-                cell = new GameObject(item != null ? "Inv_" + item.DisplayName : "InvEmpty");
+                cell = new GameObject(cellName);
                 cell.transform.SetParent(_invGrid.transform, false);
                 cellImg = cell.AddComponent<Image>();
                 cellImg.sprite = FrameSprite();
@@ -596,13 +607,12 @@ public class BackpackPanel : MonoBehaviour
             rt.anchoredPosition = new Vector2(
                 col * (cellW + CellGap) - gridW * 0.5f + cellW * 0.5f,
                 startY - row * (cellH + CellGap));
-            cellImg.raycastTarget = item != null;   // 空格子不接点击
+            cellImg.raycastTarget = hasItem;   // 空格子不接点击
 
-            if (item == null) { _invCells.Add(null); continue; }   // 空格子到此为止（只画个框）
+            if (!hasItem) { _invCells.Add(null); continue; }   // 空格子到此为止（只画个框）
 
-            // 图标：优先复用格子里已有的 Icon 子节点（模板带的，位置/尺寸随你在 prefab 里调），没有才代码补一个。
-            // 血包是「没有 WeaponData 的占格物品」→ 单独走红十字图标分支，绝不碰 item.weapon（那会是 null）
-            bool isMedkit = item.IsMedkit;
+            // 图标 + 颜色：统一走 `ItemVisuals`（背包 / 箱子 / 快捷栏共用同一份实现 → 三处永远一致）
+            // ⚠️ 血包是「没有 WeaponData 的占格物品」→ 不要直接 use `item.def as WeaponData` 的结果
             var icon = Comp<Image>(cell.transform, "Icon");
             if (icon == null)
             {
@@ -610,8 +620,8 @@ public class BackpackPanel : MonoBehaviour
                 icon.rectTransform.anchoredPosition = new Vector2(0f, 5f);
             }
             icon.gameObject.SetActive(true);
-            icon.sprite = isMedkit ? MedkitSprite() : WeaponIconSprite(item.weapon);
-            icon.color = isMedkit ? MedkitIconColor : item.weapon.pickupColor;
+            icon.sprite = ItemVisuals.IconOf(item.def);
+            icon.color = ItemVisuals.ColorOf(item.def);
             icon.preserveAspect = true;
 
             // 数量角标（右下角，只有叠了多个才显示；模板里可能自带，没有就建一个）
@@ -629,16 +639,17 @@ public class BackpackPanel : MonoBehaviour
             }
             else if (cnt != null) cnt.gameObject.SetActive(false);
 
-            // 点击装备到空槽（满则替换当前槽，旧枪掉地上）。
-            // ⚠️ 血包格**不挂装备事件**：它不是武器，点它不该进快捷槽（数量留在格子里，靠 Q 键消耗）
+            // 点击 = 装备到空槽（满则替换当前槽，旧枪掉地上）。
+            // ⚠️ **只有武器**才挂这个事件：血包 / 子弹点它不该进快捷武器槽（血包靠 Q 键消耗）
             var btn = cell.GetComponent<Button>();
-            if (!isMedkit)
+            var asWeapon = item.def as WeaponData;
+            if (asWeapon != null)
             {
                 if (btn == null) btn = cell.AddComponent<Button>();
                 btn.targetGraphic = cellImg;
                 btn.onClick.RemoveAllListeners();
-                var name = item.weaponName;
-                btn.onClick.AddListener(() => { if (_pc != null) { _pc.EquipFromInventory(name); Sfx.Confirm(); } Refresh(); });
+                string id = item.def.StackId;   // 用**身份证**而不是名字（敌人掉的枪是副本，名字/引用都不可靠）
+                btn.onClick.AddListener(() => { if (_pc != null) { _pc.EquipFromInventory(id); Sfx.Confirm(); } Refresh(); });
             }
             else if (btn != null) btn.onClick.RemoveAllListeners();
 
@@ -710,29 +721,36 @@ public class BackpackPanel : MonoBehaviour
         //    tooltip 却出现在另一处（2026-09-22 加虚拟光标时一并改掉）。
         Vector2 mouse = VirtualCursor.MousePosition;
 
-        WeaponData hover = null;
-        // 快捷槽
+        WeaponData hoverWeapon = null;   // 悬停在快捷武器槽上
+        ItemStack hoverItem = null;      // 悬停在库存格上（通用物品）
+
+        // 快捷槽（只放武器）
         for (int i = 0; i < SlotCount; i++)
             if (_slotCell[i] != null && bp != null && bp.slots[i].weapon != null &&
                 RectTransformUtility.RectangleContainsScreenPoint(_slotCell[i], mouse, null))
-            { hover = bp.slots[i].weapon; break; }
+            { hoverWeapon = bp.slots[i].weapon; break; }
+
         // 库存
         // 上界取两者较小值：_invCells（UI）与 bp.inventory（数据）是靠索引对齐的两个平行数组，
         // 只要有一边没同步（数据改了但没 Refresh）就会越界 → 这里兜住，最坏只是不显示 tooltip
         int invCount = bp != null ? Mathf.Min(_invCells.Count, bp.inventory.Count) : 0;
-        if (hover == null && bp != null)
+        if (hoverWeapon == null && bp != null)
             for (int i = 0; i < invCount; i++)
-                if (_invCells[i] != null && bp.inventory[i] != null && !bp.inventory[i].IsMedkit &&
+                if (_invCells[i] != null && bp.inventory[i] != null && !bp.inventory[i].IsEmpty &&
                     RectTransformUtility.RectangleContainsScreenPoint(_invCells[i], mouse, null))
-                { hover = bp.inventory[i].weapon; break; }
+                { hoverItem = bp.inventory[i]; break; }
 
-        if (hover != null)
+        // 内容只在**悬停的物品变化**时重建（鼠标不动不该每帧拼字符串）。
+        // 脏值键用 `ItemData`（同一种物品的内容不变；数量不进 tooltip）
+        ItemData keyDef = hoverWeapon != null ? (ItemData)hoverWeapon
+                                              : (hoverItem != null ? hoverItem.def : null);
+        if (keyDef != null)
         {
-            // 内容只在悬停的武器变化时重建（鼠标不动不该每帧拼字符串）
-            if (!ReferenceEquals(hover, _lastHoverWeapon))
+            if (!ReferenceEquals(keyDef, _lastHoverDef))
             {
-                _lastHoverWeapon = hover;
-                _tooltipText.text = WeaponInfoString(hover);
+                _lastHoverDef = keyDef;
+                _tooltipText.text = hoverWeapon != null ? WeaponInfoString(hoverWeapon)
+                                                        : ItemInfoString(hoverItem);
             }
             _tooltipGo.SetActive(true);
             PlaceTooltip(mouse);
@@ -794,6 +812,24 @@ public class BackpackPanel : MonoBehaviour
             w.hipRecoilUp, w.hipRecoilJitter, aimRecoilUp, aimRecoilJitter,
             w.hipToAimTime, w.aimToHipTime,
             w.moveSpeedMultiplier, w.aimMoveSpeedMultiplier);
+    }
+
+    /// <summary>
+    /// 库存格的悬停内容（**通用物品**）：
+    ///  · 武器 → 直接复用上面那 12 行详细属性
+    ///  · 其它物品（血包 / 以后的子弹…）→ 名字（叠了多个时加 ×N）+ 物品定义卡上的说明文字
+    /// ⚠️ 说明文字来自 `ItemData.description` —— 这就是「只有图标、没有模型」的物品
+    ///    能向玩家讲清自己是什么的地方（新物品记得写上）。
+    /// </summary>
+    static string ItemInfoString(ItemStack s)
+    {
+        if (s == null || s.def == null) return "";
+        if (s.def is WeaponData w) return WeaponInfoString(w);
+
+        string text = s.def.DisplayName;
+        if (s.count > 1) text += "   ×" + s.count;
+        if (!string.IsNullOrEmpty(s.def.description)) text += "\n" + s.def.description;
+        return text;
     }
 
     // ==================== 共享资源：贴图 / 图标 / 字体 ====================
