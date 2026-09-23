@@ -51,6 +51,7 @@ public static class StaticReset
         KillFeed.ResetStatics();
         VirtualCursor.ResetStatics();
         WeaponData.ResetStatics();
+        ItemDatabase.ResetStatics();   // 物品清单（便利表）的 Resources 缓存
 
         CameraCache.Clear();
 
