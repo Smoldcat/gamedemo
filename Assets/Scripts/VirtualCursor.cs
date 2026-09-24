@@ -12,10 +12,11 @@ using UnityEngine.UI;
 ///
 /// 做法（沿用项目"准星屏幕坐标 = 唯一真相"这条铁律，见 §4 #20）：
 ///   ① 非游玩态**不显示系统光标**，改由本类自绘一个光标；
-///      ⚠️ 并且**保持 `Cursor.lockState = Locked`**（2026-09-24 起）—— 于是那枚真光标在整个非游玩态里
-///      都是"钉在窗口中心、不可见、位置无意义"的，**永远出不了游戏窗口**。不锁的话它会跟本类的光标
-///      各走各的（起点/夹取/换算都不同）→ 跑出窗口后系统箭头从桌面冒出来，在窗口外点击直接让游戏失焦。
-///      完整推导见 `Crosshair.ApplyCursorModeNow` 里那段"为什么非游玩态也必须锁定"。
+///      ⚠️ 并且把系统光标设为 **`CursorLockMode.Confined`**（2026-09-24 起）—— 那枚真光标被
+///      `ClipCursor` **夹在游戏窗口内**，于是**永远出不了窗口**（不夹的话它会跟本类的光标各走各的：
+///      起点 / 夹取 / 换算都不同 → 跑出窗口后系统箭头由桌面画出来，在窗口外点击直接让游戏失焦，见 §4 #31）。
+///      ⚠️ **不能改用 `Locked`**：UGUI 在 `Locked` 下会把指针位置强制成 `(-1,-1)` → 任何 UI 都点不中
+///      （源码依据见 `Crosshair.ApplyCursorModeNow` 里那段；2026-09-24 踩过一次）。
 ///   ② 它出现时的位置 **= 打开那一刻的准星位置** → 准星消失、光标在同一处出现（连续感）；
 ///   ③ 之后用与 `PlayerController.TakeMouseDelta` **完全相同**的鼠标轴增量驱动它
 ///      → 手感 / 灵敏度天然一致，而且**行程无限**（轴增量不受窗口边界限制，见 §4 #21；
@@ -101,8 +102,8 @@ public static class VirtualCursor
     /// <summary>每帧驱动（由 <see cref="VirtualCursorDriver"/> 调用，执行顺序早于 EventSystem）。
     /// 换算与 `PlayerController.TakeMouseDelta` 锁定态那一行**完全一致**（`axis × mousePixelScale`）
     /// —— 所以"背包里挪光标"和"游玩时挪准星"是同一个手感，不存在快/慢的落差。
-    /// ⚠️ 驱动期间一直处于 `CursorLockMode.Locked`（见类注释 ①）：轴增量本来就与光标锁不锁无关，
-    ///    所以"真光标被钉在窗口中心"和"光标自由移动"这两件事互不干扰。</summary>
+    /// ⚠️ 驱动期间系统光标处于 `CursorLockMode.Confined`（见类注释 ①）：轴增量与光标夹不夹无关，
+    ///    所以"真光标被夹在窗口里"和"本类光标自由移动"这两件事互不干扰。</summary>
     public static void Tick()
     {
         if (!_active) return;
