@@ -69,11 +69,12 @@ public class ChestPanel : MonoBehaviour
         // 死亡时强制关闭（避免重开一局卡在暂停；同时把光标还给结算面板）
         if (GameState.GameOver) { Close(); return; }
 
-        // 关闭键：Esc / 再按一次 F（Tab 由 BackpackPanel 统一处理 —— 那两个面板是一体的）
+        // 关闭键：**再按一次 F**（Tab / B 由 BackpackPanel 统一处理 —— 那两个面板是一体的）
+        // ⚠️ **Esc 刻意不参与**（用户 2026-09-24 定）：两个面板绑成一体，Esc 还能关箱子 = 还能关背包。
         // ⚠️ 必须跳过"打开的那一帧"：开箱是 F、关箱也是 F，而本组件 Update 可能在同一帧**晚于**
         //    PlayerController.Update 执行 → 不加这个守卫就会出现"一按 F 立刻开了又关"。
         if (Time.frameCount == _openedFrame) return;
-        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.F)) Close();
+        if (Input.GetKeyDown(KeyCode.F)) Close();
     }
 
     // ==================== 打开 / 关闭 ====================

@@ -26,7 +26,8 @@ using UnityEngine.UI;
 /// 任一必需部件找不到 → 判结构不合格 → 自动退回代码生成并在 Console 打警告（不会白屏）。
 ///
 /// 打开背包 → GameState.SetPaused(true)（内部置 Paused + Time.timeScale=0，敌人/子弹冻结）；关闭时只释放自己那次请求。
-/// 开关键（Tab/B/Esc）统一在本组件 Update 处理（PlayerController 不再监听，避免同帧双触发）。
+/// 开关键（**Tab / B**；用户 2026-09-24 定：Esc 不再参与）统一在本组件 Update 处理
+///（PlayerController 不再监听，避免同帧双触发）。
 /// </summary>
 public class BackpackPanel : MonoBehaviour
 {
@@ -153,19 +154,17 @@ public class BackpackPanel : MonoBehaviour
         // 死亡时若背包还开着 → 强制关闭（避免重开一局卡在暂停，同时把光标还给结算面板）
         if (GameState.GameOver && _opened) { Close(); return; }
 
-        // 开关键：Tab/B 开关；Esc 仅关闭。
+        // 开关键：**只有 Tab / B**（用户 2026-09-24 定：Esc 不再参与开关背包）。
         // ⚠️ 判据用**本面板自己的 `_opened`**，不要用 `GameState.Paused` ——
         //    暂停现在是"多个界面共用"的（箱子面板也会让它是 true），用 Paused 判断会出现
         //    「只开了箱子、按 Tab 却去关背包（而背包本来就没开）」这种错配。
-        bool toggleKey = Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.B);
-        bool escKey = Input.GetKeyDown(KeyCode.Escape);
-        if (toggleKey)
+        // 📌 为什么把 Esc 摘掉：Esc 在 Unity / 系统层面还可能被当成"解除光标锁定"，让它同时兼任"关闭键"
+        //    会把"关面板"和"放开鼠标"两件事绑在一起（按一下发生两件事）；将来加暂停菜单时 Esc 另有安排。
+        if (Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.B))
         {
             if (_opened) Close();
             else if (!GameState.GameOver) Open();
         }
-        else if (escKey && _opened)
-            Close();
 
         // 丢弃二次确认超时还原
         if (_dropConfirmSlot >= 0 && Time.unscaledTime >= _dropConfirmUntil)
@@ -344,7 +343,7 @@ public class BackpackPanel : MonoBehaviour
         // 引导（左） + 暂停提示（右）
         float subY = titleY - 26f;
         var guide = AddText(_root.transform, "Guide", new Vector2(240f, 20f),
-            "点击装备 · Tab/Esc 关闭", 12, new Color(0.68f, 0.72f, 0.8f));
+            "点击装备 · Tab/B 关闭", 12, new Color(0.68f, 0.72f, 0.8f));
         guide.alignment = TextAnchor.MiddleLeft;
         guide.rectTransform.anchoredPosition = new Vector2(textCx, subY);
 

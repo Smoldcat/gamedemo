@@ -3759,7 +3759,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\u70B9\u51FB\u88C5\u5907 \xB7 Tab/Esc \u5173\u95ED"
+  m_Text: "\u70B9\u51FB\u88C5\u5907 \xB7 Tab/B \u5173\u95ED"
 --- !u!1 &6128701281060801466
 GameObject:
   m_ObjectHideFlags: 0

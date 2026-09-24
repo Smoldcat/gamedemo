@@ -7,6 +7,9 @@ using UnityEngine.UI;
 /// 换弹时整块准星替换为「圆形换弹进度环」。
 /// 死亡 / 背包等非游玩态隐藏准星并切换到**虚拟光标**（位置继承准星 → 不会从屏幕中心冒出来，见 `VirtualCursor`）。
 /// 完全代码生成：运行时自建一个 Overlay Canvas（带与主 HUD 同参数的 CanvasScaler），不需要手动搭 UI。
+///
+/// ⚠️ **两种状态都保持 `Cursor.lockState = Locked`**（系统光标恒被钉在窗口中心且不可见），
+///    区别只在"非游玩态"多一个自绘的虚拟光标 —— 原因见 <see cref="ApplyCursorModeNow"/> 里那段。
 /// </summary>
 public class Crosshair : MonoBehaviour
 {
@@ -61,8 +64,11 @@ public class Crosshair : MonoBehaviour
 
     [Header("光标（非游玩态：背包 / 死亡结算）")]
     [Tooltip("【虚拟光标】非游玩态用一个自绘光标代替系统光标，且**位置继承准星**（打开背包那一刻准星在哪，光标就从哪出现）。\n" +
+             "两种状态都保持「锁定 + 隐藏系统光标」，所以真光标永远出不了游戏窗口。\n" +
              "关掉 = 回到旧行为：解锁 + 显示系统光标（光标从屏幕中心出现，与准星无关）。\n" +
-             "⚠️ 这是逃生开关：万一虚拟光标让 UI 点不了（背包打开时游戏是暂停的），在 Inspector 里当场关掉它、下一帧即恢复可点。")]
+             "⚠️ 这是逃生开关：万一虚拟光标让 UI 点不了（背包打开时游戏是暂停的），在 Inspector 里当场关掉它、下一帧即恢复可点。\n" +
+             "    ⚠️ 但**鼠标这时是锁在窗口中心的** → 要先把鼠标解锁才能点 Inspector：编辑器里按 **Esc**（Unity 会自动释放锁定）" +
+             "或 Alt+Tab 切出去再回来。")]
     public bool useVirtualCursor = true;
 
     Canvas _canvas;
@@ -118,19 +124,39 @@ public class Crosshair : MonoBehaviour
     }
 
     /// 背包面板调用：切换"准星显示 / 隐藏"（**参数是"准星是否可见"，不是"是否要显示光标"**）
-    /// ⚠️ 背包 Open 调的是 `SetVisible(false)`（隐藏准星）、Close 调 `SetVisible(true)` —— 传反会导致
-    /// "开背包时光标被锁住+隐藏、完全点不了 UI"（接过这个 bug，现场表现就是"打开背包没有任何光标"）。
+    /// ⚠️ 背包 Open 调的是 `SetVisible(false)`（隐藏准星）、Close 调 `SetVisible(true)` —— 传反会出现
+    /// "准星还画着、可光标已经切到虚拟态"这种错配。
+    /// 📌 历史坑（别被旧注释误导）：**虚拟光标出现之前**，非游玩态必须**解锁**系统光标，否则 UI 完全点不了
+    ///    （UGUI 按 `Input.mousePosition` 算射线，而锁定态下它只有屏幕中心/脏值）。现在位置由
+    ///    `VirtualInput.inputOverride` 注入给 EventSystem、鼠标按键走真实硬件 → **与是否锁定无关**
+    ///    → 于是两种状态都可以锁定（见 <see cref="ApplyCursorModeNow"/>）。
     public void SetVisible(bool crosshairVisible)
     {
         if (_root != null) _root.gameObject.SetActive(crosshairVisible);
-        // 准星可见 = 游玩态 → 锁定 + 隐藏系统光标；准星隐藏 = 背包/结算态 → 解锁 + 显示（否则 UI 点不了）
+        // 准星可见 = 游玩态；准星隐藏 = 背包/结算态 —— 两种状态都由 ApplyCursorMode 内的同一实现去切光标
         ApplyCursorMode(crosshairVisible);
     }
 
     /// <summary>统一切换光标状态（**唯一实现**，别在别处再写 `Cursor.lockState / Cursor.visible`）：
-    /// **游玩** = 锁定 + 隐藏（锁定后鼠标增量不受光标位置限制 = 无限行程；也没有可见光标可跟准星"错位"）；
-    /// **非游玩**（背包 / 死亡结算）= 解锁 + **仍然隐藏系统光标** + 显示**虚拟光标**（`VirtualCursor`）
-    ///   —— 虚拟光标的位置**继承准星**，于是"准星消失、光标在同一处出现"，不再是"无论准星在哪都从屏幕中心冒出来"。
+    /// **两种状态都是「锁定 + 隐藏」系统光标**，区别只在"非游玩态"多一个自绘的**虚拟光标**：
+    ///   · **游玩** = 锁定 + 隐藏（锁定后鼠标增量不受光标位置限制 = 无限行程；也没有可见光标可跟准星"错位"）；
+    ///   · **非游玩**（背包 / 死亡结算）= **同样锁定 + 隐藏** + 显示虚拟光标（`VirtualCursor`）
+    ///     —— 虚拟光标的位置**继承准星**，于是"准星消失、光标在同一处出现"，不再是"无论准星在哪都从屏幕中心冒出来"。
+    ///
+    /// ⚠️ **为什么非游玩态也必须锁定（2026-09-24 修）**：解锁之后，那枚**看不见的真光标**与虚拟光标是
+    ///    两套彼此独立的量，必然分家 ——
+    ///      ① 起点不同：真光标被游玩态钉在窗口中心，虚拟光标继承准星（可能在屏幕任意处）；
+    ///      ② 夹取不同：虚拟光标 `ClampPos` 夹在屏幕内，真光标**完全不受限**（虚拟贴在边上不动，它继续往外跑）；
+    ///      ③ 换算可能不同：真光标 = 轴增量 ÷ InputManager 灵敏度，虚拟光标 = 轴增量 × `mousePixelScale`，
+    ///         而那条用来纠偏的"实测校准"（`PlayerController.TryCalibrateMouseScale`）**永远跑不到** ——
+    ///         它只在"未锁定且未暂停"的有效帧里执行，可解锁态恰好是暂停态（`PlayerController.Update` 直接 early-return）。
+    ///    后果：Windows 上 `Cursor.visible = false` 只在指针位于游戏窗口内时生效 —— 指针一旦出窗口，
+    ///    系统箭头就由桌面画出来了（玩家看到"光标跑出游戏窗口"）；更糟的是**在窗口外点击 = 点到桌面 / 别的窗口
+    ///    → 游戏直接失焦**（全屏 / 多显示器下尤其难受）。锁定之后真光标被钉在窗口中心，物理上出不去。
+    ///
+    /// ⚠️ 锁定**不会**让 UI 点不了：UGUI 的射线位置来自 `VirtualInput.inputOverride`（虚拟位置），
+    ///    鼠标按键本来就来自真实硬件（游玩态开火/瞄准用的就是它）→ 位置与按键都被覆盖，与锁定无关。
+    ///    "非游玩态必须解锁"是**虚拟光标出现之前**的结论（那时 UGUI 按 `Input.mousePosition` 算射线），别再套用。
     /// ⚠️ `useVirtualCursor = false` 时回落旧行为（解锁 + 显示系统光标）：那是出问题时的逃生开关。</summary>
     void ApplyCursorModeNow(bool gameplay)
     {
@@ -142,8 +168,10 @@ public class Crosshair : MonoBehaviour
         }
         else if (useVirtualCursor)
         {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = false;      // 系统光标也藏起来：否则会出现"两个光标"（屏幕中心一个 + 准星处一个）
+            // 与游玩态同一套（锁定 + 隐藏）：真光标出不了窗口，也不再需要跟虚拟光标比速度/比位置。
+            // 视觉上"系统光标藏起来"仍然必要 —— 否则会看到"窗口中心一个 + 虚拟光标一个"两枚光标。
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
             VirtualCursor.Activate();    // 位置 = 当前准星屏幕坐标（连续感的关键）
         }
         else
@@ -154,9 +182,26 @@ public class Crosshair : MonoBehaviour
         }
     }
 
+    /// <summary>重新获得焦点时补一次"非游玩态"的光标模式。
+    /// **为什么需要**：失焦（Alt+Tab / 点到别的窗口）会让 Unity **自动解锁**系统光标，而"锁定"正是
+    /// 非游玩态"真光标永远出不了窗口"的唯一保证 → 不补这一下，切回来之后真光标就又能跑出窗口了
+    /// （等于绕过了 <see cref="ApplyCursorModeNow"/> 刚修掉的那个问题）。
+    /// ⚠️ 只在**非游玩态**补（`_cursorGameplay == false`）：游玩态失焦后的解锁是既有行为，本次不动它。
+    /// ⚠️ 不违反"不要每帧强制锁定"（见 <see cref="ApplyCursorMode"/>）：这里只在焦点事件里执行一次，
+    ///    玩家在编辑器里主动按 Esc 解锁不会被顶回去；点了别处再点回 Game 视图时重新锁定正是期望行为。
+    /// ⚠️ 逃生开关为 false 时这里同样是幂等的（那分支本来就是"解锁 + 显示"）。</summary>
+    void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus || _cursorGameplay) return;
+        ApplyCursorModeNow(false);
+    }
+
     /// <summary>只在状态**变化**时切换光标模式。
-    /// ⚠️ 不能每帧强制锁定：那会跟"编辑器里按 Esc 主动解锁"打架，把用户困在游戏里出不来。
-    /// 而且"无限行程"靠的是 PlayerController 改用鼠标轴增量，与光标是否真的锁住无关 —— 锁定只是顺带让画面干净。</summary>
+    /// ⚠️ 不能每帧强制锁定：那会跟"编辑器里按 Esc 主动解锁"打架，把用户困在游戏里出不来
+    ///    （"把用户困住"这条比"光标偶尔跑出窗口"严重得多，所以宁可只在状态切换时设一次；
+    ///     唯一的例外是 <see cref="OnApplicationFocus"/> —— 失焦回来补一次，那是系统主动解的锁）。
+    /// ⚠️ 锁定的意义已经不只是"画面干净"了：它同时是"真光标出不了窗口"的保证（见 <see cref="ApplyCursorModeNow"/>）。
+    ///    而"无限行程"另有来源 —— `PlayerController` 用的是鼠标**轴增量**，与光标锁不锁无关。</summary>
     void ApplyCursorMode(bool gameplay)
     {
         if (_cursorGameplay == gameplay) return;

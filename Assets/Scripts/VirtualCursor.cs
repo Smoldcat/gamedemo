@@ -12,9 +12,14 @@ using UnityEngine.UI;
 ///
 /// 做法（沿用项目"准星屏幕坐标 = 唯一真相"这条铁律，见 §4 #20）：
 ///   ① 非游玩态**不显示系统光标**，改由本类自绘一个光标；
+///      ⚠️ 并且**保持 `Cursor.lockState = Locked`**（2026-09-24 起）—— 于是那枚真光标在整个非游玩态里
+///      都是"钉在窗口中心、不可见、位置无意义"的，**永远出不了游戏窗口**。不锁的话它会跟本类的光标
+///      各走各的（起点/夹取/换算都不同）→ 跑出窗口后系统箭头从桌面冒出来，在窗口外点击直接让游戏失焦。
+///      完整推导见 `Crosshair.ApplyCursorModeNow` 里那段"为什么非游玩态也必须锁定"。
 ///   ② 它出现时的位置 **= 打开那一刻的准星位置** → 准星消失、光标在同一处出现（连续感）；
 ///   ③ 之后用与 `PlayerController.TakeMouseDelta` **完全相同**的鼠标轴增量驱动它
-///      → 手感 / 灵敏度天然一致，而且**行程无限**（轴增量不受窗口边界限制，见 §4 #21）；
+///      → 手感 / 灵敏度天然一致，而且**行程无限**（轴增量不受窗口边界限制，见 §4 #21；
+///        也**不受锁定影响** —— 游玩态那套锁定模型读的就是同一条轴，见 `PlayerController.TakeMouseDelta`）；
 ///   ④ 位置必须**注入 EventSystem**（`BaseInputModule.inputOverride`），否则 UGUI 的射线
 ///      仍按 `Input.mousePosition` 算 → 光标画在一处、点击命中另一处；
 ///   ⑤ 外观走 `GameAssets.virtualCursorSprite`（留空 = 程序生成的箭头），
@@ -31,6 +36,8 @@ using UnityEngine.UI;
 /// ⚠️ 逃生开关：`Crosshair.useVirtualCursor = false` → 完全回到 2026-09-22 之前的行为
 ///    （解锁 + 显示系统光标，光标从屏幕中心出现）。背包打开时游戏是暂停的，
 ///    可以在 Inspector 里当场关掉、下一帧即恢复可点，不必改代码重编译。
+///    ⚠️ 但注意：现在**鼠标是锁在窗口中心的**，要先让鼠标出来才能点 Inspector ——
+///    编辑器里按 **Esc**（Unity 会自动释放锁定）或 Alt+Tab 切出去再回来。
 /// </summary>
 public static class VirtualCursor
 {
@@ -93,7 +100,9 @@ public static class VirtualCursor
 
     /// <summary>每帧驱动（由 <see cref="VirtualCursorDriver"/> 调用，执行顺序早于 EventSystem）。
     /// 换算与 `PlayerController.TakeMouseDelta` 锁定态那一行**完全一致**（`axis × mousePixelScale`）
-    /// —— 所以"背包里挪光标"和"游玩时挪准星"是同一个手感，不存在快/慢的落差。</summary>
+    /// —— 所以"背包里挪光标"和"游玩时挪准星"是同一个手感，不存在快/慢的落差。
+    /// ⚠️ 驱动期间一直处于 `CursorLockMode.Locked`（见类注释 ①）：轴增量本来就与光标锁不锁无关，
+    ///    所以"真光标被钉在窗口中心"和"光标自由移动"这两件事互不干扰。</summary>
     public static void Tick()
     {
         if (!_active) return;
