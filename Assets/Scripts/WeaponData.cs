@@ -43,8 +43,21 @@ public class WeaponData : ItemData
              "  · 它是**上界**（不是「每次都要等满」）：过渡到一半就松开时，按剩余比例缩短（只探了半个头就收回 → 只用一半时间）。")]
     public float aimToHipTime = 0.1f;
     public float bulletSpeed = 30f;   // 子弹速度
-    [Tooltip("子弹存活时间（秒）。射程 = 子弹速度 × 存活时间")]
+    [Tooltip("子弹存活时间（秒）。**最大飞行距离** = 子弹速度 × 存活时间（子弹飞满这么久就消失）")]
     public float bulletLife = 0.6f;   // 子弹存活时间（默认 0.6s：提速后缩短飞行时间，滞后感消失，射程=速度×0.6）
+    [Tooltip("【有效射程（米）】子弹飞过这个距离之后，伤害按「超出射程伤害倍率」打折。\n" +
+             "  · **0 = 关闭衰减**（默认，即「整条弹道伤害一样」，与旧行为完全一致）。\n" +
+             "  · ⚠️ 它**不是**子弹消失的距离 —— 子弹在哪消失仍由「子弹存活时间」决定（最大飞行距离 = 子弹速度 × 存活时间）。\n" +
+             "    若填得比最大飞行距离还大 → 这个射程永远达不到、衰减不会生效（Inspector 会告警）。\n" +
+             "  · 建议只给一部分武器配（霰弹/冲锋枪衰减明显、狙击不衰减）→ 让「有效射程」成为个别武器的性格，而不是全局规则。\n" +
+             "  · ⚠️ 当前是**阶梯**实现：射程内 100%、射程外一律 × 倍率（临界点会有伤害跳变）。")]
+    public float effectiveRange = 0f;
+    [Tooltip("【超出射程伤害倍率】飞过「有效射程」之后的伤害百分比（0.5 = 只剩一半）。\n" +
+             "  · **1 = 不衰减**（默认）；「有效射程 = 0」时本值不参与。\n" +
+             "  · ⚠️ 与「有效射程」同属一条链，实际倍率 = `Combat.DamageAtDistance`（唯一实现）——\n" +
+             "    将来想从「阶梯」升级成「从有效射程到 X 倍之间线性滑落」，只改那一个函数即可。")]
+    [Range(0f, 1f)]
+    public float beyondRangeDamage = 1f;
     public int magSize = 12;          // 弹匣容量
     public float reloadTime = 1.2f;   // 换弹时间
     public Color tracerColor = new Color(1f, 0.9f, 0.3f); // 曳光颜色
@@ -174,6 +187,11 @@ public class WeaponData : ItemData
         if (aimMoveSpeedMultiplier < 0.1f) aimMoveSpeedMultiplier = 0.1f;
         if (bulletSpeed < 0.1f) bulletSpeed = 0.1f;
         if (bulletLife < 0.01f) bulletLife = 0.01f;
+        // 有效射程：0 = 关闭衰减（合法值）；只兜负数。倍率夹到 0~1（[Range] 只管 Inspector 拖动，
+        // 手改 YAML 塞 >1 会让"超出射程"变成加伤，属于静默的方向性错误）。
+        if (effectiveRange < 0f) effectiveRange = 0f;
+        if (beyondRangeDamage < 0f) beyondRangeDamage = 0f;
+        if (beyondRangeDamage > 1f) beyondRangeDamage = 1f;
         if (magSize < 1) magSize = 1;
         if (reloadTime < 0.01f) reloadTime = 0.01f;
         if (gunLength < 0.01f) gunLength = 0.01f;
@@ -224,6 +242,7 @@ public class WeaponData : ItemData
         w.hipToAimTime = 0.3f; w.aimToHipTime = 0.1f;   // 与字段默认值一致（显式写出，避免以后改默认值时这条链被静默影响）
         w.aimRecoilUpMultiplier = 0.6f; w.aimRecoilJitterMultiplier = 0.6f;
         w.bulletSpeed = 32f; w.magSize = 12; w.reloadTime = 1.0f;
+        w.effectiveRange = 0f; w.beyondRangeDamage = 1f;   // = 字段默认（显式写出：以后改默认值时这条链不会被静默影响）
         w.tracerColor = new Color(1f, 0.92f, 0.35f); w.pickupColor = Color.yellow;
         w.gunLength = 0.45f; w.shake = 0.07f; w.sound = SoundKind.Normal;
         w.moveSpeedMultiplier = 1f; w.aimMoveSpeedMultiplier = 1f;   // = 字段默认（显式写出，避免以后改默认值时这条链被静默影响）
@@ -240,6 +259,7 @@ public class WeaponData : ItemData
         w.hipToAimTime = 0.3f; w.aimToHipTime = 0.1f;
         w.aimRecoilUpMultiplier = 0.6f; w.aimRecoilJitterMultiplier = 0.6f;
         w.bulletSpeed = 36f; w.magSize = 30; w.reloadTime = 1.5f;
+        w.effectiveRange = 0f; w.beyondRangeDamage = 1f;   // = 字段默认（显式写出）
         w.tracerColor = new Color(0.5f, 1f, 1f); w.pickupColor = Color.cyan;
         w.gunLength = 0.55f; w.shake = 0.05f; w.sound = SoundKind.Normal;
         w.moveSpeedMultiplier = 1f; w.aimMoveSpeedMultiplier = 1f;
@@ -256,6 +276,7 @@ public class WeaponData : ItemData
         w.hipToAimTime = 0.3f; w.aimToHipTime = 0.1f;
         w.aimRecoilUpMultiplier = 0.6f; w.aimRecoilJitterMultiplier = 0.6f;
         w.bulletSpeed = 26f; w.magSize = 6; w.reloadTime = 1.8f;
+        w.effectiveRange = 0f; w.beyondRangeDamage = 1f;   // = 字段默认（显式写出）
         w.tracerColor = new Color(1f, 0.55f, 0.25f); w.pickupColor = new Color(1f, 0.5f, 0.1f);
         w.gunLength = 0.72f; w.shake = 0.20f; w.sound = SoundKind.Shotgun;
         w.moveSpeedMultiplier = 1f; w.aimMoveSpeedMultiplier = 1f;
@@ -272,6 +293,7 @@ public class WeaponData : ItemData
         w.hipToAimTime = 0.3f; w.aimToHipTime = 0.1f;   // 0→0：过渡不可见，仅为配置一致性显式写出
         w.aimRecoilUpMultiplier = 0.6f; w.aimRecoilJitterMultiplier = 0.6f;
         w.bulletSpeed = 55f; w.magSize = 4; w.reloadTime = 2.2f;
+        w.effectiveRange = 0f; w.beyondRangeDamage = 1f;   // = 字段默认（显式写出）
         w.tracerColor = new Color(0.85f, 0.45f, 1f); w.pickupColor = new Color(0.8f, 0.4f, 1f);
         w.gunLength = 0.95f; w.shake = 0.30f; w.sound = SoundKind.Sniper;
         w.moveSpeedMultiplier = 1f; w.aimMoveSpeedMultiplier = 1f;   // 基准速度（狙击的"慢"由射击节奏体现，暂不额外减速）

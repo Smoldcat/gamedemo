@@ -27,7 +27,9 @@ public class WeaponDataEditor : Editor
         ("hipToAimTime", "腰射→瞄准过渡（秒）", "按下右键后，散布从「腰射散布」线性过渡到「瞄准散布」用时。0 = 瞬时（旧行为）。\n⚠️ 定速推进：过渡到一半就松开，回落只用「过渡时间 × 剩余比例」；只有散布走过渡，后坐/横向闸门/移速仍立即生效"),
         ("aimToHipTime", "瞄准→腰射过渡（秒）", "松开右键后，散布从「瞄准散布」线性回到「腰射散布」用时。0 = 瞬时（旧行为）。\n⚠️ 它是**上界**：过渡到一半就松开时按剩余比例缩短（只探了半个头就收回 → 只用一半时间）"),
         ("bulletSpeed","子弹速度",          "子弹飞行速度，越快曳光越长"),
-        ("bulletLife","子弹存活时间（秒）", "子弹飞多久后消失。射程 = 子弹速度 × 存活时间"),
+        ("bulletLife","子弹存活时间（秒）", "子弹飞多久后消失。**最大飞行距离** = 子弹速度 × 存活时间"),
+        ("effectiveRange", "有效射程（米，0=不衰减）", "子弹飞过这个距离之后伤害打折。0 = 关闭（默认，与旧行为完全一致）。\n⚠️ 它**不是**子弹消失的距离 —— 子弹在哪消失仍由「子弹存活时间」决定；填得比最大飞行距离还大就永远达不到（Inspector 会告警）。\n建议只给一部分武器配（霰弹/冲锋枪衰减明显、狙击不衰减）→ 让「有效射程」成为个别武器的性格。当前是阶梯实现：射程内 100%、射程外一律 × 倍率（临界点会有伤害跳变）"),
+        ("beyondRangeDamage", "超出射程伤害倍率", "飞过「有效射程」之后的伤害百分比（0.5 = 只剩一半）。1 = 不衰减（默认）；有效射程 = 0 时本值不参与。\n实际倍率由 `Combat.DamageAtDistance` 一处实现 —— 将来想从「阶梯」升级成「线性滑落」只改那个函数"),
         ("magSize",    "弹匣容量",          "一次装填的子弹数"),
         ("reloadTime", "换弹时间（秒）",     "打空弹匣后换弹所需时间"),
         ("tracerColor","曳光颜色",          "子弹曳光的颜色"),
@@ -88,6 +90,9 @@ public class WeaponDataEditor : Editor
             EditorGUILayout.PropertyField(p, new GUIContent(label, tip));
         }
 
+        // 自检：有效射程 > 最大飞行距离（弹速 × 存活时间）时，那个射程永远达不到（配了不生效、且不报错）
+        DrawEffectiveRangeWarning();
+
         // 外观区
         // ⚠️ 这里**不要**再画一条「外观（留空 = 用代码生成的默认外观）」标题：
         //    WeaponData.cs 上已经有同名的 [Header]，而 PropertyField 会自动把它画出来 → 再画一遍就是两行（2026-09-20 修）。
@@ -105,6 +110,23 @@ public class WeaponDataEditor : Editor
         DrawUnmappedFields();
 
         serializedObject.ApplyModifiedProperties();
+    }
+
+    /// <summary>自检：有效射程超过「最大飞行距离」（子弹速度 × 存活时间）时在 Inspector 里说清楚。
+    /// 配了但不生效的字段最坑（静默），与 `HUD.CheckCanvasScaler` / `Chest.SelfCheck` 同一套约定。</summary>
+    void DrawEffectiveRangeWarning()
+    {
+        var rangeP = serializedObject.FindProperty("effectiveRange");
+        var speedP = serializedObject.FindProperty("bulletSpeed");
+        var lifeP  = serializedObject.FindProperty("bulletLife");
+        if (rangeP == null || speedP == null || lifeP == null) return;
+        if (rangeP.floatValue <= 0f) return;   // 关闭态：不用提示
+        float maxRange = speedP.floatValue * lifeP.floatValue;
+        if (rangeP.floatValue > maxRange)
+            EditorGUILayout.HelpBox(
+                $"有效射程 {rangeP.floatValue:0.#} m 超过了子弹的最大飞行距离 {maxRange:0.#} m" +
+                "（= 子弹速度 × 存活时间）→ 这个射程永远达不到，伤害衰减不会生效。",
+                MessageType.Warning);
     }
 
     /// 防呆设计：漏配中文标签的新字段画到「其他字段」区（英文标签），不会凭空消失。

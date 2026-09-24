@@ -14,6 +14,11 @@ public abstract class EnemyBehaviour : MonoBehaviour
     /// <summary>宿主（本敌人身上的 EnemyAI）</summary>
     protected EnemyAI ai;
 
+    /// <summary>敌弹的存活时间（秒）——**唯一实现**：射程上限 = 子弹速度 × 本值。
+    /// ⚠️ 别在别处再写一遍这个数：`EnemyConfigEditor` 的自检要用它算「射程上限」，
+    ///    两处各写一份的话，改了一处就会让告警说假话（§4 #15 那类"同一个量两处定义"的坑）。</summary>
+    public const float EnemyBulletLife = 1.2f;
+
     /// <summary>生成敌人时由 WaveManager 调用：绑定宿主并触发子类初始化</summary>
     public void Init(EnemyAI ai)
     {
@@ -66,11 +71,15 @@ public abstract class EnemyBehaviour : MonoBehaviour
             w.bulletSpeed = cfg.bulletSpeed;
             w.hipSpread = cfg.spread;   // 敌人不瞄准，只吃腰射值（aimSpread 不参与）
             w.tracerColor = cfg.tracerColor;
+            // 有效射程 / 超出射程伤害倍率：敌人侧独立配（玩家侧看武器自己的那份）。
+            // 两者都走 `Combat.DamageAtDistance` 同一份实现 —— 敌人子弹和玩家子弹是同一条 `Bullet`。
+            w.effectiveRange = cfg.effectiveRange;
+            w.beyondRangeDamage = cfg.beyondRangeDamage;
             w.weaponName = cfg.displayName + "的枪";
             // 敌弹射程单独定：玩家子弹 bulletLife=0.6（提速配套），敌人若沿用则射程
             // = speed×0.6（远程兵仅 12m）会打不到玩家。敌弹统一 1.2s：射程 = speed×1.2
             // （远程兵 20→24m、狙击手 55→66m），恢复远程威胁。
-            w.bulletLife = 1.2f;
+            w.bulletLife = EnemyBulletLife;
         }
         return w;
     }

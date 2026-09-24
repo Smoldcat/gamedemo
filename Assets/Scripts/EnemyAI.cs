@@ -271,9 +271,26 @@ public class EnemyAI : MonoBehaviour
         if (_hp == null || _hp.LastDamageCredited)
             KillFeed.Show(cfg != null ? cfg.displayName : "敌人", _hp != null && _hp.LastDamageWasHeadshot);
 
-        // 远程行为按配置概率掉落身上那把枪（波次模式下避免满地枪）
-        if (behaviour is EnemyShooterBehaviour && shootWeapon != null && cfg != null && Random.value < cfg.dropWeaponChance)
-            WeaponPickup.Create(shootWeapon.Clone(), transform.position + Vector3.up * 0.0f);
+        // 远程行为按配置概率掉落武器（波次模式下避免满地枪）
+        // ⚠️ 判据是「**身上有没有枪**」（`shootWeapon != null`），**不要**写成 `behaviour is EnemyShooterBehaviour` ——
+        //    那样狙击手永远不会掉（`EnemySniperBehaviour` 继承的是 `EnemyBehaviour` 基类，不是 `EnemyShooterBehaviour`），
+        //    而且**静默失效**（不报错，只是概率恒为 0），用户 2026-09-24 实测"把掉落概率调到 1 也不掉"才发现。
+        //    近战/自爆兵不设置 `shootWeapon` → 天然不掉，语义仍是"只有带枪的才掉"。
+        //
+        // 掉落语义（用户 2026-09-24 定，**A/B 两条路刻意分开**）：
+        //   · **敌人手里的枪** = `CloneShootWeapon()` 按 `EnemyConfig` 改过数值的副本（伤害/间隔/弹速/散布）——
+        //     那是"敌人的攻击参数"，**不是战利品**；
+        //   · **掉给玩家的** = 配置里那把**基础武器的正常副本**（玩家侧数值 + 正确名字/图标/拾取模型）。
+        //     ⚠️ 所以这里掉 `cfg.shooterWeapon` 而**不是** `shootWeapon`：否则玩家会捡到"狙击手的枪"
+        //     （实测伤害只有 M107 的 1/3、弹速不到一半，见 §3 日志 2026-09-24）。
+        //   ⚠️ 两边都必须 `Clone()`：直接掉资源本体会让玩家侧的改动写回 `.asset`（同 §4 #25 那族风险）。
+        //   ⚠️ `cfg.shooterWeapon` 留空时（敌人用的是代码兜底的 SMG）没有"基础武器"可言 → 回落到敌人手里那把，
+        //     行为与旧版一致，不会因为没配资源就变成"什么都不掉"。
+        if (shootWeapon != null && cfg != null && Random.value < cfg.dropWeaponChance)
+        {
+            var loot = (cfg.shooterWeapon != null ? cfg.shooterWeapon : shootWeapon).Clone();
+            WeaponPickup.Create(loot, transform.position + Vector3.up * 0.0f);
+        }
 
         // 简单死亡特效：火花 + 尸体下沉消失
         Effects.Impact(transform.position + Vector3.up * 0.4f, new Color(1f, 0.3f, 0.2f), 1.6f);

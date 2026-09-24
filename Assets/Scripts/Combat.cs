@@ -27,6 +27,8 @@ public struct ShotProfile
 {
     public HitMode mode;
     public float damage;              // 直击伤害
+    public float effectiveRange;      // 有效射程（米）：**≤ 0 = 不衰减**（见 Combat.DamageAtDistance）
+    public float beyondRangeDamage;   // 超出有效射程后的伤害倍率（0~1，1 = 不衰减）
     public float explosionRadius;     // 爆炸半径（mode = Explode 且 > 0 时生效）
     public float explosionDamage;     // 爆炸对范围内敌人的伤害
     public Health.Team team;          // 阵营：只打另一边；友军不挡子弹
@@ -45,7 +47,9 @@ public struct ShotProfile
 /// ⚠️ **规则只能有一份实现**，都只在本类里出现，不要复制到别处：
 ///   ① 隔墙不掉血（`HasClearPath`，自爆兵 AOE 也复用这里）；
 ///   ② 爆头只认"开火瞬间锁定的那个目标"；
-///   ③ **爆炸 AOE 不参与爆头**（范围伤害统一结算）。
+///   ③ **爆炸 AOE 不参与爆头**（范围伤害统一结算）；
+///   ④ **有效射程 → 伤害衰减**（`DamageAtDistance`；玩家子弹与敌人子弹共用这一份，
+///      **爆炸 AOE 不受它影响** —— 爆炸走自己的半径规则）。
 /// </summary>
 public static class Combat
 {
@@ -54,10 +58,30 @@ public static class Combat
     static readonly System.Collections.Generic.List<EnemyAI> _aoeSnapshot = new System.Collections.Generic.List<EnemyAI>();
 
     /// <summary>
+    /// **有效射程 → 伤害倍率**（唯一实现）：飞行距离在 `shot.effectiveRange` 之内 = 原伤害；
+    /// 超出 = `damage × beyondRangeDamage`。`effectiveRange ≤ 0` 或 `beyondRangeDamage ≥ 1` = **不衰减**（旧行为）。
+    /// ⚠️ 玩家子弹与敌人子弹**共用这一份**（差别只在数据来源：`WeaponData` / `EnemyConfig`）。
+    /// 📌 当前是**阶梯**：临界点上会有伤害跳变（射程内 100%、射程外一律 ×倍率）。
+    ///    将来要升级成"从有效射程到 X 倍距离之间线性滑落"，**只改这个函数** ——
+    ///    调用方（`Bullet`）与数据结构（`ShotProfile` / 两侧配置）都不用动，这正是把它单独抽出来的原因。
+    /// </summary>
+    public static float DamageAtDistance(ShotProfile shot, float traveledDistance)
+    {
+        // 关闭态（默认）走零成本快路径：绝大多数子弹连一次比较都省了
+        if (shot.effectiveRange <= 0f || shot.beyondRangeDamage >= 1f) return shot.damage;
+        if (traveledDistance <= shot.effectiveRange) return shot.damage;
+        return shot.damage * Mathf.Clamp01(shot.beyondRangeDamage);
+    }
+
+    /// <summary>
     /// 结算一次命中。`dir` 是子弹的归一化方向（用作受击来向）。
+    /// `traveledDistance` = 子弹从出膛到命中点飞了多远（米），供「有效射程衰减」用
+    /// （由 `Bullet` 在命中那一帧用"出膛点 → 命中点"量一次，不是每帧累计）。
+    /// ⚠️ 这个参数**刻意不给默认值**：它必须是调用方真的量出来的距离，
+    ///    给个 `0` 的默认值会让将来新增的弹种静默地"永不衰减"（又一种不报错的坑）。
     /// 返回 `Consumed` = 子弹应被回收；`PassThrough` = 子弹继续飞（友军 / 尸体）。
     /// </summary>
-    public static HitResult ResolveHit(RaycastHit hit, ShotProfile shot, Vector3 dir)
+    public static HitResult ResolveHit(RaycastHit hit, ShotProfile shot, Vector3 dir, float traveledDistance)
     {
         // ① 爆炸弹：命中即爆（直击与范围伤害统一走爆炸）
         if (shot.mode == HitMode.Explode && shot.explosionRadius > 0f)
@@ -80,7 +104,9 @@ public static class Combat
         // ④ 打中敌人：**只有命中"开火瞬间锁定的那个敌人"才算爆头**（打中挡枪的别人 = 普通伤害）
         bool headshot = shot.headshotTarget != null
                         && hit.collider.GetComponentInParent<EnemyAI>() == shot.headshotTarget;
-        h.TakeDamage(headshot ? shot.damage * shot.headshotMultiplier : shot.damage, dir, headshot);
+        // 有效射程衰减作用在"这一发的最终伤害"上（爆头再在这个基数上乘倍率 —— 乘法可交换，关键是别只在非爆头那支上算）
+        float dmg = DamageAtDistance(shot, traveledDistance);
+        h.TakeDamage(headshot ? dmg * shot.headshotMultiplier : dmg, dir, headshot);
         if (h.team == Health.Team.Enemy) Crosshair.HitMark(headshot);   // 爆头命中 → 播爆头反馈音
         Effects.Impact(hit.point, shot.color, 0.9f);
         return HitResult.Consumed;

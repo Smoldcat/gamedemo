@@ -41,6 +41,8 @@ public class EnemyConfigEditor : Editor
         ("bulletSpeed",        "远程子弹速度",      "远程兵/狙击手的子弹速度"),
         ("spread",             "远程散布（度）",     "远程兵弹道散布（狙击手固定为 0）"),
         ("tracerColor",        "远程曳光颜色",      "远程兵/狙击手子弹的颜色"),
+        ("effectiveRange",     "远程有效射程（米）",  "敌弹飞过这个距离后伤害打折。0 = 关闭（默认，即整条弹道伤害一样）。\n⚠️ 别给狙击手无脑配衰减 ——「远处高威胁」就是它的身份；\n⚠️ 它不是子弹消失的距离：敌弹真正能飞多远 = 子弹速度 × 1.2s（超出这个上限的射程永远达不到，会告警）"),
+        ("beyondRangeDamage",  "远程超出射程倍率",   "敌弹飞过有效射程后的伤害百分比（1 = 不衰减，默认）。与玩家侧同一条链（Combat.DamageAtDistance）"),
         ("explodeRadius",      "爆炸半径",          "自爆兵爆炸的伤害半径（米）"),
         ("explodeDamage",      "爆炸伤害",          "自爆兵爆炸对玩家的伤害"),
         ("fuseTime",           "自爆预警时间",      "自爆兵点燃引信到爆炸的间隔（秒），期间身体闪烁警告"),
@@ -114,6 +116,9 @@ public class EnemyConfigEditor : Editor
             EditorGUILayout.PropertyField(p, new GUIContent(label, tip));
         }
 
+        // 自检：有效射程 > 敌弹最大飞行距离（弹速 × EnemyBulletLife）时，那个射程永远达不到（配了不生效、且不报错）
+        DrawEffectiveRangeWarning();
+
         // 头部 / 面部 / 爆头（单独成组，方便一眼找到）
         // ⚠️ **不要在这里手画标题**：`EnemyConfig` 上已经有 `[Header("头部与爆头（外观 + 爆头判定锚点）")]`，
         //    而 `PropertyField` 会自动把 `[Header]` 画出来 → 再画一遍就是**两行标题**（2026-09-23 修）。
@@ -161,6 +166,22 @@ public class EnemyConfigEditor : Editor
             }
         }
         EditorGUILayout.Space();
+    }
+
+    /// <summary>自检：有效射程超过「敌弹最大飞行距离」（子弹速度 × `EnemyBehaviour.EnemyBulletLife`）时在 Inspector 里说清楚。
+    /// 配了但不生效的字段最坑（静默），与 `HUD.CheckCanvasScaler` / `Chest.SelfCheck` 同一套约定。</summary>
+    void DrawEffectiveRangeWarning()
+    {
+        var rangeP = serializedObject.FindProperty("effectiveRange");
+        var speedP = serializedObject.FindProperty("bulletSpeed");
+        if (rangeP == null || speedP == null) return;
+        if (rangeP.floatValue <= 0f) return;   // 关闭态：不用提示
+        float maxRange = speedP.floatValue * EnemyBehaviour.EnemyBulletLife;
+        if (rangeP.floatValue > maxRange)
+            EditorGUILayout.HelpBox(
+                $"远程有效射程 {rangeP.floatValue:0.#} m 超过了敌弹的最大飞行距离 {maxRange:0.#} m" +
+                $"（= 子弹速度 × {EnemyBehaviour.EnemyBulletLife:0.#} s）→ 这个射程永远达不到，伤害衰减不会生效。",
+                MessageType.Warning);
     }
 
     /// 兜底：漏配中文标签的新字段自动以英文标签显示，保证绝不凭空消失（实现见 EditorFieldUtil）

@@ -83,6 +83,14 @@ public class EnemyConfig : ScriptableObject
     public float bulletSpeed = 20f;
     public float spread = 5f;
     public Color tracerColor = new Color(1f, 0.4f, 0.2f);
+    [Tooltip("【远程有效射程（米）】敌人子弹飞过这个距离后伤害按「超出射程伤害倍率」打折。0 = 关闭（默认）。\n" +
+             "  · ⚠️ 别给狙击手无脑配衰减 ——「远处高威胁」就是它的身份，给它衰减等于砍掉性格。\n" +
+             "  · ⚠️ 与玩家侧同一条链（`Combat.DamageAtDistance`，唯一实现）；它**不是**子弹消失距离：\n" +
+             "    敌弹真正能飞多远 = 子弹速度 × 1.2s（`CloneShootWeapon` 里写死的存活时间）。")]
+    public float effectiveRange = 0f;
+    [Tooltip("【远程超出射程伤害倍率】敌弹飞过有效射程后的伤害百分比（1 = 不衰减，默认）")]
+    [Range(0f, 1f)]
+    public float beyondRangeDamage = 1f;
 
     [Header("自爆（仅自爆兵用）")]
     [Tooltip("爆炸伤害半径（米）")]
@@ -167,6 +175,10 @@ public class EnemyConfig : ScriptableObject
         if (dmgGrowthCap < 0f) dmgGrowthCap = 0f;
         if (headRadius < 0.05f) headRadius = 0.05f;
         if (headOffset.y < 0f) headOffset.y = 0f;
+        // 有效射程：0 = 关闭衰减（合法值），只兜负数；倍率夹 0~1（手改 YAML 塞 >1 = "超出射程加伤"这种方向性错误）
+        if (effectiveRange < 0f) effectiveRange = 0f;
+        if (beyondRangeDamage < 0f) beyondRangeDamage = 0f;
+        if (beyondRangeDamage > 1f) beyondRangeDamage = 1f;
     }
 
     // ---- 内置默认敌人（代码兜底，缺资源时使用）----

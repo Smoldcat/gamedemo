@@ -20,6 +20,11 @@ public class Bullet : MonoBehaviour
 
     bool _pooled;   // 是否来自对象池（prefab 子弹不走池）
 
+    /// <summary>出膛位置（「有效射程 → 伤害衰减」要用）：命中那一帧量一次「出膛点 → 命中点」的真实距离。
+    /// ⚠️ 每次 `Spawn` 都会重设（对象池复用同一个 Bullet 组件），所以不会把上一发的起点带过来；
+    ///    也刻意**不做每帧累计** —— 只在命中时算一次距离，常态零开销。</summary>
+    Vector3 _spawnPos;
+
     /// <summary>
     /// 生成一颗子弹。headshotTarget / headshotMultiplier 由玩家开火时传入（敌人子弹留空）。
     /// </summary>
@@ -53,10 +58,14 @@ public class Bullet : MonoBehaviour
         b.dir = dir.normalized;
         b.speed = w.bulletSpeed;
         b.maxLife = w.bulletLife > 0f ? w.bulletLife : 1.5f;   // 射程按武器配置；没配则回落旧硬编码 1.5
+        b._spawnPos = pos;                                     // 「有效射程」的起点（命中时量距离用）
         b.shot = new ShotProfile
         {
             mode = w.explosionRadius > 0f ? HitMode.Explode : HitMode.Direct,
             damage = w.damage,
+            // 有效射程衰减：**默认 0 / 1 = 完全不衰减**，与旧行为逐位一致（8 把武器资源没配这项）
+            effectiveRange = w.effectiveRange,
+            beyondRangeDamage = w.beyondRangeDamage,
             explosionRadius = w.explosionRadius,
             explosionDamage = w.explosionDamage,
             team = team,
@@ -103,7 +112,9 @@ public class Bullet : MonoBehaviour
             // （Physics.queriesHitTriggers 默认 true → 将来加触发器会被子弹当墙吸收，见 Layers 注释）
             if (Physics.Raycast(ray, out RaycastHit hit, dist, Layers.BulletMask, QueryTriggerInteraction.Ignore))
             {
-                if (Combat.ResolveHit(hit, shot, dir) == HitResult.Consumed)
+                // 「有效射程 → 伤害衰减」：量一次「出膛点 → 命中点」的真实飞行距离（仅命中这一帧）
+                float traveled = Vector3.Distance(_spawnPos, hit.point);
+                if (Combat.ResolveHit(hit, shot, dir, traveled) == HitResult.Consumed)
                 {
                     Release();
                     return;
