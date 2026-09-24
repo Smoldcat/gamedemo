@@ -62,3 +62,6 @@ MonoBehaviour:
   killFeedSlideDistance: 40
   killFeedRelayoutSpeed: 900
   killFeedBottomOffset: 96
+  virtualCursorSprite: {fileID: 0}
+  virtualCursorSize: 24
+  explosion: {fileID: 0}

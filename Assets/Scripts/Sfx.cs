@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// 程序化合成音效（无需任何音频资源）：枪声、命中、拾取、受伤、治疗、分武器换弹
+/// 程序化合成音效（无需任何音频资源）：枪声、爆炸、命中、拾取、受伤、治疗、分武器换弹
 public static class Sfx
 {
     const int SR = 44100;
@@ -10,6 +10,7 @@ public static class Sfx
     static AudioClip _magOut, _magInChamber, _pump, _bolt;   // 换弹音效组
     static AudioClip _invOpen, _invClose, _confirm, _drop;   // 背包 UI 音效组
     static AudioClip _headshotHit;                            // 爆头命中反馈
+    static AudioClip _explosion;                              // 爆炸（RPG 命中 / 自爆兵自爆共用）
 
     /// <summary>静态状态清理（供 StaticReset 调用）。
     /// 合成的 AudioClip 与 AudioSource 在退出 Play 时会被销毁，而 _clipsReady 若还是 true，
@@ -25,6 +26,7 @@ public static class Sfx
         _headshotHit = null;
         _magOut = _magInChamber = _pump = _bolt = null;
         _invOpen = _invClose = _confirm = _drop = null;
+        _explosion = null;
     }
 
     /// <summary>
@@ -154,6 +156,15 @@ public static class Sfx
                 : 0f;
             return (clack1 + clack2) * 0.6f;
         });
+        // 爆炸：低频冲击波 + 高频爆裂 + 噪声碎裂（RPG 命中与自爆兵自爆共用；资源表配了「爆炸」则优先用它）
+        _explosion = Make("explosion", 0.5f, t =>
+        {
+            float env = Mathf.Exp(-t * 7f);
+            float noise = (Random.value * 2f - 1f);
+            float boom = Mathf.Sin(2f * Mathf.PI * 46f * t) * 1.2f;
+            float crack = Mathf.Sin(2f * Mathf.PI * 320f * t) * Mathf.Exp(-t * 35f) * 0.6f;
+            return (noise * 0.8f + boom + crack) * env * 0.9f;
+        });
 
         // ---- 背包 UI 音效组 ----
         // 打开：短促上滑"唰"（带一点布/皮革感噪声）
@@ -215,6 +226,8 @@ public static class Sfx
 
     public static void Shot(WeaponData w)
     {
+        // 每把枪专属的开火音效优先（配了就用；敌人手里的克隆枪经 Clone() 自动继承）
+        if (w != null && w.fireSound != null) { Play(w.fireSound); return; }
         var ga = GameAssets.I;
         switch (w.sound)
         {
@@ -227,6 +240,9 @@ public static class Sfx
     /// 换弹开始：手枪/冲锋枪拔弹匣，霰弹枪拉护木，狙击枪开栓
     public static void ReloadStart(WeaponData w)
     {
+        // ① 每把枪专属的换弹音效优先（配了就用，按它自己的音量放 —— 与 `Shot` 的专属开火音同一套约定）
+        if (w != null && w.reloadStartSound != null) { Play(w.reloadStartSound); return; }
+        // ② 留空 → 按「枪声类型」分组回落全局槽（手枪/冲锋枪 = 拔弹匣、霰弹 = 拉护木、狙击 = 开栓）
         var ga = GameAssets.I;
         switch (w.sound)
         {
@@ -239,6 +255,9 @@ public static class Sfx
     /// 换弹完成：手枪/冲锋枪插匣上膛，霰弹枪再拉护木上膛，狙击枪推栓
     public static void ReloadEnd(WeaponData w)
     {
+        // ① 每把枪专属的换弹完成音效优先（留空则与下面完全一致 —— 8 把枪现在都留空）
+        if (w != null && w.reloadEndSound != null) { Play(w.reloadEndSound); return; }
+        // ② 留空 → 按「枪声类型」分组回落全局槽（插匣上膛 / 护木回推 / 推栓）
         var ga = GameAssets.I;
         switch (w.sound)
         {
@@ -255,6 +274,8 @@ public static class Sfx
     public static void Pickup() { var ga = GameAssets.I; Play(Use(ga != null ? ga.pickup : null, _pickup)); }
     public static void Hurt() { var ga = GameAssets.I; Play(Use(ga != null ? ga.hurt : null, _hurt)); }
     public static void Heal() { var ga = GameAssets.I; Play(Use(ga != null ? ga.heal : null, _heal)); }
+    /// <summary>爆炸：RPG 命中与自爆兵自爆共用。优先用资源表 explosion，留空回落代码合成</summary>
+    public static void Explosion() { var ga = GameAssets.I; Play(Use(ga != null ? ga.explosion : null, _explosion), 0.9f); }
 
     // ---- 背包 UI 音效：优先用资源表里的真实音频，没配则回落代码合成 ----
     public static void OpenInventory() { var ga = GameAssets.I; Play(Use(ga != null ? ga.invOpen : null, _invOpen), 0.7f); }

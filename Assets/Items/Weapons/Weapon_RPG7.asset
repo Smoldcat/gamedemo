@@ -12,30 +12,44 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc7cac2f169f01048bdf8bf94328df7d, type: 3}
   m_Name: Weapon_RPG7
   m_EditorClassIdentifier: 
+  icon: {fileID: 0}
+  pickupColor: {r: 1, g: 0.6, b: 0.2, a: 1}
+  pickupModelPrefab: {fileID: 4092542706316615716, guid: 66ad34ffa80a1bf4ebc4eb8f1ddaa3c7, type: 3}
+  canStack: 0
+  maxStack: 1
+  stackId: 
+  description: 
   weaponName: RPG-7
   damage: 0
   fireInterval: 2
   pellets: 1
+  headshotMultiplier: 2
   hipSpread: 0.3
+  aimSpread: 0.15
+  hipToAimTime: 0.3
+  aimToHipTime: 0.1
   bulletSpeed: 18
   bulletLife: 1.5
+  effectiveRange: 0
+  beyondRangeDamage: 1
   magSize: 1
   reloadTime: 3.5
   tracerColor: {r: 1, g: 0.65, b: 0.25, a: 1}
-  pickupColor: {r: 1, g: 0.6, b: 0.2, a: 1}
   gunLength: 0.9
   shake: 0.12
+  moveSpeedMultiplier: 1
+  aimMoveSpeedMultiplier: 1
   sound: 0
   hipRecoilUp: 0.05
   hipRecoilJitter: 0.03
-  recoilRecover: 1
-  explosionRadius: 4
-  explosionDamage: 200
-  pickupModelPrefab: {fileID: 4092542706316615716, guid: 66ad34ffa80a1bf4ebc4eb8f1ddaa3c7, type: 3}
-  heldModelPrefab: {fileID: 4092542706316615716, guid: 66ad34ffa80a1bf4ebc4eb8f1ddaa3c7, type: 3}
-  bulletPrefab: {fileID: 3055141843294462514, guid: fd6c3d1b7fb1bdb4d935f3e913beeb39, type: 3}
-  icon: {fileID: 0}
-  iconKind: 0
-  aimSpread: 0.15
   aimRecoilUpMultiplier: 0.6
   aimRecoilJitterMultiplier: 0.6
+  recoilMaxSide: 0
+  recoilRecover: 1
+  recoilRecoverDelay: 0
+  explosionRadius: 4
+  explosionDamage: 200
+  heldModelPrefab: {fileID: 4092542706316615716, guid: 66ad34ffa80a1bf4ebc4eb8f1ddaa3c7, type: 3}
+  bulletPrefab: {fileID: 3055141843294462514, guid: fd6c3d1b7fb1bdb4d935f3e913beeb39, type: 3}
+  iconKind: 0
+  fireSound: {fileID: 8300000, guid: ce560ddae606b854fbcda4e9d96883b7, type: 3}

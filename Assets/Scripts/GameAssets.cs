@@ -144,6 +144,12 @@ public class GameAssets : ScriptableObject
              "高度按图片宽高比自动算 → 非正方形的图不会变形。默认 24")]
     [Min(1f)] public float virtualCursorSize = 24f;
 
+    // ---------------- 音效 · 爆炸（2026-09-25 新增） ----------------
+    // ⚠️ 物理位置在**末尾**（§6.8「新字段只能在已有字段之后追加」）；Inspector 里仍显示在「音效」分组
+    //    （分组与顺序由 GameAssetsEditor.Fields 决定，与类里的物理位置无关）。
+    [Tooltip("爆炸音效：RPG 命中与自爆兵自爆共用。留空 = 代码合成的低频爆炸声")]
+    public AudioClip explosion;
+
     const string ResourcePath = "GameAssets";
 
     static GameAssets _instance;

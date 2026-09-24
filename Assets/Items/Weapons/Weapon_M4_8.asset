@@ -12,31 +12,44 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc7cac2f169f01048bdf8bf94328df7d, type: 3}
   m_Name: Weapon_M4_8
   m_EditorClassIdentifier: 
+  icon: {fileID: 0}
+  pickupColor: {r: 0.5, g: 0.9, b: 0.4, a: 1}
+  pickupModelPrefab: {fileID: 7515918297116770433, guid: 62a8196c961ac554e9aa0443add11e40, type: 3}
+  canStack: 0
+  maxStack: 1
+  stackId: 
+  description: 
   weaponName: "M4 \u5361\u5BBE"
   damage: 22
   fireInterval: 0.09
   pellets: 1
+  headshotMultiplier: 2
   hipSpread: 2
+  aimSpread: 0.8
+  hipToAimTime: 0.3
+  aimToHipTime: 0.1
   bulletSpeed: 85
   bulletLife: 0.6
+  effectiveRange: 0
+  beyondRangeDamage: 1
   magSize: 30
   reloadTime: 1.5
   tracerColor: {r: 0.6, g: 1, b: 0.4, a: 1}
-  pickupColor: {r: 0.5, g: 0.9, b: 0.4, a: 1}
   gunLength: 0.6
   shake: 0.04
+  moveSpeedMultiplier: 1
+  aimMoveSpeedMultiplier: 1
   sound: 0
   hipRecoilUp: 0.3
   hipRecoilJitter: 0.1
-  recoilMaxSide: 0
-  recoilRecover: 1
-  explosionRadius: 0
-  explosionDamage: 0
-  pickupModelPrefab: {fileID: 7515918297116770433, guid: 62a8196c961ac554e9aa0443add11e40, type: 3}
-  heldModelPrefab: {fileID: 7515918297116770433, guid: 62a8196c961ac554e9aa0443add11e40, type: 3}
-  bulletPrefab: {fileID: 0}
-  icon: {fileID: 0}
-  iconKind: 0
-  aimSpread: 0.8
   aimRecoilUpMultiplier: 0.6
   aimRecoilJitterMultiplier: 0.6
+  recoilMaxSide: 0
+  recoilRecover: 1
+  recoilRecoverDelay: 0
+  explosionRadius: 0
+  explosionDamage: 0
+  heldModelPrefab: {fileID: 7515918297116770433, guid: 62a8196c961ac554e9aa0443add11e40, type: 3}
+  bulletPrefab: {fileID: 0}
+  iconKind: 0
+  fireSound: {fileID: 8300000, guid: 7bda5368c9673ea43be9e03e75d269b4, type: 3}

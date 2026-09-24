@@ -80,7 +80,11 @@ public class WeaponData : ItemData
              "  · 经验上一般 ≤ 1（瞄准本来就该更慢）；想设 > 1 请先确认上面那条不变量。")]
     [Min(0.1f)]
     public float aimMoveSpeedMultiplier = 1f;
-    public SoundKind sound = SoundKind.Normal;   // Normal=普通枪声, Shotgun=霰弹, Sniper=狙击
+    [Tooltip("【音效回落分组】**只在武器上没配专属音效时**才用得上：开火音 → 资源总表的 `shot` / `shotgun` / `sniper`；" +
+             "换弹音 → `magOut` / `magInChamber` / `pump` / `bolt`。\n" +
+             "  · 普通 = 手枪 / 冲锋枪（拔・插弹匣）、霰弹 = 拉护木、狙击 = 拉栓。\n" +
+             "  · 优先级：**武器上的专属音效（开火 / 换弹开始 / 换弹完成）> 本字段决定的全局分组 > 代码合成**。")]
+    public SoundKind sound = SoundKind.Normal;   // 回落分组：开火音（shot/shotgun/sniper）+ 换弹音（magOut/magInChamber/pump/bolt）
 
     [Header("后坐力（纯屏幕系，可压枪）")]
     [Tooltip("腰射纵向后坐：**不按右键**（腰射）时，每次开火把准星沿「屏幕上 玩家→准星」的方向往外顶开多少米。\n" +
@@ -133,6 +137,21 @@ public class WeaponData : ItemData
     public enum IconKind { Auto, Handgun, SMG, Shotgun, Sniper, Rifle, Generic }
     [Tooltip("背包里的图标形状。Auto = 按武器名/枪身长度自动推测")]
     public IconKind iconKind = IconKind.Auto;
+
+    [Header("音效（每把枪专属；留空 = 按「枪声类型」回落到资源总表的全局槽，再留空回落代码合成）")]
+    [Tooltip("这把枪专属的**开火**音效（每把枪一条）。\n" +
+             "  · 留空 = 按「枪声类型」回落到资源总表的全局槽（`shot` / `shotgun` / `sniper`），再留空回落代码合成。\n" +
+             "  · 配了就整把枪都用这一条开火声；敌人手里的克隆枪经 Clone() 自动继承。")]
+    public AudioClip fireSound;
+    [Tooltip("这把枪专属的**换弹开始**音效（手枪/冲锋枪 = 拔弹匣 · 霰弹枪 = 拉护木 · 狙击 = 开栓）。\n" +
+             "  · 留空 = 按「枪声类型」回落到资源总表的全局槽（`magOut` / `pump` / `bolt`），再留空回落代码合成 ——\n" +
+             "    即**留空时行为与加这个字段之前完全一致**（8 把枪现在都留空）。\n" +
+             "  · 配了则以它自己的音量播放（全局分组那几档有 0.9 的微调，专属音不衰减）；敌人克隆枪自动继承。")]
+    public AudioClip reloadStartSound;
+    [Tooltip("这把枪专属的**换弹完成**音效（手枪/冲锋枪 = 插匣上膛 · 霰弹枪 = 护木回推上膛 · 狙击 = 推栓）。\n" +
+             "  · 留空 = 按「枪声类型」回落到资源总表的全局槽（`magInChamber` / `pump` / `bolt`），再留空回落代码合成。\n" +
+             "  · ⚠️ 想表现「整段换弹就是一条音」的枪（如大栓每发都要拉栓），把开始和完成配成同一条也可以（两条独立槽，不做互斥）。")]
+    public AudioClip reloadEndSound;
 
     // ---- ItemData 桥接（⚠️ 刻意用「属性桥接」而不是改字段名：改字段名会让 8 个武器资源里已存的值静默丢失）----
 

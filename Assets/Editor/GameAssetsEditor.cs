@@ -64,6 +64,7 @@ public class GameAssetsEditor : Editor
         ("magInChamber",  "插匣上膛",   "换弹完成：插入弹匣上膛", null),
         ("pump",          "泵动",       "霰弹枪泵动护木", null),
         ("bolt",          "拉栓",       "狙击枪拉栓", null),
+        ("explosion",     "爆炸",       "RPG 命中与自爆兵自爆共用的爆炸音效。留空 = 代码合成", null),
 
         ("invOpen",       "打开背包",   "打开背包面板的音效", "背包 UI 音效（留空 = 代码合成默认音效）"),
         ("invClose",      "关闭背包",   "关闭背包面板的音效", null),

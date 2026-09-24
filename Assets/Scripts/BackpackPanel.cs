@@ -52,7 +52,9 @@ public class BackpackPanel : MonoBehaviour
     // Tooltip（悬停武器属性）尺寸：⚠️ **两条路径必须一致** —— 这里只是"代码生成"兜底路径用的值，
     // 而**实际生效的是 prefab 里 `Backpack/Tooltip`（+ 子节点 `/Txt`）的 sizeDelta**（背包走 prefab 双轨，见类注释；
     // `TryBuildFromPrefab` 刻意不改预置节点的布局）。**加/删信息行时两处都要改**（每行约 20px）。
-    const float TipW = 260f, TipH = 216f;
+    // 📌 **public**（2026-09-25 起）：**箱子面板**是纯代码 UI、没有 prefab 双轨，它直接取这两个值建自己的 tooltip
+    //    → 箱子与背包的 tooltip 尺寸永远一致（改这里两处一起变；同理改上面的行数注释）。
+    public const float TipW = 260f, TipH = 216f;
 
     // ---- 快捷槽元素 ----
     RectTransform[] _slotCell = new RectTransform[SlotCount];
@@ -772,17 +774,23 @@ public class BackpackPanel : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 摆 tooltip：**默认出现在鼠标右侧**（靠屏幕右边放不下时自动翻到左侧），并整体夹在屏幕内。
-    /// ⚠️ 位置必须用 `ScreenPointToLocalPointInRectangle` 换算 —— 面板锚点在**左侧**，
-    ///    不能再按"相对屏幕中心的偏移"算（那样 tooltip 会跑到屏幕外，2026-09-21 修掉的 bug）。
-    /// </summary>
-    void PlaceTooltip(Vector2 mouse)
-    {
-        if (_tooltipRect == null || _rootRect == null) return;
+    /// <summary>本面板的 tooltip 摆位 —— 转发给共用实现（见 <see cref="PlaceTooltipNearMouse"/>）。</summary>
+    void PlaceTooltip(Vector2 mouse) => PlaceTooltipNearMouse(_rootRect, _tooltipRect, _canvas, mouse);
 
-        float sf = _canvas != null && _canvas.scaleFactor > 0f ? _canvas.scaleFactor : 1f;
-        Vector2 size = _tooltipRect.sizeDelta;                 // Canvas 单位
+    /// <summary>
+    /// **摆 tooltip 的共用实现**（背包 / 箱子两个面板同一套，2026-09-25 抽出来）：
+    /// **默认出现在鼠标右侧**（靠屏幕右边放不下时自动翻到左侧），并整体夹在屏幕内。
+    /// ⚠️ 位置必须用 `ScreenPointToLocalPointInRectangle` 换算 —— 调用方的面板锚点可能是**左侧**（背包）
+    ///    也可能是**右上角**（箱子），都不能按"相对屏幕中心的偏移"算
+    ///    （那样 tooltip 会跑到屏幕外，2026-09-21 修掉的 bug）。传进来的 `rootRect` 是谁，就算谁的局部坐标。
+    /// ⚠️ 调用前先确认 `tipRect` 的 **sizeDelta 是最终尺寸**（本函数按它算翻转和夹取）。
+    /// </summary>
+    public static void PlaceTooltipNearMouse(RectTransform rootRect, RectTransform tipRect, Canvas canvas, Vector2 mouse)
+    {
+        if (tipRect == null || rootRect == null) return;
+
+        float sf = canvas != null && canvas.scaleFactor > 0f ? canvas.scaleFactor : 1f;
+        Vector2 size = tipRect.sizeDelta;                      // Canvas 单位
         float wPx = size.x * sf, hPx = size.y * sf;
         float gapPx = 16f * sf;
 
@@ -796,8 +804,41 @@ public class BackpackPanel : MonoBehaviour
         cyPx = Mathf.Clamp(cyPx, hPx * 0.5f, Mathf.Max(hPx * 0.5f, Screen.height - hPx * 0.5f));
 
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                _rootRect, new Vector2(leftPx, cyPx), null, out var local))
-            _tooltipRect.anchoredPosition = local;
+                rootRect, new Vector2(leftPx, cyPx), null, out var local))
+            tipRect.anchoredPosition = local - AnchorPointInParent(tipRect);
+    }
+
+    /// <summary>
+    /// **子节点"锚点参考点"在父节点局部坐标系里的位置**（⚠️ 2026-09-25 修 tooltip 偏移时加的，别删）。
+    ///
+    /// 为什么需要：`ScreenPointToLocalPointInRectangle(rootRect, …)` 给的是**相对父节点 pivot** 的局部坐标，
+    /// 而 `anchoredPosition` 的语义是「子节点 pivot 相对**子节点自己的锚点参考点**的位置」——
+    /// 两者只在「父节点 pivot 恰好落在子节点锚点上」时才相等：
+    ///   `实际位置 = 锚点参考点 + anchoredPosition`  →  `anchoredPosition = 目标local - 锚点参考点`
+    /// 所以调用处是 **减** 本函数的结果（当初我写成加，实测立刻偏出整整 2×面板宽，探针一眼就看出来了）。
+    ///
+    /// 为什么以前一直没暴露：背包面板根节点的 pivot 是 **(0, 0.5) 左中**，与 tooltip 的锚点 `(0,0.5)` 重合
+    /// （见类里 `rootRt.anchorMin = … pivot = new Vector2(0f, 0.5f)`）→ 本函数恒返回 `(0,0)`。
+    /// 而**箱子面板的根节点 pivot 是 (1,1) 右上角**（它贴屏幕右上角）→ 少了它，tooltip 整体偏 `(父宽, 父高/2)`：
+    /// 实测 5 格箱子（面板 392×114、画布 scaleFactor=1）时**左边缘偏 -392px、垂直中心偏 -57px**。
+    ///
+    /// 📌 结论：**别假设调用方的父节点 pivot 是什么** —— 一律减掉这一项，谁都不吃亏。
+    /// </summary>
+    static Vector2 AnchorPointInParent(RectTransform tipRect)
+    {
+        var parent = tipRect.parent as RectTransform;
+        if (parent == null) return Vector2.zero;
+        // 拉伸锚点（anchorMin != anchorMax）时 anchoredPosition 的语义变成"相对锚点矩形中心的偏移"，
+        // 本项目 tooltip 全是点锚点 → 直接跳过（真要支持拉伸锚点得另算）。
+        if (tipRect.anchorMin != tipRect.anchorMax) return Vector2.zero;
+
+        // ⚠️ `parent.rect` 的坐标原点**就是父节点的 pivot**（xMin = -pivot.x·W，xMax = (1-pivot.x)·W）→
+        //    用 Lerp 在 [xMin,xMax]×[yMin,yMax] 上取锚点归一化坐标，得到的正是"父局部坐标系下的锚点位置"，
+        //    与上面 `local` 同口径，可直接相减。
+        Rect r = parent.rect;
+        return new Vector2(
+            Mathf.Lerp(r.xMin, r.xMax, tipRect.anchorMin.x),
+            Mathf.Lerp(r.yMin, r.yMax, tipRect.anchorMin.y));
     }
 
     static string WeaponInfoString(WeaponData w)
@@ -826,13 +867,15 @@ public class BackpackPanel : MonoBehaviour
     }
 
     /// <summary>
-    /// 库存格的悬停内容（**通用物品**）：
+    /// 悬停内容（**通用物品**；背包库存格与**箱子格**共用同一份 —— 2026-09-25 起 public）：
     ///  · 武器 → 直接复用上面那 12 行详细属性
     ///  · 其它物品（血包 / 以后的子弹…）→ 名字（叠了多个时加 ×N）+ 物品定义卡上的说明文字
     /// ⚠️ 说明文字来自 `ItemData.description` —— 这就是「只有图标、没有模型」的物品
     ///    能向玩家讲清自己是什么的地方（新物品记得写上）。
+    /// 📌 箱子里的东西和背包里长一样，玩家在"要不要拿"时同样需要这些信息 → `ChestPanel` 直接调它，
+    ///    于是"同一个物品在箱子里和背包里显示的文字"永远一致（以后改格式只改这一处）。
     /// </summary>
-    static string ItemInfoString(ItemStack s)
+    public static string ItemInfoString(ItemStack s)
     {
         if (s == null || s.def == null) return "";
         if (s.def is WeaponData w) return WeaponInfoString(w);

@@ -119,6 +119,7 @@ public static class Combat
         Effects.Impact(point + Vector3.up * 0.3f, new Color(1f, 0.6f, 0.15f), 2.6f);
         Effects.Impact(point + Vector3.up * 0.3f, new Color(0.95f, 0.95f, 0.9f), 1.8f);
         Effects.BlastRing(point, shot.explosionRadius);
+        Sfx.Explosion();   // 爆炸声（自爆兵在它自己的 Explode 里调同一份实现）
 
         if (shot.team == Health.Team.Player)
         {

@@ -41,6 +41,12 @@ public class ChestPanel : MonoBehaviour
     RectTransform _grid;
     readonly List<RectTransform> _cells = new List<RectTransform>();
 
+    // ---- 悬停 tooltip（内容 / 摆位都复用 `BackpackPanel` 的 public static 实现，见 UpdateTooltip）----
+    GameObject _tipGo;
+    RectTransform _tipRect;
+    Text _tipText;
+    ItemData _lastHoverDef;   // 上次显示 tooltip 的物品定义（悬停物品没换 → 不重建字符串）
+
     Chest _chest;
     bool _opened;
     int _openedFrame = -1;   // 打开的帧号（防止"开箱的同一帧又被 F 关掉"，见 Update）
@@ -68,6 +74,9 @@ public class ChestPanel : MonoBehaviour
 
         // 死亡时强制关闭（避免重开一局卡在暂停；同时把光标还给结算面板）
         if (GameState.GameOver) { Close(); return; }
+
+        // 悬停描述（与背包同款）：放在最前面 —— 后面有"开箱同帧守卫"会提前 return，别让它把 tooltip 一起挡掉
+        UpdateTooltip();
 
         // 关闭键：**再按一次 F**（Tab / B 由 BackpackPanel 统一处理 —— 那两个面板是一体的）
         // ⚠️ **Esc 刻意不参与**（用户 2026-09-24 定）：两个面板绑成一体，Esc 还能关箱子 = 还能关背包。
@@ -113,6 +122,9 @@ public class ChestPanel : MonoBehaviour
     {
         if (!_opened) return;
         _opened = false;
+        // 收起悬停提示：面板根节点虽然被隐藏了，但 tooltip 自己那个 activeSelf 标记还留着 true，
+        // 下次开箱时会在 Update 跑到之前**闪一帧**在旧位置（2026-09-25 顺手修）。
+        if (_tipGo != null) _tipGo.SetActive(false);
         _root.gameObject.SetActive(false);
         Sfx.CloseInventory();
         UIState.Pop();
@@ -242,6 +254,56 @@ public class ChestPanel : MonoBehaviour
         Refresh();
     }
 
+    // ==================== 悬停描述（tooltip） ====================
+
+    /// <summary>
+    /// 光标停在箱子里某个物品上时弹出描述（用户 2026-09-25 提：**要像背包里一样**）。
+    /// 为什么要它：箱子格子和背包格长得一样，但箱子里没有名字 / 属性可看 —— 玩家在"这个要不要拿"上
+    /// 只能靠图标猜；箱子配方里可以放武器，那就更需要属性面板。
+    ///
+    /// 复用（**只有这一份实现，不要各写一套**）：
+    ///   · 内容 → <see cref="BackpackPanel.ItemInfoString"/>（武器 = 详细属性；其它 = 名称 + ×N + 说明）
+    ///   · 摆位 → <see cref="BackpackPanel.PlaceTooltipNearMouse"/>（鼠标右侧弹出、贴边自动翻面、夹在屏幕内）
+    ///
+    /// ⚠️ 鼠标位置必须走 `VirtualCursor.MousePosition`（全项目取鼠标位置的唯一入口）——
+    ///    非游玩态这是**虚拟光标**的位置；直接读 `Input.mousePosition` 会按"被锁在屏幕中心的系统光标"判定，
+    ///    结果就是"光标画在一处、tooltip 出现在另一处"（背包那边 2026-09-22 修过同一个坑）。
+    /// </summary>
+    void UpdateTooltip()
+    {
+        if (_tipGo == null || _tipText == null) return;
+
+        Vector2 mouse = VirtualCursor.MousePosition;
+
+        // 悬停命中判定用**矩形包含**（不是 EventSystem 射线）：tooltip 自己也是 UI，
+        // 走射线的话光标一挪到 tooltip 上就会"悬停丢失 → tooltip 闪掉 → 又命中"来回抖（背包同款做法）。
+        ItemStack hover = null;
+        if (_chest != null)
+            for (int i = 0; i < _cells.Count; i++)
+            {
+                var stack = _chest.GetSlot(i);                      // 越界返回 null
+                if (stack == null || stack.IsEmpty || stack.def == null) continue;   // 空格子不给 tooltip
+                if (_cells[i] != null && RectTransformUtility.RectangleContainsScreenPoint(_cells[i], mouse, null))
+                { hover = stack; break; }
+            }
+
+        if (hover != null)
+        {
+            // 内容只在**悬停的物品变了**时才重建（鼠标不动不该每帧拼字符串）
+            if (!ReferenceEquals(hover.def, _lastHoverDef))
+            {
+                _lastHoverDef = hover.def;
+                _tipText.text = BackpackPanel.ItemInfoString(hover);   // ← 与背包库存格**同一份**内容
+            }
+            _tipGo.SetActive(true);
+            BackpackPanel.PlaceTooltipNearMouse(_root, _tipRect, _canvas, mouse);   // ← 与背包**同一份**摆位
+        }
+        else if (_tipGo.activeSelf)
+        {
+            _tipGo.SetActive(false);
+        }
+    }
+
     // ==================== 构 UI ====================
 
     void BuildUI()
@@ -289,6 +351,33 @@ public class ChestPanel : MonoBehaviour
         _grid.pivot = new Vector2(0f, 1f);
         _grid.anchoredPosition = new Vector2(Pad, -(TitleH + Gap));
         _grid.sizeDelta = Vector2.zero;
+
+        // 悬停描述（默认隐藏；内容 / 摆位都复用背包的 public static 实现，见 UpdateTooltip）
+        // ⚠️ 必须建在 `_grid` **之后**：uGUI 同层按**兄弟顺序**绘制，后建的盖在上面 →
+        //    建在前面的话 tooltip 会被格子挡住（它在屏幕上是弹到鼠标旁的，实际也可能压在面板上）。
+        // ⚠️ 尺寸取 `BackpackPanel.TipW/TipH`（**同一个值**）→ 箱子与背包的 tooltip 一样大、一样够高
+        //    （武器那 12 行必须放得下，行数变了也只改背包那一处常量）。
+        _tipGo = new GameObject("Tooltip");
+        _tipGo.transform.SetParent(_root, false);
+        _tipRect = _tipGo.AddComponent<RectTransform>();
+        _tipRect.sizeDelta = new Vector2(BackpackPanel.TipW, BackpackPanel.TipH);
+        // ⚠️ 锚点 / 轴心必须是 **(0, 0.5) = 「左边缘 + 垂直中心」**：`BackpackPanel.PlaceTooltipNearMouse`
+        //    算出来的就是"左边缘 x + 垂直中心 y"（背包那边同款）。写成中心锚点 (0.5,0.5) 会让 tooltip
+        //    整体右偏半个宽度、还可能顶出屏幕右边（它按左边缘判断过够不够放）。
+        _tipRect.anchorMin = _tipRect.anchorMax = _tipRect.pivot = new Vector2(0f, 0.5f);
+        var tipImg = _tipGo.AddComponent<Image>();
+        tipImg.sprite = BackpackPanel.PanelSprite();
+        tipImg.type = Image.Type.Sliced;
+        tipImg.color = new Color(0.06f, 0.08f, 0.13f, 0.96f);   // 与背包 tooltip 同一底色
+        tipImg.raycastTarget = false;   // ⚠️ 必须 false：tooltip 就弹在光标旁边，能挡射线的话格子会点不动
+        var tipTxt = NewText(_tipGo.transform, "Txt",
+            new Vector2(BackpackPanel.TipW - 16f, BackpackPanel.TipH - 12f),
+            Vector2.zero, 12, Color.white, TextAnchor.MiddleLeft);
+        Center(tipTxt.rectTransform);
+        tipTxt.horizontalOverflow = HorizontalWrapMode.Wrap;    // 说明文字 / 属性行要能换行（NewText 默认不换）
+        tipTxt.verticalOverflow = VerticalWrapMode.Overflow;
+        _tipText = tipTxt;
+        _tipGo.SetActive(false);
 
         UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
     }

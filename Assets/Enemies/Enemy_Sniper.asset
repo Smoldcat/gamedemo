@@ -14,10 +14,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   displayName: "\u72D9\u51FB\u624B"
   behaviourTypeName: EnemySniperBehaviour, Assembly-CSharp
-  dropWeaponChance: 0.3
+  dropWeaponChance: 1
   bodyPrefab: {fileID: 0}
   bodyScale: 0.85
   bodyColor: {r: 0.45, g: 0.2, b: 0.6, a: 1}
+  headOffset: {x: 0, y: 0.93, z: 0}
+  headRadius: 0.3
+  headColor: {r: 0.95, g: 0.86, b: 0.72, a: 1}
+  faceColor: {r: 1, g: 0.95, b: 0.35, a: 1}
   maxHp: 60
   reactionTime: 0.2
   patrolSpeed: 2
@@ -31,13 +35,15 @@ MonoBehaviour:
   keepDistance: 14
   burstCount: 3
   burstGap: 1.4
-  gunPrefab: {fileID: 0}
-  shooterWeapon: {fileID: 0}
+  gunPrefab: {fileID: 100002, guid: a0e70037533056249a1bcaf8b480c5cb, type: 3}
+  shooterWeapon: {fileID: 11400000, guid: e65dcfe7be1b5744b8c7ddb5f6009783, type: 2}
   shooterDamage: 45
   fireInterval: 0.13
   bulletSpeed: 55
   spread: 0
   tracerColor: {r: 1, g: 0.15, b: 0.1, a: 1}
+  effectiveRange: 0
+  beyondRangeDamage: 1
   explodeRadius: 4
   explodeDamage: 60
   fuseTime: 0.8

@@ -73,6 +73,7 @@ public class EnemyBomberBehaviour : EnemyBehaviour
         Effects.Impact(transform.position + Vector3.up * 0.4f, new Color(0.9f, 0.9f, 0.95f), 2.2f);
         Effects.Decal(transform.position, new Color(0.12f, 0.1f, 0.1f, 0.7f));
         Effects.BlastRing(transform.position, radius);   // 扩散圆环：直观显示爆炸范围
+        Sfx.Explosion();   // 爆炸声（与 Combat.Explode 同一份实现：远处爆炸也该听得见）
 
         // 对玩家造成范围伤害（离得越近越疼？不，爆炸就是满伤害）
         var pc = PlayerController.Instance;
