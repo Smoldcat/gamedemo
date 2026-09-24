@@ -151,16 +151,23 @@ public class ChestPanel : MonoBehaviour
             if (!has) continue;
 
             // 图标 + 颜色：与背包 / 快捷栏同一份实现（改一处三处一起变）
+            // ⚠️ 必须 **Center** 一下：`NewImage` 走的 `NewRect` 默认锚点在**格子左上角**，
+            //    直接用会把图标摆到格子左上（2026-09-24 修的 bug）。
             var icon = NewImage(cell, "Icon", new Vector2(CellIconSize, CellIconSize), Vector2.zero, Color.white);
+            Center(icon.rectTransform);
             icon.sprite = ItemVisuals.IconOf(stack.def);   // 与背包 / 快捷栏**共用同一份实现**
             icon.color = ItemVisuals.ColorOf(stack.def);
             icon.preserveAspect = true;
 
-            // 数量角标（叠了多个才显示）
+            // 数量角标（**格子右下角**，叠了多个才显示）
             if (stack.count > 1)
             {
-                var cnt = NewText(cell, "Count", new Vector2(CellW - 10f, 16f),
-                    new Vector2(-4f, -(CellH - 10f)), 12, Color.white, TextAnchor.MiddleRight);
+                var cnt = NewText(cell, "Count", new Vector2(CellW - 8f, 16f),
+                    Vector2.zero, 12, Color.white, TextAnchor.MiddleRight);
+                var cntRt = cnt.rectTransform;
+                cntRt.anchorMin = cntRt.anchorMax = new Vector2(1f, 0f);   // 锚在格子右下角（NewRect 的默认锚点在左上）
+                cntRt.pivot = new Vector2(1f, 0f);
+                cntRt.anchoredPosition = new Vector2(-3f, 3f);
                 cnt.text = "×" + stack.count;
             }
 
@@ -222,10 +229,15 @@ public class ChestPanel : MonoBehaviour
         AfterTransfer();
     }
 
-    /// <summary>转移之后的收尾：箱子没了（拿完消失）就关面板；否则刷新一下格子。</summary>
+    /// <summary>转移之后的收尾：箱子没了（拿完消失）就关面板；否则刷新两个面板的格子。</summary>
     void AfterTransfer()
     {
         if (_chest == null) { Close(); return; }   // Unity 的 == 能识别"已销毁"
+
+        // ⚠️ 背包面板是"另一个面板"，库存变了它不会自己知道 → 必须显式通知它重画。
+        //    漏了这句的后果：东西确实已经进背包了，但左边那一堆格子要**关掉再打开**才更新（2026-09-24 修的 bug）。
+        if (BackpackPanel.Instance != null) BackpackPanel.Instance.RefreshIfOpen();
+
         Refresh();
     }
 
@@ -305,6 +317,16 @@ public class ChestPanel : MonoBehaviour
         rt.sizeDelta = size;
         rt.anchoredPosition = pos;
         return rt;
+    }
+
+    /// <summary>把节点从「贴在父节点左上角」（<see cref="NewRect"/> 的默认锚点）改成**相对父节点居中**。
+    /// 格子里的图标这类"内容"必须居中，否则会整体偏左上。</summary>
+    static void Center(RectTransform rt)
+    {
+        if (rt == null) return;
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = Vector2.zero;
     }
 
     static Image NewImage(Transform parent, string name, Vector2 size, Vector2 pos, Color color)

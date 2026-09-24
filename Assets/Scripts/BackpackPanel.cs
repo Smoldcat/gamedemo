@@ -495,6 +495,18 @@ public class BackpackPanel : MonoBehaviour
         if (ChestPanel.Instance != null && ChestPanel.Instance.IsOpen) ChestPanel.Instance.Close();
     }
 
+    /// <summary>
+    /// **外部改了背包数据之后的刷新入口**（目前只有 `ChestPanel` 用它 —— 从箱子取东西 = 背包库存变了）。
+    /// 面板没开时什么都不做：打开时 `Open()` 本来就会 Refresh，关着的时候没必要重建一堆 UI 节点。
+    /// ⚠️ 为什么必须有它：箱子面板是**另一个面板**，不会自己知道库存变了；
+    ///    不通知的话就会出现「东西已经进背包了，但左边要关掉再打开才看得见」（2026-09-24 修的 bug）。
+    /// </summary>
+    public void RefreshIfOpen()
+    {
+        if (!_opened) return;
+        Refresh();
+    }
+
     // ==================== 数据刷新 ====================
 
     void Refresh()
