@@ -116,10 +116,24 @@ public class PlayerController : MonoBehaviour
              "  · 调它就能直观校准受击区域（进 Play 看颜色即可）。")]
     public float bodyAimRadius = 0.9f;
 
+    [Header("瞄准死区")]
+    [Tooltip("【单位=世界米数】死区半径：准星点离「瞄准基准点」小于这个距离时，方向**冻结在最后一次有效值**\n" +
+             "（准星失去瞄准作用、只保留开火）。它掐的是一个自激旋转：\n" +
+             "  · 病根：朝向 ← 由「基准点 → 准星」方向决定，而基准点随朝向转 → 跨帧反馈环；\n" +
+             "    准星贴近基准点时环的增益 > 1 → 每帧甩向新角度（表现就是「玩家原地疯狂旋转」）。\n" +
+             "  · 几何：阈值 ≈ 基准点到玩家中心的距离。基准点已取「枪轴上离玩家最近的点」→ 实测 ≈ 0.45m，\n" +
+             "    这就是安全下限；本值默认 0.6m（= 1.25 倍余量）。\n" +
+             "  · ⚠️ 调到 0.45m 以下会重新落进自激区；调到 0 = 关闭保护（只在想复现它时这么干）。\n" +
+             "  · 手感调节就在这一个数：俯视角下 0.6m ≈ 玩家周围屏幕上 7px，平时几乎踩不到。\n" +
+             "  · 调大 = 更安全（但准星贴近玩家时会「枪不听使唤」的区域变大）；调小 = 更跟手（但可能抖）。")]
+    [Min(0f)] public float aimDeadZoneRadius = 0.6f;
+
     Rigidbody _rb;
     Health _hp;
     Vector2 _moveInput;
     Vector3 _aimPoint;
+    Vector3 _bulletDir = Vector3.forward;   // 本帧弹道方向（由 UpdateBulletDir 缓存；死区内保持上次有效值）
+    bool _bulletDirValid;                   // 是否已经解算过至少一次（没解算过时用 transform.forward 兜底）
     float _nextFireTime, _reloadUntil;
 
     // ---- 后坐：纯屏幕系 + 「锚点跟准星」模型 ----
@@ -183,6 +197,25 @@ public class PlayerController : MonoBehaviour
 
     /// 当前准星指向的世界坐标（供相机前探使用）
     public Vector3 AimPoint => _aimPoint;
+
+    /// <summary>本帧的**弹道方向**（已压平 y、已归一化）—— **唯一实现**：
+    /// 朝向、开火（`Fire`）、命中判定（`GetAimState`）、激光（`LaserBeam`）全部读这里，禁止各自复刻。
+    ///
+    /// 由 <see cref="UpdateBulletDir"/> 每帧算一次并缓存（缓存是为了「死区冻结」需要状态）；
+    /// 方向基准点是 <see cref="AimBasis"/>（枪轴上离玩家中心最近的点），**不是**枪口。
+    /// ⚠️ **不能**用 `transform.forward` 当弹道方向：枪口在玩家身体右侧，沿 forward 发射是一条
+    /// **平行线**、会恒偏右打不准星（"不跟手"，历史踩坑）。</summary>
+    public Vector3 BulletDir
+    {
+        get
+        {
+            // 兜底：`UpdateBulletDir()` 还没跑过时（别的组件先读，或本组件这帧被跳过），按同一套算法现场算一次，
+            // 避免把字段初值 `Vector3.forward`（世界 +Z）当成弹道方向。不写缓存 → 属性保持"只读、无副作用"。
+            if (_bulletDirValid) return _bulletDir;
+            float d;
+            return RawAimDir(out d);
+        }
+    }
 
     /// <summary>是否正按住右键瞄准（腰射 ↔ 瞄准）。</summary>
     public bool Aiming => _aiming;
@@ -462,8 +495,15 @@ public class PlayerController : MonoBehaviour
 
         // ---- 准星指向（把准星屏幕坐标投射到瞄准平面）----
         UpdateAimPoint();
-        Vector3 aimDir = _aimPoint - transform.position;
-        aimDir.y = 0f;
+        // ---- 弹道方向（唯一入口：每帧算一次并缓存；准星进死区时冻结）----
+        UpdateBulletDir();
+        // 朝向基准 = **弹道方向**（`BulletDir`）：朝向 / 弹道 / 激光三者同轴、玩家朝向与弹道平行
+        // （用户 2026-09-26 定）；枪是本物体的子物体、跟着一起转，所以不必单独旋转枪。
+        // ⚠️ `BulletDir` 的基准点是 `AimBasis()`（枪轴上离玩家最近的点）、**不是枪口** —— 理由见那个方法。
+        //    基准点仍由上一物理步的旋转决定（`MoveRotation` 延迟生效）→ 仍是"每帧迭代一次"的压缩映射，
+        //    但杠杆臂从枪口的 0.96m 缩到 0.45m → 自激区面积小了 4 倍多，剩下的由 `aimDeadZoneRadius` 兜住。
+        // ⚠️ 后坐动画只驱动枪的 localPosition.z、不碰旋转，所以与本行无冲突。
+        Vector3 aimDir = BulletDir;
         if (aimDir.sqrMagnitude > 0.001f)
         {
             // ⚠️ **不要用 `transform.rotation = ...`**：刚体开了插值后"物理系统接管 transform"，
@@ -601,6 +641,58 @@ public class PlayerController : MonoBehaviour
             float px = (cam.WorldToScreenPoint(_aimPoint + rightG.normalized) - cam.WorldToScreenPoint(_aimPoint)).magnitude;
             if (px > 1f) _pxPerM = px;
         }
+    }
+
+    /// <summary>**瞄准基准点**（世界坐标）：枪的轴线上、离玩家中心**最近**的那个点。
+    ///
+    /// 为什么不用枪口：朝向由「基准点 → 准星」方向决定，而基准点随朝向转 → 形成跨帧反馈环；
+    /// 环的**发散阈值 = 基准点到玩家中心的距离**（杠杆臂越长越容易自激）。
+    /// 实测：枪口离玩家 0.96m（死区得开 0.96m 才安全）→ 换成本点只要 0.45m（死区面积降到约 1/4.5）。
+    ///
+    /// 为什么必须落在「枪的轴线」上：轴线过挂点、沿朝向。轴上的点与枪口**共线**（实测夹角 0.000°），
+    /// 于是「轴线指向准星」这个条件完全等价 → **朝向的解一点不变**、枪管照样精确指着准星、弹道零偏差。
+    /// ⚠️ 换成不在轴上的点（例如「过玩家中心作垂线求交」）会改变解、把弹道带偏 —— 别再试。
+    ///
+    /// 实现：把挂点的本体坐标里「沿朝向的分量」（z）清零，再转回世界 = 沿轴线投影到垂足。
+    /// 用 Quaternion 而非 `InverseTransformPoint`，避免被 transform 缩放污染。</summary>
+    Vector3 AimBasis()
+    {
+        Vector3 p = gunVisual != null ? gunVisual.position : transform.position + transform.forward * 0.6f;
+        Vector3 local = Quaternion.Inverse(transform.rotation) * (p - transform.position);
+        local.z = 0f;
+        return transform.position + transform.rotation * local;
+    }
+
+    /// <summary>每帧算一次 <see cref="BulletDir"/> 并缓存（**唯一入口**，在 `UpdateAimPoint()` 之后调用）。
+    ///
+    /// 死区语义：准星点离基准点 &lt; `aimDeadZoneRadius` 时**不更新方向**（保持最后有效值）——
+    /// 那一刻准星失去瞄准作用、只保留开火；否则该距离下「基准点 → 准星」的方向会被反馈环放大成自激旋转。
+    /// 冻结值一路传到 朝向 / 弹道 / 激光（它们都读 `BulletDir`）→ 表现是「枪锁住不动」，可预测。</summary>
+    void UpdateBulletDir()
+    {
+        float dist;
+        Vector3 raw = RawAimDir(out dist);
+
+        if (dist < aimDeadZoneRadius)
+        {
+            // 死区：能冻就冻；从未解算过（开局第一帧就踩进死区）→ 用同一套算法的结果兜底，避免零方向
+            if (!_bulletDirValid) { _bulletDir = raw; _bulletDirValid = true; }
+            return;
+        }
+
+        _bulletDir = raw;
+        _bulletDirValid = true;
+    }
+
+    /// <summary>「瞄准基准点 → 准星点」的原始方向（压平 y、已归一化），并回传两者的**水平距离**。
+    /// **唯一实现**：`UpdateBulletDir()`（本帧缓存）与 `BulletDir` 的兜底路径共用这一份，避免两处算法漂移。
+    /// 退化（两点几乎重合）时用玩家朝向兜底 —— 那时方向本来就没有意义，交给死区冻结。</summary>
+    Vector3 RawAimDir(out float dist)
+    {
+        Vector3 toAim = _aimPoint - AimBasis();
+        toAim.y = 0f;
+        dist = toAim.magnitude;
+        return dist > 0.0001f ? toAim / dist : transform.forward;
     }
 
     /// <summary>把屏幕坐标夹进安全区（四周留出 marginPx 余量）</summary>
@@ -798,12 +890,10 @@ public class PlayerController : MonoBehaviour
         // 同一把枪打不同敌人倍率一致，便于按「枪」调手感；判定本身仍是"准星在敌人头上"（GetAimState）。
         float headshotMult = Mathf.Max(1f, weapon.headshotMultiplier);
 
-        // 弹道基准方向：从枪口指向准星点（而非玩家 forward）。
-        // 原因：枪口在玩家身体右侧（本地 X≈0.22），沿 forward 发射会恒偏右打不准星（"不跟手"）；
-        // 从枪口指向准星点后弹道与准星重合、指哪打哪。后坐漂移已包含在准星点里，压枪机制不变。
-        Vector3 toAim = _aimPoint - muzzle;
-        toAim.y = 0f;
-        Vector3 baseDir = toAim.sqrMagnitude > 0.0001f ? toAim.normalized : transform.forward;
+        // 弹道基准方向：从枪口指向准星点（而非玩家 forward）—— 整个项目的**唯一实现**在 `BulletDir` 属性里。
+        // 枪口在玩家身体右侧（本地 X≈0.22），沿 forward 发射会恒偏右打不准星（"不跟手"）；
+        // `LaserBeam` 读同一份，所以激光与弹道走同一条线。后坐漂移已包含在准星点里，压枪机制不变。
+        Vector3 baseDir = BulletDir;
 
         // ⚠️ **爆头弹道修正（必须有，别再删）**：被判定为爆头的那一发，改为直接指向「被锁定敌人」的**身体中心**。
         // 为什么必须：准星压在敌人头顶时，准星落点会落到敌人**身后**；对**侧向**的敌人，这个落点会偏到**旁边**
@@ -868,11 +958,9 @@ public class PlayerController : MonoBehaviour
         var cam = mainCamera != null ? mainCamera : CameraCache.Main;
         if (cam == null) return AimState.None;
 
-        // 弹道基准：与 Fire() 完全同一套算法（枪口 → 瞄准点、压平 y）。两处必须保持一致。
+        // 弹道基准：唯一实现在 `BulletDir`（与 Fire() 同一份 —— 以前这里复刻了一遍、靠注释提醒"必须保持一致"）。
         Vector3 muzzle = gunTip != null ? gunTip.position : transform.position + transform.forward * 0.6f;
-        Vector3 toAim = _aimPoint - muzzle;
-        toAim.y = 0f;
-        Vector3 bulletDir = toAim.sqrMagnitude > 0.0001f ? toAim.normalized : transform.forward;
+        Vector3 bulletDir = BulletDir;
         bulletDir.y = 0f;
         if (bulletDir.sqrMagnitude < 0.0001f) bulletDir = Vector3.forward; else bulletDir.Normalize();
         Vector3 muzzleXZ = new Vector3(muzzle.x, 0f, muzzle.z);

@@ -27,7 +27,7 @@ Transform:
   m_GameObject: {fileID: 1645930661974162919}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.4, y: 0.12, z: 0.45}
+  m_LocalPosition: {x: 0.45, y: 0.12, z: 0.45}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -308,6 +308,7 @@ MonoBehaviour:
   headshotGateScale: 1
   headshotRadiusRatio: 0.0125
   bodyAimRadius: 0.9
+  aimDeadZoneRadius: 0.6
 --- !u!114 &1834013450686954770
 MonoBehaviour:
   m_ObjectHideFlags: 0
