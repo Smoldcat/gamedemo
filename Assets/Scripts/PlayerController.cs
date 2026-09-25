@@ -18,6 +18,12 @@ public class PlayerController : MonoBehaviour
     [Tooltip("主相机。留空时运行时会自动找 Camera.main\n（Player.prefab 里故意留空 —— 预制体不能引用场景物体）")]
     public Camera mainCamera;
 
+    // ---- 后坐动画（可选，2026-09-25）----
+    // 给「Gun 挂载点」挂一个 **legacy `Animation`** 组件（clip 只驱动 localPosition.z），开火时这里重播它。
+    // 所有武器模型都挂在同一个 `Gun` 下 → **一个动画对全部武器生效**，不用给 8 个模型 prefab 各配一套。
+    Animation _gunAnim;
+    Vector3 _gunBaseLocalPos;   // Gun 的基准本地位置（Awake 记录）：换枪时若动画还在播，用它复位（见 UpdateGunVisual）
+
     [Header("移动")]
     [Tooltip("行走速度（米/秒）。按 Shift 在「跑 / 走」之间点按切换。\n" +
              "⚠️ 开一枪会强制退出奔跑（掉回行走），要再按一次 Shift 才能继续跑")]
@@ -275,7 +281,14 @@ public class PlayerController : MonoBehaviour
         if (mainCamera == null) mainCamera = CameraCache.Main;
 
         // gunVisual 只是枪的挂载点，必须保持缩放为 1，否则挂上去的模型会被拉伸变形
-        if (gunVisual != null) gunVisual.localScale = Vector3.one;
+        if (gunVisual != null)
+        {
+            gunVisual.localScale = Vector3.one;
+
+            // 后坐动画（可选）：记下基准位置 + 缓存 Animation 引用（没挂组件就是 null → 该功能整体静默关闭）
+            _gunBaseLocalPos = gunVisual.localPosition;
+            _gunAnim = gunVisual.GetComponent<Animation>();
+        }
 
         // 背包必存在：场景里没挂就自动补一个（死亡重开场景重载会自动重建为空背包）
         // 注意：BackpackPanel/Crosshair 等 UI 组件已预挂在 Player Prefab 上（方案 A），
@@ -819,6 +832,7 @@ public class PlayerController : MonoBehaviour
         Effects.MuzzleFlash(muzzle, transform.forward);
         Sfx.Shot(weapon);
         CameraRig.Shake(weapon.shake);   // 每把武器独立的镜头后坐强度
+        PlayGunKick();                   // 枪的「后坐动画」（挂在 Gun 上的 Animation，可选；没挂就什么都不做）
     }
 
     /// <summary>准星当前指向敌人的状态（供「开火判定」与「准星着色」共用）</summary>
@@ -1015,6 +1029,26 @@ public class PlayerController : MonoBehaviour
             backpack.slots[backpack.currentSlot].magAmmo = magAmmo;
     }
 
+    /// <summary>
+    /// 播放枪的「后坐动画」（挂在 `Gun` 挂载点上的 **legacy `Animation`** 组件，可选）。
+    ///
+    /// 为什么挂在 `Gun` 上而不是每个武器模型上：**所有武器模型都挂在同一个 Gun 下面** →
+    /// 一个动画对全部武器生效，不用给 8 个模型 prefab 各配一套（用户 2026-09-25 定的做法）。
+    ///
+    /// ⚠️ 用 `Rewind() + Play()` 而不是 Animator：legacy Animation **没有状态机、没有过渡**，
+    ///    能"每一发立即从头重播" → 连续扫射时看起来就是**高频抖动**（正是要的效果）；
+    ///    用 Animator 会因为状态机过渡/参数而出现延迟或播不动，除非用 `Play(state, 0, 0f)`。
+    /// ⚠️ 它走 scaled time（`Time.timeScale = 0` 时自动冻结），与暂停语义天然一致。
+    /// ⚠️ 没挂 Animation 组件时（`_gunAnim == null`）什么都不做 —— 零影响。
+    /// 📌 clip 只应驱动 **localPosition.z**：别给 x/y 打关键帧，否则动画会把挂载点摆好的左右/高度拉回 clip 里的值。
+    /// </summary>
+    void PlayGunKick()
+    {
+        if (_gunAnim == null) return;
+        _gunAnim.Rewind();   // 立即回到 clip 第 0 帧（不是等它播完）—— 连续开火时这就是"高频抖动"的来源
+        _gunAnim.Play();
+    }
+
     /// 按当前武器切换手里的枪模型
     /// - 配了「持枪模型 Prefab」→ 用它
     /// - 没配但配了「拾取模型 Prefab」→ 复用它（所以只配一个模型就能同时用于地上和手上）
@@ -1023,6 +1057,15 @@ public class PlayerController : MonoBehaviour
     void UpdateGunVisual()
     {
         if (gunVisual == null) return;
+
+        // ⚠️ 换枪这一刻如果后坐动画还在播，`Gun` 正处在"被推后"的位置，而 `UpdateGunTip` 是从
+        //    **Gun 的当前位置**反推枪口的（且只在换枪时算一次）→ 不复位的话枪口会**永久**偏出那一帧的后退量。
+        //    所以先停动画、把 Gun 拨回基准位置，再做后面的事。（"动画在播时换枪"很少见，但复位只要两行）
+        if (_gunAnim != null && _gunAnim.isPlaying)
+        {
+            _gunAnim.Stop();
+            gunVisual.localPosition = _gunBaseLocalPos;
+        }
 
         // 先清掉旧模型：直接清空挂载点，不靠引用追踪，避免残留
         for (int i = gunVisual.childCount - 1; i >= 0; i--)

@@ -9,6 +9,7 @@ GameObject:
   serializedVersion: 7
   m_Component:
   - component: {fileID: 8469201396040801475}
+  - component: {fileID: 6827909479836601113}
   m_Layer: 8
   m_HasEditorInfo: 1
   m_Name: Gun
@@ -26,12 +27,28 @@ Transform:
   m_GameObject: {fileID: 1645930661974162919}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.22, y: 0.12, z: 0.45}
+  m_LocalPosition: {x: 0.4, y: 0.12, z: 0.45}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 134735885927259692}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!111 &6827909479836601113
+Animation:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1645930661974162919}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Animation: {fileID: 7400000, guid: 4ffb569e0225860428188ff37332279f, type: 2}
+  m_Animations:
+  - {fileID: 7400000, guid: 4ffb569e0225860428188ff37332279f, type: 2}
+  m_WrapMode: 0
+  m_PlayAutomatically: 0
+  m_AnimatePhysics: 0
+  m_CullingType: 0
 --- !u!1 &7576719374155413115
 GameObject:
   m_ObjectHideFlags: 0
@@ -145,7 +162,7 @@ Transform:
   m_GameObject: {fileID: 7824396327572493553}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.22, y: -0.12, z: 0.69}
+  m_LocalPosition: {x: 0.22, y: 0.12, z: 0.69}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -242,7 +259,7 @@ CapsuleCollider:
   m_Radius: 0.4
   m_Height: 1.24
   m_Direction: 1
-  m_Center: {x: 0, y: 0.55, z: 0}
+  m_Center: {x: 0, y: 0.2, z: 0}
 --- !u!114 &4339468317536980815
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -276,6 +293,7 @@ MonoBehaviour:
   mainCamera: {fileID: 0}
   walkSpeed: 4
   runSpeed: 7.5
+  aimSpeed: 2.5
   accel: 40
   weapon: {fileID: 11400000, guid: cbf04b0c12f3fe64793ac73c07ea3551, type: 2}
   magAmmo: 4
@@ -286,9 +304,10 @@ MonoBehaviour:
   mousePixelScale: 10
   recoilScreenMargin: 0
   recoilRecoverMaxTime: 1.5
+  recoilRecoverJitterRatio: 0.011
+  headshotGateScale: 1
   headshotRadiusRatio: 0.0125
   bodyAimRadius: 0.9
-  recoilRecoverJitterRatio: 0.011
 --- !u!114 &1834013450686954770
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -345,3 +364,4 @@ MonoBehaviour:
   colorHead: {r: 0.35, g: 1, b: 0.45, a: 1}
   colorHitFlash: {r: 1, g: 1, b: 1, a: 1}
   spreadRingAlpha: 0.55
+  useVirtualCursor: 1
