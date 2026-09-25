@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4fb403605c133ee469bee6fcb5f8fc08, type: 3}
+  m_Name: "Shop_\u6742\u8D27\u94FA"
+  m_EditorClassIdentifier: 
+  slotCount: 5
+  entries:
+  - item: {fileID: 11400000, guid: 0657a6602e4de564ebd40e63381e275b, type: 2}
+    buyPrice: 80
+    sellPrice: 30
+    maxStock: 5
+    restockAmount: 1
+  - item: {fileID: 11400000, guid: 07845b1c6dc3e41409faed74b3bb6bd4, type: 2}
+    buyPrice: 300
+    sellPrice: 120
+    maxStock: 3
+    restockAmount: 1
+  - item: {fileID: 11400000, guid: 1fd61426dbdecc14989f473b306bbc03, type: 2}
+    buyPrice: 900
+    sellPrice: 350
+    maxStock: 2
+    restockAmount: 1
+  - item: {fileID: 11400000, guid: 00fd39fdda4bba348bc32b0027c98e54, type: 2}
+    buyPrice: 1100
+    sellPrice: 420
+    maxStock: 2
+    restockAmount: 1
+  - item: {fileID: 11400000, guid: 2b66471c1e4f2ae40a804b56c16d6c85, type: 2}
+    buyPrice: 1800
+    sellPrice: 700
+    maxStock: 1
+    restockAmount: 1
+  restockSeconds: 30
+  sellValueRatio: 0.4

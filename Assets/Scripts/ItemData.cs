@@ -42,6 +42,13 @@ public abstract class ItemData : ScriptableObject
     [Tooltip("悬停说明（背包 / 箱子 tooltip）。尤其「只有图标、没有模型」的物品，靠它说清这是什么")]
     [TextArea(2, 4)] public string description;
 
+    [Header("价值（商店 / 交易用）")]
+    [Tooltip("基础价值（金币）：商店买卖的**基准价**。\n" +
+             "  · 在商店货架上配了价的物品 → 以货架上的价格为准，本值只作参考\n" +
+             "  · **没在货架上配价**的物品（敌人掉的枪、箱子开出来的东西）→ 卖出价 = 本值 × 商店配方的「表外收购比例」\n" +
+             "⚠️ 没单独填的物品都用这个默认值 → 想让不同东西卖出不同价，就逐件在 Inspector 里填")]
+    public int baseValue = 100;
+
     /// <summary>显示名（背包 / 箱子 / 拾取气泡里显示的名字）。
     /// ⚠️ 做成**抽象属性**是刻意的：让每个子类用自己**已有的**字段名实现它（WeaponData → weaponName），
     ///    这样不需要把已存资源里的字段改名（改名 = 数据静默丢失，见类注释里的铁律）。</summary>

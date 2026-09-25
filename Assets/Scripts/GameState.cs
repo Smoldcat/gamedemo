@@ -10,6 +10,7 @@ public static class GameState
     public static int AliveEnemies;   // 场上存活敌人数
     public static int Wave;           // 当前波次
     public static bool GameOver;      // 玩家是否已死亡
+    public static int Gold;           // 金币（商店买卖用；每局由 WaveManager.BeginRound 按「开局资金」写入）
 
     /// <summary>是否处于暂停（只读：只能通过 SetPaused / ClearPause 修改）。</summary>
     public static bool Paused { get; private set; }
@@ -56,6 +57,7 @@ public static class GameState
         AliveEnemies = 0;
         Wave = 1;
         GameOver = false;
+        Gold = 0;          // 每局从 0 开始（开局资金由 WaveManager.BeginRound 在 Reset 之后写入）
         ClearPause();
         PickupEConsumedFrame = -1;
     }

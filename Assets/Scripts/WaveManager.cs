@@ -53,6 +53,13 @@ public class WaveManager : MonoBehaviour
     [Tooltip("地面物体的 Tag。每局按它重新查找地面（场景重载后旧引用会失效，必须重绑）。留空则不重新绑定")]
     public string mapGroundTag = "";
 
+    [Header("开局资源")]
+    [Tooltip("开局给玩家的金币（原型调试用）。\n" +
+             "  · 设 0 = 从 0 开始，想买东西就先把商店配方里的「卖出价」调高（把身上的东西卖成钱）；\n" +
+             "  · 设 >0 = 一进游戏就带这么多钱。\n" +
+             "每局开始时写入 `GameState.Gold`（在 GameState.Reset 之后，不会被清零）")]
+    [Min(0)] public int startGold = 0;
+
     // ---- 波次状态机 ----
     // 不用协程实现：协程内一旦抛异常会静默死亡，波次就永久卡住了。用状态机更可控。
     enum WavePhase { Fighting, Clearing, Spawning }
@@ -153,6 +160,7 @@ public class WaveManager : MonoBehaviour
 
         Sfx.Init();
         GameState.Reset();
+        GameState.Gold = Mathf.Max(0, startGold);   // ⚠️ 必须在 Reset **之后**：Reset 会把金币归零
         CameraCache.Clear();                      // 上一局的相机已随场景销毁，清掉缓存强制重新查找
         SpawnPosition.BindMapBounds(mapGround);   // 地图边界自适应：有地面引用就按它大小算
 

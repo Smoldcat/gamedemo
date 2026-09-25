@@ -157,6 +157,21 @@ public class PlayerBackpack : MonoBehaviour
         return count - left;
     }
 
+    /// <summary>从库存第 i 格取走 n 个（商店卖出 / 以后的消耗品用）；返回**实际取走**的数量。
+    /// 这一格空了就把格腾出来（与箱子取物 `Chest.TakeFromSlot` 同一套语义）。
+    /// ⚠️ 这是库存的"取出"**唯一入口**（与 `AddItems` 对称）—— 别在别处直接改 `inventory`，
+    ///    否则"空了要腾格"这类规则会散落在各处。</summary>
+    public int TakeFromInventory(int i, int n)
+    {
+        if (n <= 0 || i < 0 || i >= inventory.Count) return 0;
+        var s = inventory[i];
+        if (s == null || s.def == null) { inventory.RemoveAt(i); return 0; }
+
+        int take = s.Take(n);
+        if (s.IsEmpty) { s.Clear(); inventory.RemoveAt(i); }
+        return take;
+    }
+
     /// <summary>能不能再收下这把武器：有空快捷槽 → 能；否则看库存还有没有空格（武器不可堆叠 → 一把占一格）。</summary>
     public bool CanAddWeapon(WeaponData w)
     {

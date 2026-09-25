@@ -71,6 +71,7 @@ public static class InspectorLabelTable
         { "ItemData.maxStack",          "单格上限" },
         { "ItemData.stackId",           "身份证(stackId)" },
         { "ItemData.description",       "说明文字" },
+        { "ItemData.baseValue",         "基础价值（金币）" },
 
         // -------------------------------- MedkitData --------------------------------
         { "MedkitData.itemName",        "显示名" },
@@ -85,6 +86,14 @@ public static class InspectorLabelTable
         { "Chest.solid",              "是实体（挡路 / 挡子弹）" },
         { "Chest.disappearWhenEmpty", "拿完消失" },
         { "Chest.promptWhenEmpty",    "空了也提示气泡" },
+
+        // --------------------------------- Shop（商店）---------------------------------
+        // ⚠️ 别和 [Header]（"商店" / "交互" / "行为开关"）写成一样，否则 Inspector 上会出现两行一样的字
+        { "Shop.promptLabel",   "商店名字" },
+        { "Shop.config",        "商店配方（卖什么）" },
+        { "Shop.interactKey",   "交互按键" },
+        { "Shop.interactRange", "交互距离（米）" },
+        { "Shop.solid",         "是实体（挡路 / 挡子弹）" },
     };
 
     /// <summary>取中文标签；没登记返回 null（调用方负责回落英文标签）</summary>

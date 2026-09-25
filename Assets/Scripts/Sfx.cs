@@ -9,6 +9,7 @@ public static class Sfx
     static AudioClip _shot, _shotgun, _sniper, _hit, _kill, _pickup, _hurt, _heal;
     static AudioClip _magOut, _magInChamber, _pump, _bolt;   // 换弹音效组
     static AudioClip _invOpen, _invClose, _confirm, _drop;   // 背包 UI 音效组
+    static AudioClip _shopBuy, _shopSell;                     // 商店买卖音效组（2026-09-25）
     static AudioClip _headshotHit;                            // 爆头命中反馈
     static AudioClip _explosion;                              // 爆炸（RPG 命中 / 自爆兵自爆共用）
 
@@ -26,6 +27,7 @@ public static class Sfx
         _headshotHit = null;
         _magOut = _magInChamber = _pump = _bolt = null;
         _invOpen = _invClose = _confirm = _drop = null;
+        _shopBuy = _shopSell = null;
         _explosion = null;
     }
 
@@ -200,6 +202,27 @@ public static class Sfx
             float noise = (Random.value * 2f - 1f) * 0.4f;
             return (thump + noise) * env * 0.5f;
         });
+
+        // ---- 商店音效组（2026-09-25）----
+        // 买入：收银机"叮"（两段上行清脆音：第一声确认、第二声上挑，像"成交"）
+        _shopBuy = Make("shopBuy", 0.18f, t =>
+        {
+            float f = t < 0.07f ? 1046.5f : 1568f;        // C6 → G6
+            float env = Mathf.Exp(-t * 14f);
+            float tone = Mathf.Sin(2f * Mathf.PI * f * t);
+            float click = (t < 0.02f) ? (Random.value * 2f - 1f) * 0.3f * Mathf.Exp(-t * 120f) : 0f;
+            return (tone * 0.5f + click) * env * 0.6f;
+        });
+        // 卖出：金币入袋"叮当"（两个短促的金属高频音，第二声更高更轻）
+        _shopSell = Make("shopSell", 0.16f, t =>
+        {
+            float env1 = Mathf.Exp(-t * 55f);
+            float t2 = Mathf.Max(0f, t - 0.06f);
+            float env2 = Mathf.Exp(-t2 * 55f);
+            float ping1 = Mathf.Sin(2f * Mathf.PI * 1568f * t) * env1;
+            float ping2 = (t >= 0.06f) ? Mathf.Sin(2f * Mathf.PI * 2093f * t) * env2 * 0.8f : 0f;
+            return (ping1 + ping2) * 0.45f;
+        });
     }
 
     static AudioClip Make(string name, float dur, System.Func<float, float> gen)
@@ -282,4 +305,8 @@ public static class Sfx
     public static void CloseInventory() { var ga = GameAssets.I; Play(Use(ga != null ? ga.invClose : null, _invClose), 0.7f); }
     public static void Confirm() { var ga = GameAssets.I; Play(Use(ga != null ? ga.invConfirm : null, _confirm), 0.8f); }
     public static void Drop() { var ga = GameAssets.I; Play(Use(ga != null ? ga.invDrop : null, _drop), 0.8f); }
+
+    // ---- 商店买卖：优先用资源表里的真实音频，没配则回落代码合成 ----
+    public static void Buy() { var ga = GameAssets.I; Play(Use(ga != null ? ga.shopBuy : null, _shopBuy), 0.8f); }
+    public static void Sell() { var ga = GameAssets.I; Play(Use(ga != null ? ga.shopSell : null, _shopSell), 0.8f); }
 }

@@ -85,6 +85,7 @@ public class BackpackPanel : MonoBehaviour
     Text _medkitText;
     Text _pausedText;
     Text _titleText;      // 标题（含「背包 x/20」计数）
+    Text _goldText;       // 标题行右侧的金币（懒创建：prefab 里没有这个节点也会自动补一个）
     Image _invBarFill;    // 底部占用条（已用格数 / 总格数）
     Text _tooltipText;
     GameObject _tooltipGo;
@@ -164,8 +165,14 @@ public class BackpackPanel : MonoBehaviour
         //    会把"关面板"和"放开鼠标"两件事绑在一起（按一下发生两件事）；将来加暂停菜单时 Esc 另有安排。
         if (Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.B))
         {
-            if (_opened) Close();
-            else if (!GameState.GameOver) Open();
+            // ⚠️ 商店组占用 Tab 时不响应：Tab = 关闭商店组（且商店打开期间不允许开背包，用户 2026-09-25 定）。
+            //    必须做这一层让位：两个面板都在 Update 里读 Tab、谁先跑不确定，
+            //    不做的话按一下 Tab 会出现"商店关了、背包却打开了"（见 ShopPanel.HoldsTabKey）
+            if (!ShopPanel.HoldsTabKey)
+            {
+                if (_opened) Close();
+                else if (!GameState.GameOver) Open();
+            }
         }
 
         // 丢弃二次确认超时还原
@@ -510,6 +517,33 @@ public class BackpackPanel : MonoBehaviour
 
     // ==================== 数据刷新 ====================
 
+    /// <summary>金币显示色（**共享色**，与 `MedkitIconColor` 同性质）：背包标题行右侧的金币、
+    /// 商店面板 / 库存面板的金币都用它 —— 只留一份，改这里三处一起变。</summary>
+    public static readonly Color GoldColor = new Color(1f, 0.84f, 0.45f);
+
+    /// <summary>标题行右侧的金币文本（**懒创建**）：prefab 与代码生成两条路径共用 ——
+    /// 都挂在面板根上、锚到右上角，位置在「整理」按钮左侧（按钮宽 64 + 右内边距 + 8 间隙）。
+    /// 为什么懒创建：背包面板走 prefab 双轨，而 prefab 里**没有**这个节点 —— 代码补一个，
+    /// 这样"加金币显示"不需要去改 prefab（用户 2026-09-25 定：金币显示在背包标题行右侧）。</summary>
+    void EnsureGoldText()
+    {
+        if (_goldText != null || _root == null) return;
+
+        // 先看面板根下有没有现成的 "Gold" 节点（prefab 里将来若手工加了就用它，别重复建）
+        var existing = _root.transform.Find("Gold");
+        if (existing != null) _goldText = existing.GetComponent<Text>();
+
+        if (_goldText == null)
+            _goldText = AddText(_root.transform, "Gold", new Vector2(150f, 26f), "", 14, GoldColor);
+
+        _goldText.alignment = TextAnchor.MiddleRight;
+        _goldText.color = GoldColor;
+        var rt = _goldText.rectTransform;
+        rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);   // 锚到面板右上角（与"整理"按钮同一行）
+        rt.pivot = new Vector2(1f, 1f);
+        rt.anchoredPosition = new Vector2(-(Pad + 72f), -30f);
+    }
+
     void Refresh()
     {
         if (_invGrid == null || _medkitText == null) return;   // 面板还没建完
@@ -521,6 +555,11 @@ public class BackpackPanel : MonoBehaviour
 
         // 标题计数 + 底部占用条
         if (_titleText != null) _titleText.text = "背包   " + used + "/" + cap;
+
+        // 金币（标题行右侧；数值来自 `GameState.Gold`，商店买卖 / 开局资金都会改它）
+        EnsureGoldText();
+        if (_goldText != null)
+            _goldText.text = "金币 " + GameState.Gold.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
         if (_invBarFill != null)
         {
             float w = cap > 0 ? Mathf.Clamp01(used / (float)cap) * _barWidth : 0f;

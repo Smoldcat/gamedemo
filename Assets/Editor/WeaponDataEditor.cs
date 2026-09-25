@@ -18,6 +18,7 @@ public class WeaponDataEditor : Editor
     static readonly (string propName, string label, string tip)[] Fields =
     {
         ("weaponName", "武器名称",          "武器显示名（出现在拾取提示和 HUD 上）"),
+        ("baseValue",  "基础价值（金币）",   "商店买卖的基准价。⚠️ 货架上配了价 → 以货架价为准；**没配价**的物品（敌人掉的枪）卖出价 = 本值 × 商店配方的「表外收购比例」"),
         ("damage",     "单发伤害",          "命中一发的伤害值"),
         ("fireInterval","开火间隔（秒）",    "两次开火的间隔，越小射速越快"),
         ("pellets",    "弹丸数",            "一次发射的弹丸数（霰弹枪 > 1）"),
