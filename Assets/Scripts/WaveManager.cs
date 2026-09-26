@@ -31,6 +31,10 @@ public class WaveManager : MonoBehaviour
     [Tooltip("把所有想出现的武器 .asset 拖进来：每局开局把池里的武器**全部**铺到地图上（落点随机）；留空则用代码内置 4 把默认枪")]
     public WeaponData[] weaponPool;
 
+    [Header("初始弹药")]
+    [Tooltip("开局每种弹药各铺几包（0 = 不铺）。\n弹药种类**自动从物品清单里找**（不用手拖）—— 加了新弹药后跑一次菜单 Tools/游戏/重建物品清单即可")]
+    [Min(0)] public int initialAmmoPacksPerType = 2;
+
     [Header("敌人池（每波随机出怪；推荐用这个）")]
     [Tooltip("把敌人配置拖进每一项，权重/解锁波次直接在面板上调。有几项就会随机出几种敌人")]
     public EnemyPoolEntry[] enemyPool;
@@ -196,6 +200,28 @@ public class WaveManager : MonoBehaviour
         for (int i = 0; i < 3; i++)
             HealthPack.Create(SpawnPosition.FindOpenSpot(4f, SpawnPosition.RangeMedkit, spawned));
 
+        // 初始弹药：每种弹药各铺 N 包。弹药卡**自动从物品清单里找** → 以后加新弹药不用改这里
+        if (initialAmmoPacksPerType > 0)
+        {
+            var db = ItemDatabase.I;
+            if (db != null && db.all != null)
+            {
+                int kinds = 0;
+                foreach (var def in db.all)
+                {
+                    var ammo = def as AmmoData;
+                    if (ammo == null) continue;
+                    kinds++;
+                    for (int i = 0; i < initialAmmoPacksPerType; i++)
+                        AmmoPickup.Create(ammo, SpawnPosition.FindOpenSpot(4f, SpawnPosition.RangeMedkit, spawned));
+                }
+                if (kinds == 0)
+                    Debug.LogWarning("[WaveManager] 物品清单里没有任何弹药卡 → 开局不铺弹药。请在菜单跑一次 Tools/游戏/重建物品清单");
+            }
+            else
+                Debug.LogWarning("[WaveManager] 物品清单缺失（Assets/Resources/ItemDatabase.asset）→ 开局不铺弹药");
+        }
+
         // 初始敌人：从敌人池随机挑（池里几种就随机几种），数量按波次配置，随机落点且彼此拉开
         for (int i = 0; i < WC.initialEnemies; i++)
             SpawnEnemy(PickConfig(), spawned);
@@ -207,6 +233,7 @@ public class WaveManager : MonoBehaviour
         foreach (var ai in EnemyAI.All) if (ai != null) Destroy(ai.gameObject);
         foreach (var wp in WeaponPickup.All) if (wp != null) Destroy(wp.gameObject);
         foreach (var hp in HealthPack.All) if (hp != null) Destroy(hp.gameObject);
+        foreach (var ap in AmmoPickup.All) if (ap != null) Destroy(ap.gameObject);
         // 特效和子弹
         foreach (var t in FindObjectsOfType<TimedEffect>()) Destroy(t.gameObject);
         foreach (var b in FindObjectsOfType<Bullet>()) Destroy(b.gameObject);

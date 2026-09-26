@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca7918c14530d4e4eab557432cb3e03a, type: 3}
+  m_Name: Ammo_Handgun
+  m_EditorClassIdentifier: 
+  icon: {fileID: 0}
+  pickupColor: {r: 0.96, g: 0.88, b: 0.5, a: 1}
+  pickupModelPrefab: {fileID: 0}
+  canStack: 1
+  maxStack: 999
+  stackId: 
+  description: "\u5E38\u89C1\u7684\u624B\u67AA\u5B50\u5F39\u30028 \u53D1\u4E00\u5305\uFF0C\u624B\u611F\u8F7B\u5FEB\u3002"
+  baseValue: 5
+  itemName: "\u624B\u67AA\u5F39"
+  ammoKind: 0
+  packSize: 8
+  worldIconSize: 0.3
+  worldHoverHeight: 0.16
+  worldShadowSize: 0.26

@@ -172,6 +172,43 @@ public class PlayerBackpack : MonoBehaviour
         return take;
     }
 
+    /// <summary>按口径统计背包里的**总备弹**（跨格子求和）。
+    /// **唯一入口**：换弹扣除、HUD 显示都读它 —— 别在别处自己遍历 `inventory` 算弹药。
+    /// ⚠️ 将来做「弹药分级」（一级/二级…同口径可互换）时，本方法**自动**把它们加起来（按 `ammoKind` 匹配）；
+    ///    但 HUD 到时候要改成**按每张卡分别显示**（用户 2026-09-27 明确），不能继续用这个总和。</summary>
+    public int CountAmmo(AmmoKind kind)
+    {
+        if (kind == AmmoKind.None) return 0;
+        int total = 0;
+        for (int i = 0; i < inventory.Count; i++)
+        {
+            var s = inventory[i];
+            if (s == null || s.def == null) continue;
+            var a = s.def as AmmoData;
+            if (a == null || a.ammoKind != kind) continue;
+            total += s.count;
+        }
+        return total;
+    }
+
+    /// <summary>按口径扣除备弹（跨格子；返回**实际扣掉**的数量）。
+    /// ⚠️ 与 `CountAmmo` 成对 —— 将来做"弹药分级"时，"先扣哪一级"只在这里决定（现在是按库存顺序扣）。</summary>
+    public int TakeAmmo(AmmoKind kind, int n)
+    {
+        if (kind == AmmoKind.None || n <= 0) return 0;
+        int left = n;
+        // 从后往前扫：`TakeFromInventory` 会 RemoveAt，倒序扫描不会打乱未处理的下标
+        for (int i = inventory.Count - 1; i >= 0 && left > 0; i--)
+        {
+            var s = inventory[i];
+            if (s == null || s.def == null) continue;
+            var a = s.def as AmmoData;
+            if (a == null || a.ammoKind != kind) continue;
+            left -= TakeFromInventory(i, left);   // 走唯一"取出"入口（空了自动腾格）
+        }
+        return n - left;
+    }
+
     /// <summary>能不能再收下这把武器：有空快捷槽 → 能；否则看库存还有没有空格（武器不可堆叠 → 一把占一格）。</summary>
     public bool CanAddWeapon(WeaponData w)
     {

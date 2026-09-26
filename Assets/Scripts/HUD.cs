@@ -145,6 +145,7 @@ public class HUD : MonoBehaviour
     int _sHp = int.MinValue, _sMaxHp = int.MinValue;
     bool _sHasWeapon, _sReloading;
     int _sMag = int.MinValue, _sMagSize = int.MinValue;
+    int _sReserve = int.MinValue;   // 备弹（-1 = 无限：武器 `ammoKind == None`，如 RPG）
     string _sWeaponName;
     bool _sRunning = true;
     int _sKills = int.MinValue, _sWave = int.MinValue, _sAlive = int.MinValue, _sClearTicks = int.MinValue;
@@ -441,14 +442,20 @@ public class HUD : MonoBehaviour
             int magSize = hasWeapon ? pc.weapon.magSize : 0;
             // ⚠️ 「槽N」与「血包×N」已于 2026-09-22 **移出**这行：底部快捷栏（1/2/3/Q）已经在表达这两项，
             //    同屏重复反而更难扫读。想恢复就把它们加回下面的字符串。
+            // 备弹：按这杆枪的口径统计（`AmmoKind.None` = 不吃弹药 → 显示 ∞）
+            int reserve = hasWeapon && pc.weapon.ammoKind != AmmoKind.None && pc.backpack != null
+                        ? pc.backpack.CountAmmo(pc.weapon.ammoKind) : -1;   // -1 = 无限
+
             if (hasWeapon != _sHasWeapon || pc.reloading != _sReloading || mag != _sMag || magSize != _sMagSize
+                || reserve != _sReserve
                 || (hasWeapon && !string.Equals(pc.weapon.weaponName, _sWeaponName)))
             {
                 _sHasWeapon = hasWeapon; _sReloading = pc.reloading; _sMag = mag; _sMagSize = magSize;
+                _sReserve = reserve;
                 _sWeaponName = hasWeapon ? pc.weapon.weaponName : null;
                 weaponText.text = !hasWeapon ? "空手  ——  到地上捡一把武器吧"
                     : (pc.reloading ? $"{pc.weapon.weaponName}  换弹中..."
-                                    : $"{pc.weapon.weaponName}  {mag}/{magSize} ∞");
+                                    : $"{pc.weapon.weaponName}  {mag}/{magSize} " + (reserve < 0 ? "∞" : reserve.ToString()));
             }
             weaponText.color = hasWeapon ? pc.weapon.pickupColor : new Color(0.7f, 0.7f, 0.7f);
         }

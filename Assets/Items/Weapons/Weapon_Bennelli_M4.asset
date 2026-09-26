@@ -19,6 +19,7 @@ MonoBehaviour:
   maxStack: 1
   stackId: 
   description: 
+  baseValue: 100
   weaponName: "\u8D1D\u5185\u5229 M4"
   damage: 11
   fireInterval: 0.7
@@ -33,6 +34,7 @@ MonoBehaviour:
   effectiveRange: 0
   beyondRangeDamage: 1
   magSize: 7
+  ammoKind: 4
   reloadTime: 1.9
   tracerColor: {r: 1, g: 0.55, b: 0.25, a: 1}
   gunLength: 0.72
@@ -53,3 +55,5 @@ MonoBehaviour:
   bulletPrefab: {fileID: 0}
   iconKind: 0
   fireSound: {fileID: 8300000, guid: 631050b44e13c864289a59225a04bc89, type: 3}
+  reloadStartSound: {fileID: 0}
+  reloadEndSound: {fileID: 0}

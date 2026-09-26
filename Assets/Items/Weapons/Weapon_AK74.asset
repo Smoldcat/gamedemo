@@ -19,6 +19,7 @@ MonoBehaviour:
   maxStack: 1
   stackId: 
   description: 
+  baseValue: 100
   weaponName: AK74
   damage: 26
   fireInterval: 0.11
@@ -33,6 +34,7 @@ MonoBehaviour:
   effectiveRange: 0
   beyondRangeDamage: 1
   magSize: 30
+  ammoKind: 1
   reloadTime: 1.8
   tracerColor: {r: 1, g: 0.6, b: 0.3, a: 1}
   gunLength: 0.6
@@ -53,3 +55,5 @@ MonoBehaviour:
   bulletPrefab: {fileID: 0}
   iconKind: 0
   fireSound: {fileID: 8300000, guid: ee5effd151d4d5042889a113b786378d, type: 3}
+  reloadStartSound: {fileID: 0}
+  reloadEndSound: {fileID: 0}

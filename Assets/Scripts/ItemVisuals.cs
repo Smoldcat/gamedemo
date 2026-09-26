@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -18,6 +19,7 @@ using UnityEngine;
 public static class ItemVisuals
 {
     static Sprite _genericIcon;   // 菱形占位（只建一次）
+    static readonly Dictionary<AmmoKind, Sprite> _ammoIcons = new Dictionary<AmmoKind, Sprite>();   // 弹药图标（按口径缓存，最多 5 张）
 
     /// <summary>这个物品该显示哪张图标。</summary>
     public static Sprite IconOf(ItemData def)
@@ -26,6 +28,7 @@ public static class ItemVisuals
         if (def.icon != null) return def.icon;
         if (def is WeaponData w) return BackpackPanel.WeaponIconSprite(w);
         if (def is MedkitData) return BackpackPanel.MedkitSprite();
+        if (def is AmmoData a) return AmmoIconSprite(a);
         return GenericIcon();
     }
 
@@ -37,11 +40,75 @@ public static class ItemVisuals
         return def.pickupColor;
     }
 
-    /// <summary>静态状态清理（供 `StaticReset` 调用）：成对销毁自己建的那张占位图。</summary>
+    /// <summary>静态状态清理（供 `StaticReset` 调用）：成对销毁自己建的那些图（占位图 + 弹药图标）。</summary>
     internal static void ResetStatics()
     {
         UIUtil.DestroySprite(_genericIcon);
         _genericIcon = null;
+        foreach (var kv in _ammoIcons) UIUtil.DestroySprite(kv.Value);
+        _ammoIcons.Clear();
+    }
+
+    /// <summary>弹药图标（按口径缓存；白色 alpha 剪影，颜色由 `Image.color` 上色 —— 与武器图标同一套做法）。</summary>
+    static Sprite AmmoIconSprite(AmmoData a)
+    {
+        if (a == null) return GenericIcon();
+        Sprite s;
+        if (_ammoIcons.TryGetValue(a.ammoKind, out s) && s != null) return s;
+        s = MakeAmmoIcon(a.ammoKind);
+        _ammoIcons[a.ammoKind] = s;
+        return s;
+    }
+
+    /// <summary>画一枚"竖着的子弹"剪影（弹头朝上）：下半段 = 弹壳（等宽矩形），上半段 = 弹头。
+    /// 五种口径靠**尺寸 + 弹头形状**区分（不靠颜色 —— 颜色由定义卡上的 `pickupColor` 给）。</summary>
+    static Sprite MakeAmmoIcon(AmmoKind kind)
+    {
+        const int size = 64;
+
+        // 参数：弹壳长 / 弹头长 / 半宽 / 弹头形状（0 = 尖、1 = 圆、2 = 平顶）
+        float caseLen, headLen, halfW; int headShape;
+        switch (kind)
+        {
+            case AmmoKind.Handgun: caseLen = 0.20f; headLen = 0.13f; halfW = 0.105f; headShape = 1; break;  // 短小·圆头
+            case AmmoKind.SMG:     caseLen = 0.24f; headLen = 0.12f; halfW = 0.115f; headShape = 1; break;  // 短粗·圆头
+            case AmmoKind.Rifle:   caseLen = 0.30f; headLen = 0.18f; halfW = 0.095f; headShape = 0; break;  // 中等·尖头
+            case AmmoKind.Sniper:  caseLen = 0.34f; headLen = 0.25f; halfW = 0.078f; headShape = 0; break;  // 细长·尖头
+            case AmmoKind.Shotgun: caseLen = 0.44f; headLen = 0.00f; halfW = 0.120f; headShape = 2; break;  // 粗圆柱·平顶
+            default:               caseLen = 0.30f; headLen = 0.16f; halfW = 0.095f; headShape = 1; break;
+        }
+
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+
+        float total = caseLen + headLen;
+        float vBot = 0.5f - total * 0.5f;      // 弹壳底
+        float vMid = vBot + caseLen;           // 弹壳顶 = 弹头底
+        float vTop = vMid + headLen;           // 弹头顶
+
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float u = (x + 0.5f) / size;
+            float v = 1f - (y + 0.5f) / size;                 // v 越大越靠上
+            float du = Mathf.Abs(u - 0.5f);
+            float a = 0f;
+
+            if (v >= vBot && v <= vMid)                        // 弹壳：等宽矩形（底缘略宽一点点）
+                a = du <= (v <= vBot + 0.03f ? halfW * 1.12f : halfW) ? 1f : 0f;
+            else if (headLen > 0f && v > vMid && v <= vTop)    // 弹头
+            {
+                float t = (v - vMid) / headLen;                // 0 = 弹头底，1 = 顶端
+                float w = headShape == 0 ? halfW * (1f - t * t * 0.82f)                          // 尖头（略鼓的锥）
+                        : headShape == 1 ? halfW * Mathf.Sqrt(Mathf.Max(0f, 1f - t * t))         // 圆头
+                        : halfW;
+                a = du <= w ? 1f : 0f;
+            }
+
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+        }
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
     }
 
     static Sprite GenericIcon()

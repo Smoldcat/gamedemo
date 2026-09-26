@@ -59,6 +59,11 @@ public class WeaponData : ItemData
     [Range(0f, 1f)]
     public float beyondRangeDamage = 1f;
     public int magSize = 12;          // 弹匣容量
+    [Tooltip("这杆枪吃哪种弹药（换弹时按口径从背包扣）。\n" +
+             "  · None = **不吃弹药**：打空后仍能换弹、且不消耗备弹（RPG 等特殊武器，用户 2026-09-27 定）\n" +
+             "  · 其余 = 对应口径（手枪 / 步枪 / 狙击 / 冲锋 / 霰弹）\n" +
+             "⚠️ 以后加「一级弹 / 二级弹」时**本字段不用改**：同口径的多种弹药都能被它使用。")]
+    public AmmoKind ammoKind = AmmoKind.Rifle;
     public float reloadTime = 1.2f;   // 换弹时间
     public Color tracerColor = new Color(1f, 0.9f, 0.3f); // 曳光颜色
     // ⚠️ `pickupColor`（拾取物高亮色）已于 2026-09-24 **上移到基类 ItemData** —— 它是所有物品共有的字段。

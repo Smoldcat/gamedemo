@@ -19,6 +19,7 @@ MonoBehaviour:
   maxStack: 1
   stackId: 
   description: 
+  baseValue: 100
   weaponName: "M107 \u72D9\u51FB"
   damage: 130
   fireInterval: 1.25
@@ -33,6 +34,7 @@ MonoBehaviour:
   effectiveRange: 0
   beyondRangeDamage: 1
   magSize: 5
+  ammoKind: 2
   reloadTime: 2.4
   tracerColor: {r: 0.85, g: 0.45, b: 1, a: 1}
   gunLength: 0.95
@@ -53,3 +55,5 @@ MonoBehaviour:
   bulletPrefab: {fileID: 0}
   iconKind: 0
   fireSound: {fileID: 8300000, guid: 398ce88350c6d3442ab98dd789aceec5, type: 3}
+  reloadStartSound: {fileID: 0}
+  reloadEndSound: {fileID: 0}

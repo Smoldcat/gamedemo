@@ -29,6 +29,7 @@ public static class StaticReset
         EnemyAI.All.Clear();
         WeaponPickup.All.Clear();
         HealthPack.All.Clear();
+        AmmoPickup.All.Clear();          // 弹药包注册表（2026-09-27）
         HealthPack.ResetStatics();      // 静态事件 AnyConsumed（漏登记 → 上一局已销毁的 WaveManager 仍会被回调）
         SpawnPosition.ResetStatics();   // 地图边界（漏登记 → 上一局算出的边界残留到下一局）
 

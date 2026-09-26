@@ -19,6 +19,7 @@ MonoBehaviour:
   maxStack: 1
   stackId: 
   description: 
+  baseValue: 100
   weaponName: "M249 \u673A\u67AA"
   damage: 20
   fireInterval: 0.08
@@ -33,6 +34,7 @@ MonoBehaviour:
   effectiveRange: 0
   beyondRangeDamage: 1
   magSize: 100
+  ammoKind: 1
   reloadTime: 3.2
   tracerColor: {r: 0.7, g: 0.8, b: 0.95, a: 1}
   gunLength: 0.75
@@ -53,3 +55,5 @@ MonoBehaviour:
   bulletPrefab: {fileID: 0}
   iconKind: 0
   fireSound: {fileID: 8300000, guid: 5dbc823251fe46a4287658c02469d99c, type: 3}
+  reloadStartSound: {fileID: 0}
+  reloadEndSound: {fileID: 0}

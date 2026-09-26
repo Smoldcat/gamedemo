@@ -132,6 +132,7 @@ public class PlayerController : MonoBehaviour
     Health _hp;
     Vector2 _moveInput;
     Vector3 _aimPoint;
+    float _nextNoAmmoWarnTime;              // "没有弹药"提示的下次允许时间（节流：空弹时按住左键会每帧重试换弹）
     Vector3 _bulletDir = Vector3.forward;   // 本帧弹道方向（由 UpdateBulletDir 缓存；死区内保持上次有效值）
     bool _bulletDirValid;                   // 是否已经解算过至少一次（没解算过时用 transform.forward 兜底）
     float _nextFireTime, _reloadUntil;
@@ -1045,6 +1046,19 @@ public class PlayerController : MonoBehaviour
     void StartReload()
     {
         if (weapon == null || reloading) return;
+        // ⚠️ 不吃弹药的枪（`AmmoKind.None`，如 RPG）永远能换；其余枪**一颗备弹都没有就拒绝换弹**并提示 ——
+        //    否则会出现"吭哧换完，弹匣还是空的"，玩家会以为卡了。
+        if (weapon.ammoKind != AmmoKind.None && backpack != null && backpack.CountAmmo(weapon.ammoKind) <= 0)
+        {
+            // ⚠️ **提示必须节流**：打空弹匣后按住左键会**每帧**重试换弹（见 `HandleFire`），
+            //    不节流的话中央公告会被每帧刷新 → 永远不消失（且盖住波次 / 拾取公告、每帧产生新字符串）。
+            if (Time.time >= _nextNoAmmoWarnTime)
+            {
+                _nextNoAmmoWarnTime = Time.time + 0.8f;
+                HUD.Announce("没有" + AmmoData.DisplayOf(weapon.ammoKind) + "了", 1.0f, 26, new Color(1f, 0.62f, 0.42f));
+            }
+            return;
+        }
         reloading = true;
         _reloadUntil = Time.time + weapon.reloadTime;
         _markValid = false;        // 换弹：回正标记作废（本次射击周期结束）
@@ -1058,15 +1072,22 @@ public class PlayerController : MonoBehaviour
     void FinishReload()
     {
         reloading = false;
-        if (weapon != null)
+        if (weapon == null) { magAmmo = 0; return; }
+
+        if (weapon.ammoKind == AmmoKind.None || backpack == null)
         {
-            magAmmo = weapon.magSize;
-            Sfx.ReloadEnd(weapon);     // 换弹完成：插匣上膛 / 推栓
+            magAmmo = weapon.magSize;      // 不吃弹药的枪（RPG）/ 没背包 → 直接补满
         }
         else
         {
-            magAmmo = 0;
+            // 按缺口从背包扣备弹；备弹不足则**能补多少补多少**（不会白扣，扣多少补多少）
+            int need = Mathf.Max(0, weapon.magSize - magAmmo);
+            int got = need > 0 ? backpack.TakeAmmo(weapon.ammoKind, need) : 0;
+            magAmmo += got;
+            SaveCurrentSlotAmmo();         // 补好的弹匣立刻写回槽（切枪/丢弃前都会再存一次，这里是双保险）
         }
+
+        Sfx.ReloadEnd(weapon);             // 换弹完成：插匣上膛 / 推栓
     }
 
     /// 装备武器（从地上捡起时调用）：先收进背包（自动占空快捷槽并切换过去），满了进库存。
@@ -1104,11 +1125,15 @@ public class PlayerController : MonoBehaviour
     {
         if (backpack == null) return;
         SaveCurrentSlotAmmo();   // 先把当前槽弹匣写回（丢弃的可能不是当前槽，但保险起见统一保存）
+        // ⚠️ 必须在 `DropSlot` **之前**记下"是不是手上这把"：`DropSlot` 会把 `currentSlot` 清成 -1
+        bool wasCurrent = i == backpack.currentSlot;
         var w = backpack.DropSlot(i, out int ammo);
         if (w != null)
         {
             WeaponPickup.Create(w, FindDropPos(), ammo);   // 地上的枪保留真实弹匣余量（捡回来不会白满）
-            LoadMirrorFromSlot();   // 若丢掉的是手上的枪,这里会把镜像切到新的当前槽并刷新模型
+            // ⚠️ 只有丢掉的是**手上这把**才刷新镜像 —— `LoadMirrorFromSlot` 会取消换弹，
+            //    丢别的槽没必要打断（那是"换枪"语义，不该让玩家白等一次换弹）。
+            if (wasCurrent) LoadMirrorFromSlot();
         }
     }
 

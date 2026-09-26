@@ -19,6 +19,7 @@ MonoBehaviour:
   maxStack: 1
   stackId: 
   description: 
+  baseValue: 100
   weaponName: RPG-7
   damage: 0
   fireInterval: 2
@@ -33,6 +34,7 @@ MonoBehaviour:
   effectiveRange: 0
   beyondRangeDamage: 1
   magSize: 1
+  ammoKind: -1
   reloadTime: 3.5
   tracerColor: {r: 1, g: 0.65, b: 0.25, a: 1}
   gunLength: 0.9
@@ -53,3 +55,5 @@ MonoBehaviour:
   bulletPrefab: {fileID: 3055141843294462514, guid: fd6c3d1b7fb1bdb4d935f3e913beeb39, type: 3}
   iconKind: 0
   fireSound: {fileID: 8300000, guid: ce560ddae606b854fbcda4e9d96883b7, type: 3}
+  reloadStartSound: {fileID: 0}
+  reloadEndSound: {fileID: 0}

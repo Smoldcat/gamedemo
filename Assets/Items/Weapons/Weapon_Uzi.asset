@@ -19,6 +19,7 @@ MonoBehaviour:
   maxStack: 1
   stackId: 
   description: 
+  baseValue: 100
   weaponName: "\u4E4C\u5179 Uzi"
   damage: 12
   fireInterval: 0.07
@@ -33,6 +34,7 @@ MonoBehaviour:
   effectiveRange: 0
   beyondRangeDamage: 1
   magSize: 34
+  ammoKind: 3
   reloadTime: 1.6
   tracerColor: {r: 0.5, g: 1, b: 1, a: 1}
   gunLength: 0.55
@@ -53,3 +55,5 @@ MonoBehaviour:
   bulletPrefab: {fileID: 0}
   iconKind: 0
   fireSound: {fileID: 8300000, guid: 4a3a4f23789f28b428900aaf89c9abbb, type: 3}
+  reloadStartSound: {fileID: 0}
+  reloadEndSound: {fileID: 0}
