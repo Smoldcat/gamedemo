@@ -20,6 +20,16 @@ public class ItemStack
     [Tooltip("数量。不可堆叠的物品恒为 1")]
     public int count = 1;
 
+    /// <summary>武器的弹匣余量；**-1 = 满弹 / 未知**（新枪、敌人掉落、箱子 / 商店来的枪都用它）。
+    /// 只在 `def` 是 `WeaponData` 时有意义，非武器一律忽略。
+    ///
+    /// 为什么存在"格子"里：弹匣是**这杆枪自己的运行时状态**，必须跟着枪在「快捷槽 ↔ 库存」之间流转 ——
+    /// 否则"打掉半匣 → 换枪（旧枪自动下放进库存）→ 再装回来"就是免费满弹（用户 2026-09-26 报的口子）。
+    /// ⚠️ **绝不能**存进 `WeaponData`（ScriptableObject 资产）：同型号的枪共享同一份资产，会互相串味；
+    ///    快捷槽里的枪有时正是直接引用资产本体，写进去会污染全局。</summary>
+    [Tooltip("武器的弹匣余量（-1 = 满弹/未知；非武器忽略）")]
+    public int magAmmo = -1;
+
     public ItemStack() { }
 
     public ItemStack(ItemData def, int count)
@@ -69,5 +79,6 @@ public class ItemStack
     {
         def = null;
         count = 0;
+        magAmmo = -1;
     }
 }

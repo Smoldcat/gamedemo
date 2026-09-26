@@ -68,6 +68,11 @@ public class ChestPanel : MonoBehaviour
         if (_inst == this) _inst = null;
     }
 
+    /// <summary>静态状态清理（由 <see cref="StaticReset"/> 在重开一局时调用）。
+    /// ⚠️ 以前是漏登记的：靠 `OnDestroy` 兜底，但异常退出路径下会留下已销毁对象的死引用
+    /// （表现 = 重开一局后箱子面板打不开 / 打开的是上一局的壳）。</summary>
+    public static void ResetStatics() => _inst = null;
+
     void Update()
     {
         if (!_opened) return;

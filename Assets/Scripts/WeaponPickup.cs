@@ -16,6 +16,10 @@ public class WeaponPickup : MonoBehaviour, IInteractable
     /// <summary>这把拾取物对应的武器数据</summary>
     public WeaponData data;
 
+    /// <summary>它的弹匣余量（**-1 = 满弹**）。丢在地上的枪会带着真实余量 → 捡回来不会白送满弹。
+    /// （新枪 / 敌人掉落 / 开局铺的枪都是 -1。）</summary>
+    public int magAmmo = -1;
+
     /// <summary>拾取距离（米）。与"交互焦点"用同一个值。</summary>
     public const float PickupRange = 1.6f;
 
@@ -33,8 +37,9 @@ public class WeaponPickup : MonoBehaviour, IInteractable
         InteractFocus.Unregister(this);   // 注册配注销（场景重载后焦点表里不会留死引用）
     }
 
-    /// <summary>在指定位置创建一个武器拾取物（优先用武器资源里配的模型，否则代码生成默认外观）</summary>
-    public static WeaponPickup Create(WeaponData w, Vector3 pos)
+    /// <summary>在指定位置创建一个武器拾取物（优先用武器资源里配的模型，否则代码生成默认外观）。
+    /// `magAmmo` 负值 = 满弹（新枪）；主动丢在地上的枪会传真实余量。</summary>
+    public static WeaponPickup Create(WeaponData w, Vector3 pos, int magAmmo = -1)
     {
         var root = new GameObject("WeaponPickup_" + w.weaponName);
         root.transform.position = pos;
@@ -68,6 +73,7 @@ public class WeaponPickup : MonoBehaviour, IInteractable
 
         var p = root.AddComponent<WeaponPickup>();
         p.data = w;
+        p.magAmmo = magAmmo;
         p._baseY = pos.y;
         p._t = Random.Range(0f, 6f);
 
@@ -107,7 +113,14 @@ public class WeaponPickup : MonoBehaviour, IInteractable
         }
 
         bool intoSlot = bp != null && bp.HasEmptySlot();
-        player.Equip(data);
+        // ⚠️ 检查返回值：万一真收不下（`CanAddWeapon` 漏判 / 没挂背包），**枪必须留在原地** ——
+        //    下面那句 `Destroy(gameObject)` 是无条件的，不检查就会把枪销毁掉（凭空消失）。
+        // `magAmmo` 原样带过去：地上的枪保留自己的弹匣余量（-1 = 满弹）。
+        if (!player.Equip(data, magAmmo))
+        {
+            HUD.AnnounceBackpackFull();
+            return;
+        }
         HUD.Announce(intoSlot ? "拾取  " + data.DisplayName : data.DisplayName + " 收入背包",
                      1.0f, 28, data.pickupColor);
         Sfx.Pickup();

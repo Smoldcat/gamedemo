@@ -375,9 +375,9 @@ public class PlayerController : MonoBehaviour
     {
         if (backpack == null || i < 0 || i >= backpack.slots.Length) return;
         if (backpack.slots[i].weapon == null) return;   // 空槽不切
-        // 先把手上这把的弹匣存回去
-        if (backpack.currentSlot >= 0 && backpack.currentSlot < backpack.slots.Length)
-            backpack.slots[backpack.currentSlot].magAmmo = magAmmo;
+        // 先把手上这把的弹匣存回去 —— **唯一实现**在 `SaveCurrentSlotAmmo()`，别在这里再抄一遍
+        // （抄成两份的后果就是"以后改保存规则只改一处"，与 2026-09-26 那个复制 bug 同源）
+        SaveCurrentSlotAmmo();
         backpack.currentSlot = i;
         LoadMirrorFromSlot();
     }
@@ -1071,27 +1071,30 @@ public class PlayerController : MonoBehaviour
 
     /// 装备武器（从地上捡起时调用）：先收进背包（自动占空快捷槽并切换过去），满了进库存。
     /// 返回 false = 快捷槽和库存都放不下（背包已满，调用方应保留地上的枪并给提示）。
-    public bool Equip(WeaponData w)
+    public bool Equip(WeaponData w, int magAmmo = -1)
     {
         if (backpack == null) return false;
         SaveCurrentSlotAmmo();   // 先把当前槽弹匣写回，避免换槽后原槽免费回满弹
-        bool ok = backpack.AddWeapon(w);
+        bool ok = backpack.AddWeapon(w, magAmmo);   // magAmmo 负值 = 满弹（捡地上用过的枪时传它的余量）
         // 若因此换到了新槽，刷新手上的镜像
         LoadMirrorFromSlot();
         return ok;
     }
 
-    /// 从背包库存装备一把武器（背包面板点击时调用）：优先空槽，全满则替换当前槽，原武器下放进库存。
+    /// <summary>从背包库存装备一把武器（背包面板点击时调用）：优先装进空槽；没有空槽则替换当前槽，
+    /// **被换下的武器下放进库存**（背包内部已处理）。
+    /// ⚠️ `displaced` 只在"库存真的放不下"时才非空 —— 这里是**唯一的兜底出口**，不是常规路径：
+    ///    既下放又掉落 = 凭空多出一把枪（用户 2026-09-26 报的 bug）。
     /// `stackId` = 物品**身份证**（`ItemStack.def.StackId`）—— **不能用武器名/对象引用**：
-    /// 敌人掉落的枪是 `Clone()` 出来的副本，按名字或按引用匹配都会出现"看起来一样却对不上"的静默 bug。
+    /// 敌人掉落的枪是 `Clone()` 出来的副本，按名字或按引用匹配都会出现"看起来一样却对不上"的静默 bug。</summary>
     public void EquipFromInventory(string stackId)
     {
         if (backpack == null) return;
         SaveCurrentSlotAmmo();   // 先把当前槽弹匣写回
-        if (backpack.EquipFromInventory(stackId, out WeaponData displaced))
+        if (backpack.EquipFromInventory(stackId, out WeaponData displaced, out int displacedAmmo))
         {
             if (displaced != null)
-                WeaponPickup.Create(displaced, FindDropPos());   // 被挤下的武器掉到地上
+                WeaponPickup.Create(displaced, FindDropPos(), displacedAmmo);   // 兜底：库存放不下才掉地上（连弹匣）
             LoadMirrorFromSlot();
         }
     }
@@ -1101,10 +1104,10 @@ public class PlayerController : MonoBehaviour
     {
         if (backpack == null) return;
         SaveCurrentSlotAmmo();   // 先把当前槽弹匣写回（丢弃的可能不是当前槽，但保险起见统一保存）
-        var w = backpack.DropSlot(i);
+        var w = backpack.DropSlot(i, out int ammo);
         if (w != null)
         {
-            WeaponPickup.Create(w, FindDropPos());
+            WeaponPickup.Create(w, FindDropPos(), ammo);   // 地上的枪保留真实弹匣余量（捡回来不会白满）
             LoadMirrorFromSlot();   // 若丢掉的是手上的枪,这里会把镜像切到新的当前槽并刷新模型
         }
     }

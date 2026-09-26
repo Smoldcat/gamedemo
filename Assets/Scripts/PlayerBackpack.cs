@@ -182,9 +182,19 @@ public class PlayerBackpack : MonoBehaviour
         return inventory.Count < Capacity;
     }
 
+    /// <summary>`ItemStack.magAmmo` 与各处形参 `magAmmo` 的**唯一解析**：**负值 = 满弹**（新枪的统一约定），
+    /// 其余夹到 `[0, magSize]`（防手改 YAML 塞脏数据把弹匣撑爆或变负）。
+    /// ⚠️ 别在别处再写一遍"-1 算满弹"这个判断 —— 散开了迟早有一处忘改。</summary>
+    public static int AmmoOf(WeaponData w, int magAmmo)
+    {
+        int size = w != null ? Mathf.Max(0, w.magSize) : 0;
+        return magAmmo < 0 ? size : Mathf.Clamp(magAmmo, 0, size);
+    }
+
     /// <summary>捡到一把武器：**优先自动装进空快捷槽并成为当前武器**；快捷槽满了则进库存。
+    /// `magAmmo` 负值 = 满弹（新枪 / 敌人掉落 / 开局铺的枪都走它）；捡地上用过的枪时传它的真实余量。
     /// <returns>true = 已收下；false = 快捷槽与库存都放不下（背包已满，枪留在原地）</returns></summary>
-    public bool AddWeapon(WeaponData w)
+    public bool AddWeapon(WeaponData w, int magAmmo = -1)
     {
         if (w == null) return false;
         EnsureSlots();
@@ -194,25 +204,48 @@ public class PlayerBackpack : MonoBehaviour
             if (slots[i].weapon == null)
             {
                 slots[i].weapon = w;
-                slots[i].magAmmo = w.magSize;
+                slots[i].magAmmo = AmmoOf(w, magAmmo);
                 currentSlot = i;
                 return true;
             }
         }
 
-        return AddItems(w, 1) > 0;   // 快捷槽满 → 进库存（武器不可堆叠 → 新占一格）
+        return AddWeaponItem(w, magAmmo) > 0;   // 快捷槽满 → 进库存（武器不可堆叠 → 新占一格）
     }
 
-    /// <summary>从库存「装备」一把武器：装到空槽，全满则替换当前槽，原武器下放进库存。
+    /// <summary>把一把武器放进**库存**（连弹匣余量一起写进那一格）—— 库存侧的**唯一入口**，
+    /// 替代直接调 `AddItems`。返回收下的数量（0 或 1）；`magAmmo` 负值 = 满弹。</summary>
+    public int AddWeaponItem(WeaponData w, int magAmmo = -1)
+    {
+        if (w == null) return 0;
+        int put = AddItems(w, 1);
+        if (put <= 0) return 0;
+
+        // 刚加进去的就是末尾那一格（武器不可堆叠 → 每格 1 把，且存的是同一个引用）→ 把弹匣写上去
+        for (int i = inventory.Count - 1; i >= 0; i--)
+        {
+            var s = inventory[i];
+            if (s == null || s.def != w) continue;
+            s.magAmmo = AmmoOf(w, magAmmo);
+            break;
+        }
+        return put;
+    }
+
+    /// <summary>从库存「装备」一把武器：装到空槽；没有空槽则替换当前槽，**被换下的武器下放进库存**。
+    /// `displaced` = **只有库存真的放不下时**才非空（调用方负责把它掉到地上）—— 正常情况下为 null，
+    /// 因为背包已经把它下放进库存了。⚠️ 调用方**不能**无条件把 `displaced` 掉落（会凭空多一把枪）。
     /// `stackId` = 物品身份证（由 `ItemStack.def.StackId` 得到；**不能**用对象引用 —— 敌人掉落的枪是副本）。</summary>
-    public bool EquipFromInventory(string stackId, out WeaponData displaced)
+    public bool EquipFromInventory(string stackId, out WeaponData displaced, out int displacedAmmo)
     {
         displaced = null;
+        displacedAmmo = -1;
         EnsureSlots();
         if (string.IsNullOrEmpty(stackId)) return false;
 
         int idx = -1;
         WeaponData weapon = null;
+        int weaponAmmo = -1;                 // 库存那一格记的弹匣余量（-1 = 满弹）
         for (int i = 0; i < inventory.Count; i++)
         {
             var s = inventory[i];
@@ -220,44 +253,48 @@ public class PlayerBackpack : MonoBehaviour
             var w = s.def as WeaponData;
             if (w == null) continue;                 // 血包 / 子弹不是武器 → 不能装到快捷槽
             if (w.StackId != stackId) continue;
-            idx = i; weapon = w; break;
+            idx = i; weapon = w; weaponAmmo = s.magAmmo; break;
         }
         if (idx < 0 || weapon == null) return false;
+
+        // ⚠️ **顺序很重要**：先「从库存取走这把武器」（腾出格子），再决定「被替换下来的那把放哪」——
+        //    反过来的话，库存正好满（20/20）时被替换的枪会放不下、**凭空消失**（静默丢装备）。
+        var item = inventory[idx];
+        item.count -= 1;
+        if (item.count <= 0) inventory.RemoveAt(idx);
 
         int target = -1;
         for (int i = 0; i < slots.Length; i++)
             if (slots[i].weapon == null) { target = i; break; }
 
-        if (target >= 0)
+        if (target < 0)
         {
-            slots[target].weapon = weapon;
-            slots[target].magAmmo = weapon.magSize;
-        }
-        else
-        {
+            // 没有空槽 → 替换当前槽。被换下的枪**下放进库存**（带着它自己的弹匣，刚腾出的那格必然收得下）；
+            // 只有真收不下时才用 `displaced` 交给调用方掉到地上。
+            // ⚠️ 绝不能"既下放又掉落" —— 那是凭空多出一把枪（用户 2026-09-26 报的 bug）。
             target = currentSlot >= 0 ? currentSlot : 0;
-            displaced = slots[target].weapon;
-            slots[target].weapon = weapon;
-            slots[target].magAmmo = weapon.magSize;
-            if (displaced != null) AddItems(displaced, 1);   // 原武器下放进库存（走通用流程）
+            var old = slots[target].weapon;
+            int oldAmmo = slots[target].magAmmo;
+            if (old != null && AddWeaponItem(old, oldAmmo) <= 0) { displaced = old; displacedAmmo = oldAmmo; }
         }
 
-        var item = inventory[idx];
-        item.count -= 1;
-        if (item.count <= 0) inventory.RemoveAt(idx);
+        slots[target].weapon = weapon;
+        slots[target].magAmmo = AmmoOf(weapon, weaponAmmo);   // ← 用库存里记的余量，不再无条件给满
         currentSlot = target;
         return true;
     }
 
     /// <summary>从快捷槽丢弃一把武器（掉回地面后由调用方创建 WeaponPickup）。返回被丢弃的数据，空槽返回 null。</summary>
-    public WeaponData DropSlot(int i)
+    public WeaponData DropSlot(int i, out int magAmmo)
     {
+        magAmmo = -1;
         EnsureSlots();
         if (i < 0 || i >= slots.Length) return null;
         var w = slots[i].weapon;
         if (w == null) return null;
+        magAmmo = slots[i].magAmmo;
         slots[i].weapon = null;
-        slots[i].magAmmo = 0;
+        slots[i].magAmmo = -1;
         if (currentSlot == i) currentSlot = -1;   // 手上武器被丢掉 → 空手
         return w;
     }

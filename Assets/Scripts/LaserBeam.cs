@@ -52,8 +52,22 @@ public class LaserBeam : MonoBehaviour
 
     void OnEnable()
     {
+        // ⚠️ **只在"枪在玩家手上"时才工作**：同一份模型 prefab 也被用作地上的拾取物
+        //    （`WeaponData.pickupModelPrefab` 与 `heldModelPrefab` 常常是同一个）——
+        //    地上那把若也带激光，每把散落的枪都会射出一条**跟着准星扫动**的红线（还每帧多一次射线检测）。
+        //    判据 = 本组件是否挂在玩家的 `gunVisual` 子树下；不是就把整个组件停用（连 Update 都不跑）。
+        if (!IsHeldByPlayer()) { enabled = false; return; }
+
         // ⚠️ 初始化放在 OnEnable（不是 Awake）：这样"预挂配件 + 用 SetActive 开关显示"的做法也能正常工作
         Build();
+    }
+
+    /// <summary>本配件是否挂在"玩家手里的枪"上（地上的拾取物不满足）。
+    /// 拾取时会销毁地面实例、再由 `UpdateGunVisual` 重新 Instantiate 手上的模型 → 新实例会重新走 OnEnable。</summary>
+    bool IsHeldByPlayer()
+    {
+        var pc = PlayerController.Instance;
+        return pc != null && pc.gunVisual != null && transform.IsChildOf(pc.gunVisual);
     }
 
     void OnDisable()

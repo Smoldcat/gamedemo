@@ -691,7 +691,7 @@ public class BackpackPanel : MonoBehaviour
             }
             else if (cnt != null) cnt.gameObject.SetActive(false);
 
-            // 点击 = 装备到空槽（满则替换当前槽，旧枪掉地上）。
+            // 点击 = 装备到空槽；没有空槽则替换当前槽，被换下的枪**下放进库存**（只有库存真放不下才掉地上）。
             // ⚠️ **只有武器**才挂这个事件：血包 / 子弹点它不该进快捷武器槽（血包靠 Q 键消耗）
             var btn = cell.GetComponent<Button>();
             var asWeapon = item.def as WeaponData;

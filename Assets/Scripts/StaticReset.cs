@@ -55,6 +55,7 @@ public static class StaticReset
         UIState.ResetStatics();        // 界面总开关的计数（漏了 → 重开一局可能一进去就是暂停）
         InteractFocus.ResetStatics();  // 交互焦点注册表（场景重载后里面会留死引用）
         Chest.ResetStatics();          // 箱子注册表
+        ChestPanel.ResetStatics();     // 箱子面板单例（2026-09-26 补登记：以前只靠 OnDestroy 兜底）
         ItemVisuals.ResetStatics();    // 物品的占位图标（自己创建的运行时 Sprite）
         Shop.ResetStatics();           // 商店注册表（2026-09-25）
         ShopPanel.ResetStatics();      // 商店面板：单例 + Tab 帧号（漏了 → 重开一局可能残留"Tab 被占"）
