@@ -41,7 +41,7 @@ public class AmmoPickup : MonoBehaviour, IInteractable
     public const float PickupRange = 1.6f;
 
     SpriteRenderer _sr;
-    Transform _shadow;
+    SpriteRenderer _shadowSr;
     bool _built;
     float _t;
 
@@ -80,13 +80,20 @@ public class AmmoPickup : MonoBehaviour, IInteractable
         float k = IconSize / baseSize;
         iconGo.transform.localScale = new Vector3(k, k, 1f);
 
-        // ---- 阴影：压扁的暗片贴地（独立子物体，不跟着图标翻转）----
-        var shadowGo = Effects.CreateMeshObject(PrimitiveType.Quad, "Shadow", transform,
-                                                Effects.SharedAlpha(new Color(0f, 0f, 0f, 0.30f)));
+        // ---- 阴影：平躺的"径向渐变圆片"（边缘平滑 → **半影**效果）----
+        // ⚠️ 演进史：Quad（方块）→ 压扁 Sphere（硬边圆）→ 现在 **SpriteRenderer + 径向渐变贴图**：
+        //    只有贴图能做到"中心实、边缘渐隐"的半影，实心几何体（球/圆盘）永远只能是硬边（用户 2026-09-27 提出）。
+        //    好处：SpriteRenderer 自带 `Sprites/Default`（不必新建材质），贴图是程序生成 + 全局共享。
+        var shadowGo = new GameObject("Shadow");
+        shadowGo.transform.SetParent(transform, false);
+        _shadowSr = shadowGo.AddComponent<SpriteRenderer>();
+        _shadowSr.sprite = ItemVisuals.ShadowSprite();
+        _shadowSr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        _shadowSr.receiveShadows = false;
+        _shadowSr.sortingOrder = -1;                                        // 永远画在图标之下
         shadowGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // 平躺
-        shadowGo.transform.localPosition = new Vector3(0f, 0.012f, 0f);     // 略高于地面，避免与地面 z-fighting
-        shadowGo.transform.localScale = new Vector3(ShadowSize, ShadowSize, 1f);
-        _shadow = shadowGo.transform;
+        shadowGo.transform.localPosition = new Vector3(0f, 0.008f, 0f);     // 贴地（略抬，避免与地面 z-fighting）
+        SetShadowLook();                                                    // 尺寸 + 颜色（含透明度）
 
         PlaceIcon(0f);
         SetLayers(Layers.Pickup);   // 与 WeaponPickup / HealthPack 同一层（子弹与视线掩码都不含它）
@@ -108,14 +115,28 @@ public class AmmoPickup : MonoBehaviour, IInteractable
         if (_sr != null) _sr.transform.localPosition = new Vector3(0f, HoverHeight + bob, 0f);
     }
 
-    /// <summary>把弹药卡上的外观参数应用到本实例（只改尺寸 / 位置，**不重建物体** → 编辑模式下也能安全调用）。</summary>
+    /// <summary>阴影的**尺寸**与**颜色**（透明度来自弹药卡的 `worldShadowAlpha`）。
+    /// Sprite 的默认世界尺寸由 PPU 决定（程序生成的 64px 图 = 0.64m）→ 缩放到想要的大小；
+    /// 平躺（绕 X 转 90°）之后，localScale 的 x/y 仍然对应"平面内的两个方向"。
+    /// **唯一实现**：`BuildVisual` 与 `ApplyLook` 共用一份。</summary>
+    void SetShadowLook()
+    {
+        if (_shadowSr == null) return;
+        float baseSize = _shadowSr.sprite != null ? Mathf.Max(0.0001f, _shadowSr.sprite.bounds.size.x) : 1f;
+        float k = ShadowSize / baseSize;
+        _shadowSr.transform.localScale = new Vector3(k, k, 1f);
+        float a = data != null ? Mathf.Clamp01(data.worldShadowAlpha) : 0.30f;
+        _shadowSr.color = new Color(0f, 0f, 0f, a);
+    }
+
+    /// <summary>把弹药卡上的外观参数应用到本实例（只改尺寸 / 位置 / 颜色，**不重建物体** → 编辑模式下也能安全调用）。</summary>
     public void ApplyLook()
     {
         if (_sr == null) return;
         float baseSize = _sr.sprite != null ? Mathf.Max(0.0001f, _sr.sprite.bounds.size.x) : 1f;
         float k = IconSize / baseSize;
         _sr.transform.localScale = new Vector3(k, k, 1f);
-        if (_shadow != null) _shadow.localScale = new Vector3(ShadowSize, ShadowSize, 1f);
+        SetShadowLook();
         PlaceIcon(0f);
     }
 

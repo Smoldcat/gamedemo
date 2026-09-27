@@ -20,6 +20,7 @@ public static class ItemVisuals
 {
     static Sprite _genericIcon;   // 菱形占位（只建一次）
     static readonly Dictionary<AmmoKind, Sprite> _ammoIcons = new Dictionary<AmmoKind, Sprite>();   // 弹药图标（按口径缓存，最多 5 张）
+    static Sprite _shadowSprite;  // 地上的"投影"贴图（径向渐变圆，只建一次）
 
     /// <summary>这个物品该显示哪张图标。</summary>
     public static Sprite IconOf(ItemData def)
@@ -40,13 +41,39 @@ public static class ItemVisuals
         return def.pickupColor;
     }
 
-    /// <summary>静态状态清理（供 `StaticReset` 调用）：成对销毁自己建的那些图（占位图 + 弹药图标）。</summary>
+    /// <summary>静态状态清理（供 `StaticReset` 调用）：成对销毁自己建的那些图（占位图 + 弹药图标 + 投影图）。</summary>
     internal static void ResetStatics()
     {
         UIUtil.DestroySprite(_genericIcon);
         _genericIcon = null;
         foreach (var kv in _ammoIcons) UIUtil.DestroySprite(kv.Value);
         _ammoIcons.Clear();
+        UIUtil.DestroySprite(_shadowSprite);
+        _shadowSprite = null;
+    }
+
+    /// <summary>地上的**投影**贴图：一个**径向渐变圆**（白 alpha，中心实、边缘平滑渐隐 → 天然的"半影"效果）。
+    /// 颜色由调用方给（一般是黑色 + 可调透明度），所以这里只画形状。
+    /// ⚠️ 生命周期归 `ItemVisuals.ResetStatics`（与占位图 / 弹药图标一起销毁）。</summary>
+    public static Sprite ShadowSprite()
+    {
+        if (_shadowSprite != null) return _shadowSprite;
+
+        const int size = 64;
+        const float solid = 0.45f;   // 半径 45% 内是实心的，外面 55% 渐隐（这就是"半影"范围）
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        float c = (size - 1) * 0.5f;
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;   // 0 = 圆心，1 = 外缘
+            float a = 1f - Mathf.SmoothStep(solid, 1f, d);                     // 实心 → 平滑渐隐
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(a)));
+        }
+        tex.Apply();
+        _shadowSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        return _shadowSprite;
     }
 
     /// <summary>弹药图标（按口径缓存；白色 alpha 剪影，颜色由 `Image.color` 上色 —— 与武器图标同一套做法）。</summary>

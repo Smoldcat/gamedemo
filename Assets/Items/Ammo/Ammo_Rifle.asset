@@ -27,3 +27,4 @@ MonoBehaviour:
   worldIconSize: 0.3
   worldHoverHeight: 0.16
   worldShadowSize: 0.26
+  worldShadowAlpha: 0.3

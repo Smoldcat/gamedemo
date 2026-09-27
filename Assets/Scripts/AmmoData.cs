@@ -48,6 +48,10 @@ public class AmmoData : ItemData
     [Min(0f)] public float worldHoverHeight = 0.16f;
     [Tooltip("脚下阴影的直径（米）")]
     [Min(0f)] public float worldShadowSize = 0.26f;
+    [Tooltip("脚下阴影的**透明度**（0 = 完全看不见，1 = 纯黑）。\n" +
+             "想让影子更柔和就调低（0.18~0.25），想更有\"压在地上\"的存在感就调高。\n" +
+             "⚠️ 边缘的\"半影\"（模糊感）来自程序生成的径向渐变贴图，不受本值影响。")]
+    [Range(0f, 1f)] public float worldShadowAlpha = 0.30f;
 
     public override string DisplayName => string.IsNullOrEmpty(itemName) ? name : itemName;
 
@@ -58,6 +62,7 @@ public class AmmoData : ItemData
         if (worldIconSize < 0.01f) worldIconSize = 0.01f;
         if (worldHoverHeight < 0f) worldHoverHeight = 0f;
         if (worldShadowSize < 0f) worldShadowSize = 0f;
+        worldShadowAlpha = Mathf.Clamp01(worldShadowAlpha);
 
         // 编辑器里改这几项 → 场上的弹药包**立刻**跟着变（方便对着画面调大小 / 高度 / 阴影）
         AmmoPickup.RefreshLook(this);
