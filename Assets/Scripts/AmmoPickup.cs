@@ -133,6 +133,10 @@ public class AmmoPickup : MonoBehaviour, IInteractable
     public void ApplyLook()
     {
         if (_sr == null) return;
+        // ⚠️ 图标与颜色在这里**重新取一次**：改了弹药卡的口径色 / 描边色（等级描边）后，
+        //    `ItemVisuals.IconOf` 会返回新的合成图 —— 不重取的话场上的包还挂着旧图，改色看不见效果。
+        _sr.sprite = ItemVisuals.IconOf(data);
+        _sr.color = ItemVisuals.ColorOf(data);
         float baseSize = _sr.sprite != null ? Mathf.Max(0.0001f, _sr.sprite.bounds.size.x) : 1f;
         float k = IconSize / baseSize;
         _sr.transform.localScale = new Vector3(k, k, 1f);

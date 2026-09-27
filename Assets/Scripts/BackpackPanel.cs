@@ -582,7 +582,13 @@ public class BackpackPanel : MonoBehaviour
                 _slotIcon[i].gameObject.SetActive(true);
                 _slotName[i].text = w.weaponName;
                 _slotName[i].color = w.pickupColor;
-                _slotMag[i].text = "弹 " + (isCurrent ? _pc.magAmmo : bp.slots[i].magAmmo) + "/" + w.magSize;
+                // 弹匣行：`弹 30/30 Ⅱ` —— 等级徽标与 HUD 共用 `AmmoData.TierMark`（唯一实现）。
+                // ⚠️ 等级取**这一格自己的** `ammoId`（当前槽读镜像、其它槽读槽里的记录）——
+                //    否则切到别的槽时会显示成手上那把这级的等级。
+                var slotCard = isCurrent ? _pc.magAmmoId : bp.slots[i].ammoId;
+                string slotTier = slotCard != null ? slotCard.TierMark : "";
+                _slotMag[i].text = "弹 " + (isCurrent ? _pc.magAmmo : bp.slots[i].magAmmo) + "/" + w.magSize
+                                 + (slotTier.Length > 0 ? "  " + slotTier : "");
             }
             else
             {

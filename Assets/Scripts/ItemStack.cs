@@ -30,6 +30,17 @@ public class ItemStack
     [Tooltip("武器的弹匣余量（-1 = 满弹/未知；非武器忽略）")]
     public int magAmmo = -1;
 
+    /// <summary>弹匣里**装的是哪一张弹药卡**（= 这一匣子弹的等级 / 伤害倍率）—— 只在 `def` 是武器时有意义。
+    /// `null` = "还不知道 / 空弹匣"（新枪、敌人掉落、箱子商店来的枪、旧数据）→ 装填时按
+    /// 「该口径有货的最低等级」自动选（见 `PlayerController.ResolveAmmoFor`）。
+    ///
+    /// 为什么必须跟着枪走：用户 2026-09-27 定的分级方案里，**弹匣的等级是一种实例状态** ——
+    ///   · 开火伤害要按它乘倍率；
+    ///   · 按 T 换级时，"没打完的那一匣"要**退回它自己那张卡**（退错等级 = 凭空变出别的子弹）。
+    /// ⚠️ 和 `magAmmo` 一样**绝不能**存进 `WeaponData`（资产被同型号枪共享，会互相串味）。</summary>
+    [Tooltip("弹匣里装的弹药卡（null = 未知，装填时自动按该口径最低等级补；非武器忽略）")]
+    public AmmoData ammoId;
+
     public ItemStack() { }
 
     public ItemStack(ItemData def, int count)
@@ -80,5 +91,6 @@ public class ItemStack
         def = null;
         count = 0;
         magAmmo = -1;
+        ammoId = null;
     }
 }

@@ -146,6 +146,7 @@ public class HUD : MonoBehaviour
     bool _sHasWeapon, _sReloading;
     int _sMag = int.MinValue, _sMagSize = int.MinValue;
     int _sReserve = int.MinValue;   // 备弹（-1 = 无限：武器 `ammoKind == None`，如 RPG）
+    int _sTier = int.MinValue;      // 弹匣当前等级（徽标用；0 = 不分级 / 拿不到卡）
     string _sWeaponName;
     bool _sRunning = true;
     int _sKills = int.MinValue, _sWave = int.MinValue, _sAlive = int.MinValue, _sClearTicks = int.MinValue;
@@ -443,19 +444,33 @@ public class HUD : MonoBehaviour
             // ⚠️ 「槽N」与「血包×N」已于 2026-09-22 **移出**这行：底部快捷栏（1/2/3/Q）已经在表达这两项，
             //    同屏重复反而更难扫读。想恢复就把它们加回下面的字符串。
             // 备弹：按这杆枪的口径统计（`AmmoKind.None` = 不吃弹药 → 显示 ∞）
-            int reserve = hasWeapon && pc.weapon.ammoKind != AmmoKind.None && pc.backpack != null
-                        ? pc.backpack.CountAmmo(pc.weapon.ammoKind) : -1;   // -1 = 无限
+            // 备弹：**弹匣当前这一级**的库存（分级系统 2026-09-27 起 —— 用户明确"各等级不能加在一起显示"）。
+            // `AmmoKind.None` = 不吃弹药（RPG）→ ∞。
+            // ⚠️ 弹匣等级未知（`magAmmoId == null`，如刚捡的新枪 / 旧数据）→ 预览"该口径**有货的最低等级**"，
+            //    与换弹时 `ResolveAmmo` 的实际选择一致：玩家看到的数字就是下次装填会装的那一级。
+            var ammoCard = (hasWeapon && pc.weapon.ammoKind != AmmoKind.None && pc.backpack != null)
+                         ? (pc.magAmmoId != null ? pc.magAmmoId : pc.backpack.LowestOwnedAmmo(pc.weapon.ammoKind))
+                         : null;
+            int reserve = ammoCard != null ? pc.backpack.CountAmmo(ammoCard) : -1;   // -1 = 无限
+            int tier = ammoCard != null ? ammoCard.tier : 0;
+            string tierMark = ammoCard != null ? ammoCard.TierMark : "";
 
             if (hasWeapon != _sHasWeapon || pc.reloading != _sReloading || mag != _sMag || magSize != _sMagSize
-                || reserve != _sReserve
+                || reserve != _sReserve || tier != _sTier
                 || (hasWeapon && !string.Equals(pc.weapon.weaponName, _sWeaponName)))
             {
                 _sHasWeapon = hasWeapon; _sReloading = pc.reloading; _sMag = mag; _sMagSize = magSize;
-                _sReserve = reserve;
+                _sReserve = reserve; _sTier = tier;
                 _sWeaponName = hasWeapon ? pc.weapon.weaponName : null;
+                // 用户 2026-09-27 定的格式：`武器名  弹匣/当前等级备弹  等级徽标`（**不再显示弹匣容量**）
                 weaponText.text = !hasWeapon ? "空手  ——  到地上捡一把武器吧"
-                    : (pc.reloading ? $"{pc.weapon.weaponName}  换弹中..."
-                                    : $"{pc.weapon.weaponName}  {mag}/{magSize} " + (reserve < 0 ? "∞" : reserve.ToString()));
+                    // 换级与换弹的**表现**在这里分开（都是 `reloading`，靠 `switchingAmmo` 区分）：
+                    // 否则玩家按 T 会看到"换弹中…"，分不清自己在装弹还是在换等级。
+                    // ⚠️ 不需要额外的缓存字段：`reloading` 由 false→true 那一刻 `_switchTarget` 已定，
+                    //    而缓存判断里的 `pc.reloading != _sReloading` 正好在那帧触发重建。
+                    : (pc.reloading ? $"{pc.weapon.weaponName}  " + (pc.switchingAmmo ? "换弹药中..." : "换弹中...")
+                                    : $"{pc.weapon.weaponName}  {mag}/" + (reserve < 0 ? "∞" : reserve.ToString())
+                                      + (tierMark.Length > 0 ? "  " + tierMark : ""));
             }
             weaponText.color = hasWeapon ? pc.weapon.pickupColor : new Color(0.7f, 0.7f, 0.7f);
         }

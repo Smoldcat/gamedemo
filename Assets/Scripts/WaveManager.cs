@@ -211,6 +211,10 @@ public class WaveManager : MonoBehaviour
                 {
                     var ammo = def as AmmoData;
                     if (ammo == null) continue;
+                    // ⚠️ 开局**只铺一级弹**：二级弹是稀有货，只从军火箱 / 商店来（用户 2026-09-27 定）。
+                    //    少了这道过滤，从物品清单自动扫出来的二级弹会铺得满地都是（"稀有"就没了）。
+                    //    ⚠️ 判据是 `!= 1` 而不是 `> 1`：`tier == 0`（不分级 / 特殊弹）也不该开局铺。
+                    if (ammo.tier != 1) continue;
                     kinds++;
                     for (int i = 0; i < initialAmmoPacksPerType; i++)
                         AmmoPickup.Create(ammo, SpawnPosition.FindOpenSpot(4f, SpawnPosition.RangeMedkit, spawned));

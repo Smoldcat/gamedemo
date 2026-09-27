@@ -45,6 +45,10 @@ public class PlayerController : MonoBehaviour
     [Tooltip("当前快捷槽的弹匣余弹（**运行时镜像**：切槽时与背包互写）。\n" +
              "⚠️ 在编辑器里改这里没有意义 —— 一进游戏就会被覆盖")]
     public int magAmmo;
+    [Tooltip("弹匣里装的是**哪一张弹药卡**（= 这一匣子弹的等级；**运行时镜像**，与 `magAmmo` 同生共死）。\n" +
+             "null = 未知 → 装填时按「该口径**有货的最低等级**」自动选。\n" +
+             "⚠️ 开火伤害倍率、按 T 换级时旧弹退给谁、HUD 显示哪一级的备弹 —— 全读它")]
+    public AmmoData magAmmoId;
 
     [Header("武器背包")]
     [Tooltip("3 快捷槽 + 库存 + 血包的背包。挂到玩家身上或由本组件自动创建")]
@@ -52,6 +56,15 @@ public class PlayerController : MonoBehaviour
 
     [HideInInspector] public bool running = true;
     [HideInInspector] public bool reloading;
+    /// <summary>「按 T 换级」的目标卡 —— **非 null = 本次换弹是换级**（完成时要"退旧弹 + 装新弹"）。
+    /// 为什么要有它：换级复用换弹那套计时与 `reloading` 状态（用户定："更换需要换弹"），
+    /// 完成时靠它区分该走哪条分支；⚠️ 切枪 / 丢弃会走 `LoadMirrorFromSlot`，那里必须清掉它
+    /// （否则"换到一半切了枪"会把旧弹退掉、却不再装新弹）。</summary>
+    AmmoData _switchTarget;
+
+    /// <summary>本次换弹是不是"按 T 换级"（只读）。HUD / 准星用它把文案从"换弹中…"改成"换弹药中…"，
+    /// 免得玩家分不清"我在装弹"还是"我在换等级"（2026-09-27 独立审计建议）。</summary>
+    public bool switchingAmmo => _switchTarget != null;
 
     [Header("后坐推出（平滑过渡）")]
     [Tooltip("后坐推力的过渡速度（米/秒）。每发后坐不再瞬移到位，而是以这个速度把准星平滑推过去：\n大后坐（如 0.5m）看得见过程，小后坐（0.05m）近似瞬时。设得越小越'拖沓'、越像连续漂移")]
@@ -340,6 +353,7 @@ public class PlayerController : MonoBehaviour
         // Player.prefab 里存着 reloading=1 之类的脏值，若走「空手 / 空槽」早退分支就不复位，
         // 首帧会处于「换弹中」（虽然下一帧会自愈，但属于侥幸，见交接文档 §5.2）。
         reloading = false;
+        _switchTarget = null;   // 切枪 / 丢弃 → 取消"按 T 换级"（否则退弹会执行、却没有新弹可装）
         _nextFireTime = 0f;   // 切枪后立刻能开火，不继承上一把的射速冷却
         _reloadUntil = 0f;
         // 切枪：清掉回正标记与本次射击周期的推动量（准星本身不动 —— 它已是唯一真相，没有"偏移"要复位）
@@ -359,6 +373,30 @@ public class PlayerController : MonoBehaviour
         var prevWeapon = weapon;
         weapon = s != null ? s.weapon : null;
         magAmmo = s != null ? s.magAmmo : 0;
+        magAmmoId = s != null ? s.ammoId : null;   // 弹匣等级与余弹**同源同生**（漏了它 = 换枪后等级漂移）
+
+        // ⚠️ **"等级未知"必须在这里就落实成具体一张卡**，不能留到开火时才猜 ——
+        //    否则同一个弹匣会同时存在三种说法（2026-09-27 独立审计查出）：
+        //      · HUD 按 `LowestOwnedAmmo` **预览**成二级 → 显示 `30/30 Ⅱ`
+        //      · `Fire` 因为 null → 倍率 1.0 → 打出去的是一级的伤害
+        //      · 按 T 以为"已经是二级" → 提示"没有其他等级"
+        //    触发路径很常见：捡地上的新枪 / 敌人掉的枪（`magAmmo = -1` 满弹、`ammoId = null`），
+        //    而背包里当时只有二级弹。
+        //    落实后**立即写回槽**，保证 镜像 / 槽 / HUD / 伤害 / T 永远读同一张卡。
+        //    （`StartReload` 里也有一份同样的落实 —— 两处都走 `ResolveAmmo` 这个唯一出口，双保险。）
+        if (weapon != null && weapon.ammoKind != AmmoKind.None && magAmmoId == null)
+        {
+            var pick = ResolveAmmo(weapon, null);
+            if (pick != null)
+            {
+                magAmmoId = pick;
+                if (backpack != null && backpack.currentSlot >= 0 && backpack.currentSlot < backpack.slots.Length)
+                {
+                    backpack.slots[backpack.currentSlot].ammoId = pick;
+                    backpack.slots[backpack.currentSlot].magAmmo = magAmmo;
+                }
+            }
+        }
 
         // 换枪（或变成空手）→ 瞄准过渡进度归零：**换枪 = 重新举枪**。
         // 于是"按住右键换枪"不会白嫖满瞄准精度（新枪要从腰射散布重新过渡一遍），也避免了
@@ -525,6 +563,10 @@ public class PlayerController : MonoBehaviour
         // ---- 换弹 ----
         if (Input.GetKeyDown(KeyCode.R) && weapon != null && !reloading && magAmmo < weapon.magSize)
             StartReload();
+        // ---- T：切换弹药等级（同口径、有货、按等级升序循环；没得切会提示）----
+        // 与 R 互斥（同一个 `reloading` 挡）；两者的"完成"都走 `FinishReload`（内部分支）。
+        if (Input.GetKeyDown(KeyCode.T) && weapon != null && !reloading)
+            StartSwitchAmmo();
         if (reloading && Time.time >= _reloadUntil) FinishReload();
 
         // ---- 交互（**单一交互焦点**）：地上的武器 / 血包 / 箱子中"离玩家最近的那个"显示气泡并响应按键 ----
@@ -913,11 +955,19 @@ public class PlayerController : MonoBehaviour
             if (toTarget.sqrMagnitude > 0.0001f) baseDir = toTarget.normalized;
         }
 
+        // 弹药等级的伤害倍率（一级 1.0 / 二级 1.1）—— 整发有效，在 `Bullet` 里与爆头倍率一起相乘结算。
+        // ⚠️ 读的是**弹匣里那一张卡**（`magAmmoId`），不是"背包里最好的那一级"：
+        //    玩家在 HUD 上看到的等级、这一发打出的伤害、打完退回的弹，必须是同一张卡。
+        // ⚠️ **口径对得上才认**（防脏数据）：`magAmmoId` 是 public、Inspector 可以手改；将来若再出现一次等级漂移，
+        //    症状会是"手枪吃着步枪弹的倍率"这种最难查的静默失衡 → 不合法一律按 1.0。
+        bool ammoOk = magAmmoId != null && magAmmoId.ammoKind == weapon.ammoKind;
+        float ammoMult = ammoOk ? Mathf.Max(0f, magAmmoId.damageMultiplier) : 1f;
+
         for (int i = 0; i < weapon.pellets; i++)
         {
             float angle = Random.Range(-CurrentSpread, CurrentSpread);
             Vector3 dir = Quaternion.AngleAxis(angle, Vector3.up) * baseDir;
-            Bullet.Spawn(muzzle, dir, weapon, Health.Team.Player, headshotTarget, headshotMult);
+            Bullet.Spawn(muzzle, dir, weapon, Health.Team.Player, headshotTarget, headshotMult, ammoMult);
         }
 
         Effects.MuzzleFlash(muzzle, transform.forward);
@@ -1046,18 +1096,26 @@ public class PlayerController : MonoBehaviour
     void StartReload()
     {
         if (weapon == null || reloading) return;
-        // ⚠️ 不吃弹药的枪（`AmmoKind.None`，如 RPG）永远能换；其余枪**一颗备弹都没有就拒绝换弹**并提示 ——
+        // ⚠️ 不吃弹药的枪（`AmmoKind.None`，如 RPG）永远能换；其余枪**当前这一级一颗备弹都没有就拒绝换弹**并提示 ——
         //    否则会出现"吭哧换完，弹匣还是空的"，玩家会以为卡了。
-        if (weapon.ammoKind != AmmoKind.None && backpack != null && backpack.CountAmmo(weapon.ammoKind) <= 0)
+        // ⚠️ 分级系统（2026-09-27）起这里只看**弹匣当前等级**那张卡的库存，不再用按口径的总和：
+        //    一级打完时不会自动拿二级顶上（想换级请按 T —— 那是一次完整的换弹）。
+        if (weapon.ammoKind != AmmoKind.None && backpack != null)
         {
-            // ⚠️ **提示必须节流**：打空弹匣后按住左键会**每帧**重试换弹（见 `HandleFire`），
-            //    不节流的话中央公告会被每帧刷新 → 永远不消失（且盖住波次 / 拾取公告、每帧产生新字符串）。
-            if (Time.time >= _nextNoAmmoWarnTime)
+            var cur = ResolveAmmo(weapon, magAmmoId);
+            if (cur != null) magAmmoId = cur;     // "未知等级"顺手落实成具体那张（HUD / 退弹都读它）
+            if (cur == null || backpack.CountAmmo(cur) <= 0)
             {
-                _nextNoAmmoWarnTime = Time.time + 0.8f;
-                HUD.Announce("没有" + AmmoData.DisplayOf(weapon.ammoKind) + "了", 1.0f, 26, new Color(1f, 0.62f, 0.42f));
+                // ⚠️ **提示必须节流**：打空弹匣后按住左键会**每帧**重试换弹（见 `HandleFire`），
+                //    不节流的话中央公告会被每帧刷新 → 永远不消失（且盖住波次 / 拾取公告、每帧产生新字符串）。
+                if (Time.time >= _nextNoAmmoWarnTime)
+                {
+                    _nextNoAmmoWarnTime = Time.time + 0.8f;
+                    string what = cur != null ? cur.DisplayName : AmmoData.DisplayOf(weapon.ammoKind);
+                    HUD.Announce("没有" + what + "了", 1.0f, 26, new Color(1f, 0.62f, 0.42f));
+                }
+                return;
             }
-            return;
         }
         reloading = true;
         _reloadUntil = Time.time + weapon.reloadTime;
@@ -1072,7 +1130,17 @@ public class PlayerController : MonoBehaviour
     void FinishReload()
     {
         reloading = false;
-        if (weapon == null) { magAmmo = 0; return; }
+
+        // 「按 T 换级」走独立分支：**退旧弹 + 装新弹**在这里一次做完（原子）
+        if (_switchTarget != null)
+        {
+            var target = _switchTarget;
+            _switchTarget = null;
+            FinishSwitchAmmo(weapon, target);
+            return;
+        }
+
+        if (weapon == null) { magAmmo = 0; magAmmoId = null; return; }
 
         if (weapon.ammoKind == AmmoKind.None || backpack == null)
         {
@@ -1080,23 +1148,125 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            // 按缺口从背包扣备弹；备弹不足则**能补多少补多少**（不会白扣，扣多少补多少）
+            // 按缺口从**弹匣当前等级**那张卡扣备弹；不足则**能补多少补多少**（不会白扣，扣多少补多少）。
+            // ⚠️ 只扣当前等级（用户 2026-09-27 定）：一级打完不会自动拿二级补，换级得按 T。
+            var cur = ResolveAmmo(weapon, magAmmoId);
             int need = Mathf.Max(0, weapon.magSize - magAmmo);
-            int got = need > 0 ? backpack.TakeAmmo(weapon.ammoKind, need) : 0;
+            int got = (need > 0 && cur != null) ? backpack.TakeAmmo(cur, need) : 0;
             magAmmo += got;
+            magAmmoId = cur;               // 记下这一匣是哪一级（伤害倍率 / T 换级退弹 / HUD 都读它）
             SaveCurrentSlotAmmo();         // 补好的弹匣立刻写回槽（切枪/丢弃前都会再存一次，这里是双保险）
         }
 
         Sfx.ReloadEnd(weapon);             // 换弹完成：插匣上膛 / 推栓
     }
 
+    /// <summary>解析"这一匣该算哪张弹药卡"：`id` 有效（口径对得上）就用它；
+    /// 否则（null / 脏数据）→ 取该口径**背包里有货的最低等级**。
+    /// ⚠️ 这是"等级未知"的**唯一出口** —— HUD / 伤害倍率 / 换弹扣弹 / 换级退弹都先过它，
+    ///    免得五个地方各写一遍"空的时候算哪一级"（那必然有一处会忘）。
+    /// 返回 null = 这个口径确实什么都没有；`None` 口径（RPG）永远返回 null。</summary>
+    AmmoData ResolveAmmo(WeaponData w, AmmoData id)
+    {
+        if (w == null || w.ammoKind == AmmoKind.None) return null;
+        if (id != null && id.ammoKind == w.ammoKind) return id;   // 认它（口径必须对得上 —— 防脏数据串口径）
+        return backpack != null ? backpack.LowestOwnedAmmo(w.ammoKind) : null;
+    }
+
+    /// <summary>按 T：切到"下一级"（同口径、**有货**、等级升序；到顶绕回有货的最低等级）。
+    ///
+    /// **切换 = 一次换弹**（用户 2026-09-27 定）：这里只做**预检 + 记下目标卡**，
+    /// 真正的"退旧弹 / 装新弹"在 `FinishSwitchAmmo` 里完成时**一次性**执行（原子）——
+    /// 中途被打断（切枪 / 丢弃会走 `LoadMirrorFromSlot` 清掉 `_switchTarget`）就等于什么都没发生，
+    /// 绝不会出现"旧弹退了、新弹没装上"这种半截状态。
+    /// 预检走 `CanSwapMag`：判定基准是"**取走新弹之后**"的背包状态（用户定的语义）。</summary>
+    void StartSwitchAmmo()
+    {
+        if (weapon == null || reloading || backpack == null) return;
+        if (weapon.ammoKind == AmmoKind.None) return;      // RPG 那类不吃弹药 → 按 T 无效
+
+        var cur = ResolveAmmo(weapon, magAmmoId);
+        var next = backpack.NextAmmo(weapon.ammoKind, cur);
+        if (next == null)
+        {
+            WarnAmmoOnce("没有其他等级的" + AmmoData.DisplayOf(weapon.ammoKind) + "了", new Color(0.9f, 0.85f, 0.5f));
+            return;
+        }
+
+        int willLoad;
+        if (!backpack.CanSwapMag(weapon, next, magAmmo, cur, out willLoad))
+        {
+            WarnAmmoOnce("背包放不下退弹，先腾个格子", new Color(1f, 0.62f, 0.42f));
+            return;
+        }
+
+        _switchTarget = next;
+        reloading = true;
+        _reloadUntil = Time.time + weapon.reloadTime;   // 复用换弹时长（用户定：换级就是要换弹）
+        _markValid = false;
+        _recovering = false;
+        _undisturbedSince = Time.time;
+        _mouseDeviation = Vector2.zero;
+        _latAccum = 0f;
+        Sfx.ReloadStart(weapon);
+    }
+
+    /// <summary>换级完成（**先退弹、再装填**，只在这里做 —— 原子）。
+    /// 退弹退给 `cur`（弹匣**原来那一级**）；装填从 `target` 扣。预检已保证放得下，
+    /// 但这里仍走 `AddItems` 的返回值尽力收（背包可能在换弹那几秒里被别的东西塞满），
+    /// 收不下的**如实提示**而不是静默吞掉。</summary>
+    void FinishSwitchAmmo(WeaponData w, AmmoData target)
+    {
+        if (w == null || target == null) { magAmmo = 0; magAmmoId = null; return; }
+
+        var cur = ResolveAmmo(w, magAmmoId);   // 旧弹退给**它自己那一级**（不是目标那一级）
+        int oldAmmo = magAmmo;
+
+        // ⚠️ **顺序必须是"先取新弹、再退旧弹"** —— 与 `CanSwapMag` 的模拟顺序严格一致。
+        //    预检的语义是"**取走新弹之后**的背包放不放得下"（用户 2026-09-27 定的），
+        //    所以执行也必须先取：满背包 + 目标那格正好被取空时，"取走新弹"腾出的那一格
+        //    才是退旧弹的落脚点。
+        //    ❌ 反过来（先退后取）的后果：`AddItems` 在满包时返回 0 → **整匣旧弹被静默丢弃**
+        //       （2026-09-27 独立审计查出的真 bug，当时实测只验了预检返回值、没验退弹真的回到背包）。
+        int willLoad = backpack != null ? Mathf.Min(Mathf.Max(0, w.magSize), backpack.CountAmmo(target)) : 0;
+        magAmmo = backpack != null ? backpack.TakeAmmo(target, willLoad) : 0;
+        magAmmoId = target;
+
+        // ② 再退旧弹
+        int dropped = 0;
+        if (oldAmmo > 0 && cur != null)
+        {
+            int put = backpack != null ? backpack.AddItems(cur, oldAmmo) : 0;
+            dropped = oldAmmo - put;
+        }
+
+        SaveCurrentSlotAmmo();
+
+        // ③ 反馈（"退弹丢了"最需要玩家知道 → 优先；其次"没装上"；正常才报成功与装填量）
+        if (dropped > 0 && cur != null)
+            HUD.Announce("背包已满：" + cur.DisplayName + " " + dropped + " 发没能收回", 1.6f, 26, new Color(1f, 0.62f, 0.42f));
+        else if (willLoad <= 0)
+            HUD.Announce("已切换 " + target.DisplayName + "（备弹不足，没装上）", 1.4f, 26, new Color(0.9f, 0.85f, 0.5f));
+        else
+            HUD.Announce("已切换 " + target.DisplayName + "（" + willLoad + " 发）", 1.0f, 26, target.pickupColor);
+        Sfx.ReloadEnd(w);
+    }
+
+    /// <summary>弹药相关的提示：统一走 0.8 秒节流（与"没弹药"共用同一个窗口 → 连按 T 不会刷屏）。</summary>
+    void WarnAmmoOnce(string msg, Color color)
+    {
+        if (Time.time < _nextNoAmmoWarnTime) return;
+        _nextNoAmmoWarnTime = Time.time + 0.8f;
+        HUD.Announce(msg, 1.0f, 26, color);
+    }
+
     /// 装备武器（从地上捡起时调用）：先收进背包（自动占空快捷槽并切换过去），满了进库存。
     /// 返回 false = 快捷槽和库存都放不下（背包已满，调用方应保留地上的枪并给提示）。
-    public bool Equip(WeaponData w, int magAmmo = -1)
+    public bool Equip(WeaponData w, int magAmmo = -1, AmmoData ammoId = null)
     {
         if (backpack == null) return false;
         SaveCurrentSlotAmmo();   // 先把当前槽弹匣写回，避免换槽后原槽免费回满弹
-        bool ok = backpack.AddWeapon(w, magAmmo);   // magAmmo 负值 = 满弹（捡地上用过的枪时传它的余量）
+        bool ok = backpack.AddWeapon(w, magAmmo, ammoId);   // magAmmo 负值 = 满弹；ammoId = 那一匣的等级（null → 装填时自动挑）
         // 若因此换到了新槽，刷新手上的镜像
         LoadMirrorFromSlot();
         return ok;
@@ -1112,10 +1282,10 @@ public class PlayerController : MonoBehaviour
     {
         if (backpack == null) return;
         SaveCurrentSlotAmmo();   // 先把当前槽弹匣写回
-        if (backpack.EquipFromInventory(stackId, out WeaponData displaced, out int displacedAmmo))
+        if (backpack.EquipFromInventory(stackId, out WeaponData displaced, out int displacedAmmo, out AmmoData displacedAmmoId))
         {
             if (displaced != null)
-                WeaponPickup.Create(displaced, FindDropPos(), displacedAmmo);   // 兜底：库存放不下才掉地上（连弹匣）
+                WeaponPickup.Create(displaced, FindDropPos(), displacedAmmo, displacedAmmoId);   // 兜底：库存放不下才掉地上（连弹匣与等级）
             LoadMirrorFromSlot();
         }
     }
@@ -1127,10 +1297,10 @@ public class PlayerController : MonoBehaviour
         SaveCurrentSlotAmmo();   // 先把当前槽弹匣写回（丢弃的可能不是当前槽，但保险起见统一保存）
         // ⚠️ 必须在 `DropSlot` **之前**记下"是不是手上这把"：`DropSlot` 会把 `currentSlot` 清成 -1
         bool wasCurrent = i == backpack.currentSlot;
-        var w = backpack.DropSlot(i, out int ammo);
+        var w = backpack.DropSlot(i, out int ammo, out AmmoData ammoId);
         if (w != null)
         {
-            WeaponPickup.Create(w, FindDropPos(), ammo);   // 地上的枪保留真实弹匣余量（捡回来不会白满）
+            WeaponPickup.Create(w, FindDropPos(), ammo, ammoId);   // 地上的枪保留真实弹匣余量与等级（捡回来不会白满、也不会串级）
             // ⚠️ 只有丢掉的是**手上这把**才刷新镜像 —— `LoadMirrorFromSlot` 会取消换弹，
             //    丢别的槽没必要打断（那是"换枪"语义，不该让玩家白等一次换弹）。
             if (wasCurrent) LoadMirrorFromSlot();
@@ -1142,7 +1312,10 @@ public class PlayerController : MonoBehaviour
     {
         if (backpack == null) return;
         if (backpack.currentSlot >= 0 && backpack.currentSlot < backpack.slots.Length)
+        {
             backpack.slots[backpack.currentSlot].magAmmo = magAmmo;
+            backpack.slots[backpack.currentSlot].ammoId = magAmmoId;   // 等级与余弹一起写回（漏一处就漂移）
+        }
     }
 
     /// <summary>

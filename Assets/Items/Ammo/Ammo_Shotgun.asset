@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ca7918c14530d4e4eab557432cb3e03a, type: 3}
   m_Name: Ammo_Shotgun
   m_EditorClassIdentifier: 
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 68449ef10d7573949ad11f825b98cf34, type: 3}
   pickupColor: {r: 0.88, g: 0.38, b: 0.26, a: 1}
   pickupModelPrefab: {fileID: 0}
   canStack: 1
@@ -20,10 +20,14 @@ MonoBehaviour:
   stackId: 
   description: "\u5927\u9897\u5F39\u4E38\u7684\u9730\u5F39\u30027 \u53D1\u4E00\u5305\u3002"
   baseValue: 12
-  itemName: "\u9730\u5F39"
+  itemName: "\u4E00\u7EA7\u9730\u5F39"
   ammoKind: 4
   packSize: 7
-  worldIconSize: 0.3
-  worldHoverHeight: 0.16
-  worldShadowSize: 0.26
-  worldShadowAlpha: 0.3
+  tier: 1
+  damageMultiplier: 1
+  tierOutlineColor: {r: 0, g: 0, b: 0, a: 0}
+  outlineWidth: 2
+  worldIconSize: 0.5
+  worldHoverHeight: 0.2
+  worldShadowSize: 0.3
+  worldShadowAlpha: 0.6

@@ -28,8 +28,12 @@ public class Bullet : MonoBehaviour
     /// <summary>
     /// 生成一颗子弹。headshotTarget / headshotMultiplier 由玩家开火时传入（敌人子弹留空）。
     /// </summary>
+    /// <param name="damageMultiplier">**弹药等级的伤害倍率**（`AmmoData.damageMultiplier`；一级 1.0 / 二级 1.1）。
+    /// 只乘"直接伤害"这一项；爆炸伤害（`explosionDamage`）属于 RPG 那类不吃弹药的武器，不进这套分级。
+    /// 敌人开火用默认值 1（它们的子弹不消耗玩家弹药）。</param>
     public static Bullet Spawn(Vector3 pos, Vector3 dir, WeaponData w, Health.Team team,
-                               EnemyAI headshotTarget = null, float headshotMultiplier = 1f)
+                               EnemyAI headshotTarget = null, float headshotMultiplier = 1f,
+                               float damageMultiplier = 1f)
     {
         GameObject go;
         if (w.bulletPrefab != null)
@@ -62,7 +66,7 @@ public class Bullet : MonoBehaviour
         b.shot = new ShotProfile
         {
             mode = w.explosionRadius > 0f ? HitMode.Explode : HitMode.Direct,
-            damage = w.damage,
+            damage = w.damage * Mathf.Max(0f, damageMultiplier),   // ← 弹药等级倍率在这里一次算完，`Combat` 那边不用知道有"分级"这回事
             // 有效射程衰减：**默认 0 / 1 = 完全不衰减**，与旧行为逐位一致（8 把武器资源没配这项）
             effectiveRange = w.effectiveRange,
             beyondRangeDamage = w.beyondRangeDamage,
