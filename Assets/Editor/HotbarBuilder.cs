@@ -7,7 +7,7 @@ using UnityEditor.SceneManagement;
 /// 把「HUD 快捷栏」**预置到场景里**（一键"从代码里剥离出来"），之后就能在编辑器里直接拖布局。
 ///
 /// 为什么需要：快捷栏原本只有 `HUD` 运行时用代码 `new` 的那条路 —— 编辑器里看不见、也就没法调。
-/// 菜单 `Tools/游戏/生成快捷栏到场景` 会在 HUD 的 Canvas 下建一个 `Hotbar` 节点（4 格：1 / 2 / 3 / Q）：
+/// 菜单 `Tools/游戏/生成快捷栏到场景` 会在 HUD 的 Canvas 下建一个 `Hotbar` 节点（5 格：1 / 2 / 3 / E / Q）：
 ///   · 每格 = `Bg`（半透明深色底）+ `Frame`（描边）+ `Icon`（图标）+ `KeyBg`（键位小圆角矩形）+ `KeyText`；
 ///   · 最后一格（Q = 血包）额外有 `CountBg` + `CountText`（右下角的数量圆标）；
 ///   · 把 HUD 上 `hotbar` 引用**自动接好**；
@@ -26,7 +26,9 @@ public static class HotbarBuilder
 
     // ⚠️ 与 `HUD` 里的同名常量保持一致（编辑器程序集读不到 HUD 的 private const）。
     //    改 HUD 里那份记得一起改这里 —— 这只影响**本工具生成的节点**，不影响运行时兜底路径。
-    const int   SlotCount = 4;
+    // ⚠️ 2026-09-28：4 → **5**（新增魔法格，顺序 = 1 / 2 / 3 / E / Q）。
+    //    改这里必须**同步改 `HUD.HotbarSlotCount`**（运行时兜底路径读那一份）。
+    const int   SlotCount = 5;
     const float SlotSize  = 56f;   // 槽框边长
     const float Gap       = 8f;    // 槽间距
     const float Bottom    = 14f;   // 整组距屏幕底部
@@ -127,7 +129,9 @@ public static class HotbarBuilder
                 keySprite, HUD.BubbleKeyBgColor, true);
             // ⚠️ 文字必须**建成键位小矩形的子节点**再铺满 —— `Stretch` 只改锚点、**不重挂父子**；
             //    如果建成 Slot 的子节点，锚点就是相对整个槽算的 → 文字会铺满整格、数字跑到图标正中间（踩过）。
-            var keyText = MakeText(keyBg.transform, "KeyText", isLast ? "Q" : (i + 1).ToString(), KeyFont, HUD.BubbleKeyTextColor);
+            // 键位：前 3 格 = 武器（1/2/3）、第 4 格 = 魔法（E，运行时可能被改成剩余秒数或「被」）、最后 1 格 = 血包（Q）
+            string keyLabel = isLast ? "Q" : (i == SlotCount - 2 ? "E" : (i + 1).ToString());
+            var keyText = MakeText(keyBg.transform, "KeyText", keyLabel, KeyFont, HUD.BubbleKeyTextColor);
             Stretch(keyText.rectTransform, keyBg.rectTransform);
 
             if (!isLast) continue;
@@ -152,7 +156,7 @@ public static class HotbarBuilder
         Undo.CollapseUndoOperations(group);
         Selection.activeGameObject = root.gameObject;
 
-        Debug.Log("[HotbarBuilder] 已生成「Hotbar」（4 格：1 / 2 / 3 / Q）并接到 HUD 的 hotbar 引用上。\n" +
+        Debug.Log("[HotbarBuilder] 已生成「Hotbar」（5 格：1 / 2 / 3 / E / Q）并接到 HUD 的 hotbar 引用上。\n" +
                   "· 现在可以在编辑器里直接拖布局 / 改尺寸 / 换图 / 改字号（贴图已生成到 " + SpriteDir + "）。\n" +
                   "· ⚠️ **颜色改节点无效**：槽底 / 槽框 / 键位 / 数量圆标的颜色由代码统一驱动（读 GameAssets 的「背包」组）" +
                   "→ 改颜色请改 GameAssets，这样背包与快捷栏永远一致。\n" +

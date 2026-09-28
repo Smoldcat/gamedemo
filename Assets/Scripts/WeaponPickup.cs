@@ -102,7 +102,7 @@ public class WeaponPickup : MonoBehaviour, IInteractable
 
     public Transform InteractAnchor => transform;
     public string InteractLabel => data != null ? data.DisplayName : "武器";
-    public string InteractKey => "E";
+    public string InteractKey => "F";
     public float InteractRange => PickupRange;
 
     /// <summary>按键拾取（由交互焦点调用）。满了就把枪留在原地并提示"背包已满"。</summary>

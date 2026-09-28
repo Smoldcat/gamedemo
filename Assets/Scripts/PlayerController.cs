@@ -54,6 +54,11 @@ public class PlayerController : MonoBehaviour
     [Tooltip("3 快捷槽 + 库存 + 血包的背包。挂到玩家身上或由本组件自动创建")]
     public PlayerBackpack backpack;
 
+    [Header("魔法")]
+    [Tooltip("玩家侧的魔法管理器（装备同步 / 冷却 / 释放入口 / 命中转发）。\n" +
+             "⚠️ **不需要手拖**：Start 时若为空会自动 AddComponent 创建（与背包同一套做法）。")]
+    public PlayerMagic magic;
+
     [HideInInspector] public bool running = true;
     [HideInInspector] public bool reloading;
     /// <summary>「按 T 换级」的目标卡 —— **非 null = 本次换弹是换级**（完成时要"退旧弹 + 装新弹"）。
@@ -427,6 +432,12 @@ public class PlayerController : MonoBehaviour
         _hp = GetComponent<Health>();
         if (_hp != null) _hp.OnDeath += OnPlayerDeath;
 
+        // 魔法管理器：兜底自动挂（**不需要**往场景 / prefab 里预配 —— 与背包同一套做法）。
+        // ⚠️ 必须在 `Start` 而不是 `Awake`：确保 PlayerBackpack 已经 Awake 过，
+        //    PlayerMagic.Awake 里那次 GetComponent<PlayerBackpack>() 才拿得到引用。
+        if (magic == null) magic = GetComponent<PlayerMagic>();
+        if (magic == null) magic = gameObject.AddComponent<PlayerMagic>();
+
         // 按开局自带的武器刷新一次手上的枪模型（Inspector 里配了武器就要走这一步）
         UpdateGunVisual();
     }
@@ -568,6 +579,15 @@ public class PlayerController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.T) && weapon != null && !reloading)
             StartSwitchAmmo();
         if (reloading && Time.time >= _reloadUntil) FinishReload();
+
+        // ---- E：释放魔法（主动魔法；被动魔法不需要按键，装备即生效）----
+        // ⭐ 这里只留「一个按键入口」，逻辑全在 PlayerMagic 里（本类已经 1400+ 行，别再往里塞）。
+        // ⚠️ E 曾经是"拾取"键；2026-09-28 起拾取/开箱/开商店统一为 F，E 让位给魔法。
+        if (Input.GetKeyDown(KeyCode.E) && magic != null) magic.TryCast();
+
+        // ---- 魔法：每帧推进（核对装备变化 + 冷却 + 行为自己的 Tick）----
+        // 放在交互之前：交互（F）可能在这一帧开面板 → 下一帧起暂停，魔法自然停摆（与武器一致）。
+        if (magic != null) magic.Tick(Time.deltaTime);
 
         // ---- 交互（**单一交互焦点**）：地上的武器 / 血包 / 箱子中"离玩家最近的那个"显示气泡并响应按键 ----
         //    ⚠️ 唯一入口：别在别的脚本里再自己扫一遍 —— 那会抢 HUD 里那唯一一个气泡
@@ -1290,6 +1310,19 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    /// <summary>从背包库存「装备」一个魔法（背包面板点击魔法卡时调用）。
+    /// 被替换下来的那张由背包内部下放进库存；**只有库存真的放不下**时才掉到地上
+    /// （与武器同一套纪律：既下放又掉落 = 凭空多出一张卡）。
+    /// ⚠️ 装备本身不需要在这里做任何事 —— `PlayerMagic` 每帧比对背包槽，会自动重建行为实例。</summary>
+    public void EquipMagicFromInventory(string stackId)
+    {
+        if (backpack == null) return;
+        if (backpack.EquipMagicFromInventory(stackId, out MagicData displaced))
+        {
+            if (displaced != null) MagicPickup.Create(displaced, FindDropPos());
+        }
+    }
+
     /// 放弃指定快捷槽的武器（背包面板每格「丢弃」按钮用）掉到地上成为拾取物
     public void DropSlotAt(int i)
     {
@@ -1305,6 +1338,59 @@ public class PlayerController : MonoBehaviour
             //    丢别的槽没必要打断（那是"换枪"语义，不该让玩家白等一次换弹）。
             if (wasCurrent) LoadMirrorFromSlot();
         }
+    }
+
+    /// <summary>丢弃魔法槽（背包面板「丢弃」按钮用）：掉到地上成为一张魔法卡。
+    /// 与武器版 <see cref="DropSlotAt"/> 同一套语义 —— 但魔法没有"弹匣镜像"，
+    /// 所以不需要 `SaveCurrentSlotAmmo` / `LoadMirrorFromSlot` 那两步（少了两处能出错的地方）。</summary>
+    public void DropMagicSlotAt(int i)
+    {
+        if (backpack == null) return;
+        backpack.DropMagicSlot(i, out MagicData dropped);
+        if (dropped != null) MagicPickup.Create(dropped, FindDropPos());
+    }
+
+    /// <summary>丢弃**背包库存里的一件物品**（背包面板右键用）：掉到地上成为对应的拾取物。
+    /// 按物品类型分发到各自的拾取物类 —— 这里是"物品落地"的**唯一分发点**，
+    /// 以后加新物品种类（手雷 / 护甲）只需要在下面加一支。
+    ///
+    /// ⚠️ 顺序：**先判断类型、再取走、最后落地** —— 反过来的话，"认不出来的物品"会先被取走
+    ///    然后什么都不生成 = 凭空消失（静默丢东西）。
+    /// ⚠️ 弹药**整格丢**（一格 N 发 → 地上就是一包 N 发）：否则"丢 1 发"会在脚边堆一串小包。
+    /// ⚠️ 武器要把**真实弹匣与等级**一起带走（`magAmmo` / `ammoId`），否则捡回来会满弹或串级。</summary>
+    public void DropItemFromInventory(int index)
+    {
+        if (backpack == null) return;
+        if (index < 0 || index >= backpack.inventory.Count) return;
+        var stack = backpack.inventory[index];
+        if (stack == null || stack.def == null || stack.IsEmpty) return;
+
+        var def = stack.def;
+        var w = def as WeaponData;
+        var a = def as AmmoData;
+        var m = def as MagicData;
+        bool isMedkit = def is MedkitData;
+
+        if (w == null && a == null && m == null && !isMedkit)
+        {
+            // 认不出来的物品**不取走**（取走就变没了），只给一句明确的话
+            HUD.Announce($"「{def.DisplayName}」还不能丢到地上", 1.2f, 24, new Color(1f, 0.6f, 0.4f));
+            return;
+        }
+
+        int count = Mathf.Max(1, stack.count);          // 弹药整格丢；其它物品一格只有一个
+        int ammo = stack.magAmmo;
+        AmmoData ammoId = stack.ammoId;
+        Vector3 pos = FindDropPos();
+
+        // 先取走（腾格规则由 TakeFromInventory 统一负责）
+        backpack.TakeFromInventory(index, w != null ? 1 : count);
+
+        // 再按类型落地（与 `DropSlotAt` / `DropMagicSlotAt` 走同一族拾取物）
+        if (w != null) { WeaponPickup.Create(w, pos, ammo, ammoId); return; }
+        if (a != null) { AmmoPickup.Create(a, pos, count); return; }
+        if (m != null) { MagicPickup.Create(m, pos); return; }
+        if (isMedkit) { HealthPack.Create(pos); return; }
     }
 
     /// 把当前手上弹匣写回背包槽（换枪/切槽前调用，防止弹匣状态丢失导致免费回满弹）

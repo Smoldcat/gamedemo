@@ -25,7 +25,8 @@ public interface IInteractable
     /// ⚠️ 返回 null 或空串 = **本次不参与**（例：空箱子且勾了"空了不提示"）→ 焦点会跳过它。</summary>
     string InteractLabel { get; }
 
-    /// <summary>气泡里显示的按键（"E" / "F"）。</summary>
+    /// <summary>气泡里显示的按键。**目前全项目统一 F**（拾取 / 开箱 / 开商店合并成一键，2026-09-28 起；
+    /// E 已让位给魔法释放）。</summary>
     string InteractKey { get; }
 
     /// <summary>多远之内算"能交互"（米）。每个物体可以不一样（地上的枪 1.6 / 血包 1.2…）。</summary>
@@ -76,6 +77,10 @@ public static class InteractFocus
         if (player == null) return;
         if (GameState.GameOver || GameState.Paused) return;   // 暂停 / 死亡时不提示、也不响应按键
 
+        // ⚠️ 帧号互斥：同一帧里 F 已被别处消费过（典型是"刚按下 F 关掉了箱子 / 商店"）→ 本次不响应。
+        //    否则会出现"关掉的**同一帧**又被焦点重新打开"。见 `GameState.InteractConsumedFrame`。
+        if (GameState.InteractConsumedFrame == Time.frameCount) return;
+
         Vector3 p = player.transform.position;
         IInteractable best = null;
         float bestSq = float.MaxValue;
@@ -109,14 +114,17 @@ public static class InteractFocus
 
         // 按键：只作用于焦点 → 天然不会"一次按键触发两件事"
         if (!WasKeyPressed(best.InteractKey)) return;
-        GameState.PickupEConsumedFrame = Time.frameCount;   // 保留原有"本帧 E 已用掉"的约定（将来若还有别处检查）
+        GameState.InteractConsumedFrame = Time.frameCount;   // 标记本帧的 F 已用掉（面板那边据此让位）
         best.Interact(player);
     }
 
-    /// <summary>把气泡里的按键字母映射成真实按键。目前支持 E（拾取，默认）与 F（打开容器）。</summary>
+    /// <summary>把气泡里的按键字母映射成真实按键。
+    /// ⭐ **当前统一为 F**（拾取 / 开箱 / 开商店一键，2026-09-28 起；E 已让位给魔法释放）——
+    ///    历史遗留的 `"E"` 配置也一律按 F 处理，避免旧场景里的物体"提示 E 却按不动"。
+    /// 保留"按键 → 真实键"这一层映射结构：将来若某个交互物需要独立键（例如"长按 F 拆解"），
+    /// 在这里加一支分支即可，调用方（<see cref="Tick"/>）不用改。</summary>
     static bool WasKeyPressed(string key)
     {
-        if (key == "F") return Input.GetKeyDown(KeyCode.F);
-        return Input.GetKeyDown(KeyCode.E);
+        return Input.GetKeyDown(KeyCode.F);
     }
 }

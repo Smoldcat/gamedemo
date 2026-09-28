@@ -667,6 +667,18 @@ public class BackpackPanel : MonoBehaviour
                 startY - row * (cellH + CellGap));
             cellImg.raycastTarget = hasItem;   // 空格子不接点击
 
+            // 右键丢弃：给**有物品**的格子挂一个点击分发器（左键仍归下面那个 Button 管）
+            // ⚠️ `index` 必须**每次 Refresh 重新绑** —— 格子是重建的，且丢弃后下标会整体前移
+            var cellClick = cell.GetComponent<BackpackCellClick>();
+            if (hasItem)
+            {
+                if (cellClick == null) cellClick = cell.AddComponent<BackpackCellClick>();
+                cellClick.panel = this;
+                cellClick.index = i;
+                cellClick.enabled = true;
+            }
+            else if (cellClick != null) cellClick.enabled = false;
+
             if (!hasItem) { _invCells.Add(null); continue; }   // 空格子到此为止（只画个框）
 
             // 图标 + 颜色：统一走 `ItemVisuals`（背包 / 箱子 / 快捷栏共用同一份实现 → 三处永远一致）
@@ -701,13 +713,26 @@ public class BackpackPanel : MonoBehaviour
             // ⚠️ **只有武器**才挂这个事件：血包 / 子弹点它不该进快捷武器槽（血包靠 Q 键消耗）
             var btn = cell.GetComponent<Button>();
             var asWeapon = item.def as WeaponData;
-            if (asWeapon != null)
+            var asMagic = item.def as MagicData;
+            // ⚠️ 武器与魔法都能"装备"到各自的槽（2026-09-28 起魔法也有槽）；
+            //    血包 / 子弹点它不该进任何装备槽（血包靠 Q 键消耗）
+            if (asWeapon != null || asMagic != null)
             {
                 if (btn == null) btn = cell.AddComponent<Button>();
                 btn.targetGraphic = cellImg;
                 btn.onClick.RemoveAllListeners();
                 string id = item.def.StackId;   // 用**身份证**而不是名字（敌人掉的枪是副本，名字/引用都不可靠）
-                btn.onClick.AddListener(() => { if (_pc != null) { _pc.EquipFromInventory(id); Sfx.Confirm(); } Refresh(); });
+                bool isMagic = asMagic != null;
+                btn.onClick.AddListener(() =>
+                {
+                    if (_pc != null)
+                    {
+                        if (isMagic) _pc.EquipMagicFromInventory(id);   // 装到魔法槽（HUD 的 E 格）
+                        else _pc.EquipFromInventory(id);                // 装到武器槽（1/2/3）
+                        Sfx.Confirm();
+                    }
+                    Refresh();
+                });
             }
             else if (btn != null) btn.onClick.RemoveAllListeners();
 
@@ -766,6 +791,48 @@ public class BackpackPanel : MonoBehaviour
                     _slotDropTxt[i].text = "丢弃";
                     _slotDropTxt[i].color = new Color(1f, 0.8f, 0.75f);
                 }
+    }
+
+    // ==================== 库存格右键丢弃（2026-09-28） ====================
+
+    // 库存格的"待确认丢弃"目标：第一次右键记下来，2 秒内再右键同一格才真丢。
+    // ⚠️ 存的是**格子在 `backpack.inventory` 里的下标** —— 丢弃后必须 Refresh（下标会变），
+    //    所以确认态用完立刻清掉。
+    int _dropInvIndex = -1;
+    float _dropInvUntil;
+
+    /// <summary>
+    /// 库存格**右键**：第一次 = 提示确认；2 秒内再右键同一格 = 真正丢弃。
+    /// 与快捷武器槽的"点两次丢弃"同一套交互（都是再确认一次），区别只是库存格没有独立按钮，
+    /// 所以第一次右键改用 `HUD.Announce` 给提示。
+    ///
+    /// ⚠️ 由 <see cref="BackpackCellClick"/> 转发进来（它挂在每个格子上）——
+    ///    走 `EventSystem` 才能正确对应"虚拟光标指的是哪一格"。
+    /// </summary>
+    public void RequestDropItem(int index)
+    {
+        if (Time.unscaledTime > _dropInvUntil) _dropInvIndex = -1;   // 超过 2 秒 → 回到"第一次"
+
+        if (_pc == null) _pc = PlayerController.Instance;
+        if (_pc == null || _pc.backpack == null) return;
+        var bp = _pc.backpack;
+        if (index < 0 || index >= bp.inventory.Count) return;
+        var item = bp.inventory[index];
+        if (item == null || item.def == null || item.IsEmpty) return;
+
+        if (_dropInvIndex == index)
+        {
+            _dropInvIndex = -1;
+            _pc.DropItemFromInventory(index);
+            Sfx.Drop();
+            Refresh();
+            return;
+        }
+
+        _dropInvIndex = index;
+        _dropInvUntil = Time.unscaledTime + 2f;
+        HUD.Announce("再点一次右键丢弃  " + item.DisplayName, 1.2f, 24, new Color(1f, 0.6f, 0.4f));
+        Sfx.Confirm();
     }
 
     // ==================== Tooltip ====================

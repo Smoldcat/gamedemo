@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4fb403605c133ee469bee6fcb5f8fc08, type: 3}
   m_Name: "Shop_\u6742\u8D27\u94FA"
   m_EditorClassIdentifier: 
-  slotCount: 10
+  slotCount: 14
   entries:
   - item: {fileID: 11400000, guid: 0657a6602e4de564ebd40e63381e275b, type: 2}
     buyPrice: 80
@@ -64,5 +64,15 @@ MonoBehaviour:
     sellPrice: 36
     maxStock: 5
     restockAmount: 2
+  - item: {fileID: 11400000, guid: b486626727cdb6f4c93a13621cc0d05f, type: 2}
+    buyPrice: 30
+    sellPrice: 12
+    maxStock: 2
+    restockAmount: 1
+  - item: {fileID: 11400000, guid: 8631e3d87f4fdf34395aec179a47f8de, type: 2}
+    buyPrice: 30
+    sellPrice: 12
+    maxStock: 2
+    restockAmount: 1
   restockSeconds: 30
   sellValueRatio: 0.4

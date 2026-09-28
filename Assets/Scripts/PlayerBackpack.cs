@@ -20,7 +20,10 @@ using UnityEngine;
 /// </summary>
 public class PlayerBackpack : MonoBehaviour
 {
-    /// <summary>一个快捷武器槽：武器 + 该槽独立的弹匣余量 + **弹匣里装的是哪张弹药卡**（等级）</summary>
+    /// <summary>一个**快捷装备槽**：武器 + 该槽独立的弹匣余量 + 弹匣里装的是哪张弹药卡（等级）+ 魔法卡。
+    /// ⚠️ 两类槽共用同一个结构，是为了**代码同构**（装备 / 丢弃 / 以后的多槽扩容，写法完全一样），
+    ///    而不是"一个槽能同时装枪和魔法" —— 用哪个字段由**槽的归属**决定：
+    ///    `slots` 数组只写 <see cref="weapon"/>，`magics` 数组只写 <see cref="magic"/>。</summary>
     [System.Serializable]
     public class Slot
     {
@@ -29,11 +32,19 @@ public class PlayerBackpack : MonoBehaviour
         /// <summary>弹匣里装的弹药卡（`null` = 未知 → 装填时按"该口径有货的最低等级"自动选）。
         /// 决定了**开火伤害倍率**、**按 T 换级时旧弹退给谁**、**HUD 显示哪一级的备弹**。</summary>
         public AmmoData ammoId;
+        /// <summary>魔法槽里装的魔法卡（`slots` 数组不用本字段）。</summary>
+        public MagicData magic;
     }
 
     [Header("快捷武器槽（只放武器）")]
     public Slot[] slots = new Slot[3];
     public int currentSlot;   // 当前使用中的槽位 0..2（-1 = 空手）
+
+    [Header("魔法槽（只放魔法）")]
+    [Tooltip("⭐ 做成**数组**是刻意的（用户 2026-09-28 定）：将来会同时装备多个魔法，" +
+             "现在只开 1 格（magics[0] = HUD 上的 E 格）—— 以后开多格**只改这里的数字**，代码已全部按数组写。\n" +
+             "⚠️ 装备 / 丢弃与武器完全同构：装备 = 从库存移进槽，丢弃 = 从槽掉到地上。")]
+    public Slot[] magics = new Slot[1];
 
     [Header("背包库存（通用物品格）")]
     public List<ItemStack> inventory = new List<ItemStack>();
@@ -66,6 +77,12 @@ public class PlayerBackpack : MonoBehaviour
         if (slots.Length != 3) System.Array.Resize(ref slots, 3);
         for (int i = 0; i < slots.Length; i++)
             if (slots[i] == null) slots[i] = new Slot();
+
+        // 魔法槽：**不强制长度**（以后加格只改字段默认值就行，不用来这里改数字），
+        // 但要保证每个元素都已创建 —— 编辑器里字段为 null 或旧存档缺字段时靠这里兜住。
+        if (magics == null) magics = new Slot[1];
+        for (int i = 0; i < magics.Length; i++)
+            if (magics[i] == null) magics[i] = new Slot();
     }
 
     /// <summary>是否有空快捷槽（拾取提示判断「进槽 or 进库存」用）</summary>
@@ -461,6 +478,82 @@ public class PlayerBackpack : MonoBehaviour
         slots[i].ammoId = null;
         if (currentSlot == i) currentSlot = -1;   // 手上武器被丢掉 → 空手
         return w;
+    }
+
+    // ==================== 魔法槽（与武器槽完全同构；用户 2026-09-28 定） ====================
+
+    /// <summary>当前装备的魔法卡（空槽为 null）。
+    /// ⭐ **"装备了什么魔法"的唯一权威** —— <see cref="PlayerMagic"/> 每帧比对它来决定是否重建行为实例。
+    /// 为什么权威放这里而不是放 `PlayerMagic`：这样**所有**改动路径（装备 / 丢弃 / 商店卖出 / 以后新增的路径）
+    /// 都只需要改背包一处，不会出现"魔法还挂着但卡已经没了"的幽灵状态。</summary>
+    public MagicData CurrentMagic
+    {
+        get
+        {
+            EnsureSlots();
+            return magics.Length > 0 && magics[0] != null ? magics[0].magic : null;
+        }
+    }
+
+    /// <summary>从库存「装备」一个魔法：装进**空魔法槽**；没有空槽则替换第 0 槽，
+    /// **被换下的魔法下放进库存**；库存也放不下时通过 `displaced` 交给调用方掉到地上。
+    ///
+    /// ⚠️ 与武器版 `EquipFromInventory` 同一套纪律（那三条是踩过坑总结出来的）：
+    ///   ① `stackId` 用**物品身份证**（`ItemStack.def.StackId`），不用对象引用
+    ///   ② **先**从库存取走（腾出格子），**再**安置被替换下来的那张 —— 顺序反了会在库存满时静默丢卡
+    ///   ③ 绝不"既下放又掉落"（那会凭空多出一张卡）</summary>
+    public bool EquipMagicFromInventory(string stackId, out MagicData displaced)
+    {
+        displaced = null;
+        EnsureSlots();
+        if (string.IsNullOrEmpty(stackId) || magics.Length == 0) return false;
+
+        int idx = -1;
+        MagicData magicDef = null;
+        for (int i = 0; i < inventory.Count; i++)
+        {
+            var s = inventory[i];
+            if (s == null || s.def == null) continue;
+            var m = s.def as MagicData;
+            if (m == null) continue;                     // 武器 / 子弹 / 血包 → 不能装进魔法槽
+            if (m.StackId != stackId) continue;
+            idx = i; magicDef = m; break;
+        }
+        if (idx < 0 || magicDef == null) return false;
+
+        // ① 先从库存取走（腾出格子）
+        var item = inventory[idx];
+        item.count -= 1;
+        if (item.count <= 0) inventory.RemoveAt(idx);
+
+        // ② 找空魔法槽；没有就替换第 0 槽（第一期只有一格）
+        int target = -1;
+        for (int i = 0; i < magics.Length; i++)
+            if (magics[i].magic == null) { target = i; break; }
+
+        if (target < 0)
+        {
+            target = 0;
+            var old = magics[target].magic;
+            // 魔法卡不可堆叠 → 下放就是占一格；放不下才交给调用方掉落
+            if (old != null && AddItems(old, 1) <= 0) displaced = old;
+        }
+
+        magics[target].magic = magicDef;
+        return true;
+    }
+
+    /// <summary>从魔法槽丢弃（掉到地上后由调用方创建 `MagicPickup`）。空槽返回 null。
+    /// 与武器版 `DropSlot` 同一套语义。</summary>
+    public MagicData DropMagicSlot(int i, out MagicData magicDef)
+    {
+        magicDef = null;
+        EnsureSlots();
+        if (i < 0 || i >= magics.Length) return null;
+        magicDef = magics[i].magic;
+        if (magicDef == null) return null;
+        magics[i].magic = null;
+        return magicDef;
     }
 
     /// <summary>整理库存：按显示名排序（背包面板右上角「整理」按钮调用）。</summary>

@@ -124,8 +124,9 @@ public class HUD : MonoBehaviour
              "代码只写「图标 + 槽框状态色 + 血包数量」。\n" +
              "⚠️ 颜色由代码统一驱动（读 GameAssets 的「背包」那组颜色 + 拾取气泡的按键圆标配色）→ 节点上调色无效。\n" +
              "留空 → 运行时用代码生成一个（与预置版同构）。\n" +
-             "⚠️ 节点名有约定：Slot1..Slot4，每格下面 Bg / Frame / Icon / KeyBg / KeyText，\n" +
-             "   最后一格（Q = 血包）额外要 CountBg / CountText。")]
+             "⚠️ 节点名有约定：Slot1..Slot5，每格下面 Bg / Frame / Icon / KeyBg / KeyText，\n" +
+             "   最后一格（Q = 血包）额外要 CountBg / CountText。\n" +
+             "   （Slot4 = 魔法格，键位文字运行时会动态变成剩余冷却秒数或「被」；Slot5 = 血包）")]
     public RectTransform hotbar;
 
     // ---- 快捷栏（1/2/3 = 武器快捷槽，Q = 血包）----
@@ -133,9 +134,12 @@ public class HUD : MonoBehaviour
     readonly Image[] _hbFrame = new Image[HotbarSlotCount];
     readonly Image[] _hbIcon = new Image[HotbarSlotCount];
     readonly Image[] _hbBg = new Image[HotbarSlotCount];   // 槽底填充（颜色 = 背包的「库存格底色」，可选节点）
+    /// <summary>键位文字（每格下方那个小圆角矩形里的字）。武器格恒为 1/2/3；
+    /// **魔法格会动态变**（主动 = `E`、冷却中 = 剩余秒数、被动 = `被`）→ 所以必须缓存引用。</summary>
+    readonly Text[] _hbKeyText = new Text[HotbarSlotCount];
     Image _hbCountBg;              // 血包数量圆标（只挂在最后一格）
     Text _hbCountText;
-    int _hbSig = int.MinValue;     // 脏值签名：当前槽 + 血包数 + 前 3 格武器 → 变了才重刷（避免每帧重建 Canvas）
+    int _hbSig = int.MinValue;     // 脏值签名：当前槽 + 血包数 + 前 3 格武器 + 魔法卡 → 变了才重刷（避免每帧重建 Canvas）
 
     // ---- 血条平滑显示（文字仍显示精确血量）----
     Vector2 _hpFullSize;
@@ -619,7 +623,13 @@ public class HUD : MonoBehaviour
 
     // 下面这些像素值**只给「代码生成」兜底路径**用（场景预置时以节点为准）。
     // ⚠️ `HotbarBuilder`（编辑器程序集）读不到 private const，那边有一份同名副本 → 改这里记得一起改。
-    const int   HotbarSlotCount  = 4;
+    // ⚠️ 2026-09-28：4 → **5**（新增**魔法格**）。槽位顺序固定为：
+    //    前 3 格 = 武器（键盘 1/2/3）、第 4 格 = 魔法（键盘 E）、第 5 格 = 血包（键盘 Q）。
+    //    两个索引由格数推导 → 以后要加武器格只改 WeaponSlotCount 一处。
+    const int   WeaponSlotCount  = 3;                        // 武器格数
+    const int   MagicSlotIndex   = WeaponSlotCount;          // 魔法格下标
+    const int   MedkitSlotIndex  = WeaponSlotCount + 1;      // 血包格下标
+    const int   HotbarSlotCount  = MedkitSlotIndex + 1;      // 总格数（= 5）
     const float HotbarSlotSize   = 56f;   // 槽框边长
     const float HotbarGap        = 8f;    // 槽间距
     const float HotbarBottom     = 14f;   // 整组距屏幕底部
@@ -699,6 +709,9 @@ public class HUD : MonoBehaviour
             _hbFrame[i] = FindImage(slot, "Frame");
             _hbIcon[i] = FindImage(slot, "Icon");
             _hbBg[i] = FindImage(slot, "Bg");          // 可选：没有就不管（只有 Frame / Icon 是必需的）
+            // ⚠️ `KeyText` 挂在 `KeyBg` **底下** → 必须**递归**找。用直接查找会拿到 null，
+            //    表现是"魔法格永远显示工具写入的占位字母、冷却秒数不更新"（与 CountText 同一类坑）。
+            _hbKeyText[i] = FindTextDeep(slot, "KeyText");
             if (slot == null || _hbFrame[i] == null || _hbIcon[i] == null) return false;
         }
         var q = _hotbarRect.Find("Slot" + HotbarSlotCount);
@@ -730,7 +743,9 @@ public class HUD : MonoBehaviour
             bool isLast = i == HotbarSlotCount - 1;
             float x = -w * 0.5f + HotbarSlotSize * 0.5f + i * (HotbarSlotSize + HotbarGap);
             var slot = NewChildRect(_hotbarRect, "Slot" + (i + 1), new Vector2(HotbarSlotSize, h), new Vector2(x, h * 0.5f));
-            BuildHotbarSlotByCode(slot, i, isLast ? "Q" : (i + 1).ToString(), isLast);
+            // 键位：前 3 格 = 武器（1/2/3）、第 4 格 = 魔法（E，运行时可能变成剩余秒数或「被」）、最后 1 格 = 血包（Q）
+            string keyLabel = isLast ? "Q" : (i == MagicSlotIndex ? "E" : (i + 1).ToString());
+            BuildHotbarSlotByCode(slot, i, keyLabel, isLast);
         }
     }
 
@@ -767,6 +782,7 @@ public class HUD : MonoBehaviour
         _hbFrame[index] = frame;
         _hbIcon[index] = icon;
         _hbBg[index] = bg;
+        _hbKeyText[index] = keyText;   // 魔法格的键位文字会被运行时改写 → 必须留引用
 
         if (!withBadge) return;
 
@@ -795,44 +811,86 @@ public class HUD : MonoBehaviour
         var bp = pc.backpack;
         int cur = bp != null ? bp.currentSlot : -1;
         int med = bp != null ? bp.Medkits : 0;
+        var magicCard = bp != null ? bp.CurrentMagic : null;   // 当前装备的魔法卡（null = 空槽）
+        float cdRatio = pc.magic != null ? pc.magic.CooldownRatio : 0f;
+        float cdLeft = pc.magic != null ? pc.magic.CooldownRemaining : 0f;
 
         unchecked
         {
             int sig = (cur + 2) * 397 ^ med;
-            for (int i = 0; i < HotbarSlotCount - 1; i++)
+            for (int i = 0; i < WeaponSlotCount; i++)
             {
                 var w0 = SlotWeapon(bp, i);
                 sig = sig * 31 + (w0 != null ? w0.GetInstanceID() : 0);
             }
+            sig = sig * 31 + (magicCard != null ? magicCard.GetInstanceID() : 0);        // ⚠️ 换魔法必须重刷
+            sig = sig * 31 + Mathf.CeilToInt(cdLeft * 10f);                             // ⚠️ 冷却倒数要重刷（0.1s 粒度）
             if (sig == _hbSig) return;
             _hbSig = sig;
         }
 
         for (int i = 0; i < HotbarSlotCount; i++)
         {
-            bool isMedkit = i == HotbarSlotCount - 1;
-            var w = isMedkit ? null : SlotWeapon(bp, i);
+            bool isMedkit = i == MedkitSlotIndex;
+            bool isMagic = i == MagicSlotIndex;
+            var w = (isMedkit || isMagic) ? null : SlotWeapon(bp, i);
 
-            // 图标：没武器 / 没血包 → 干脆不显示（槽框 + 键位留着，一眼看出"这格是空的"）
-            Sprite spr = isMedkit
-                ? (med > 0 ? BackpackPanel.MedkitSprite() : null)
-                : (w != null ? BackpackPanel.WeaponIconSprite(w) : null);
+            // ---- 图标：武器图标 / 魔法图标 / 血包十字；没有 → 不显示（槽框 + 键位留着，一眼看出这格是空的）----
+            Sprite spr = null;
+            Color iconColor = Color.white;
+            if (isMedkit)
+            {
+                spr = med > 0 ? BackpackPanel.MedkitSprite() : null;
+                iconColor = BackpackPanel.MedkitIconColor;
+            }
+            else if (isMagic)
+            {
+                spr = magicCard != null ? ItemVisuals.IconOf(magicCard) : null;
+                iconColor = magicCard != null ? ItemVisuals.ColorOf(magicCard) : Color.white;
+                if (cdRatio > 0f) iconColor *= new Color(0.45f, 0.45f, 0.5f, 1f);   // 冷却中：压暗
+            }
+            else if (w != null)
+            {
+                spr = BackpackPanel.WeaponIconSprite(w);
+                iconColor = w.pickupColor;
+            }
+
             if (_hbIcon[i] != null)
             {
                 _hbIcon[i].sprite = spr;
-                if (spr != null) _hbIcon[i].color = isMedkit ? BackpackPanel.MedkitIconColor : w.pickupColor;
+                if (spr != null) _hbIcon[i].color = iconColor;
                 if (_hbIcon[i].gameObject.activeSelf != (spr != null)) _hbIcon[i].gameObject.SetActive(spr != null);
             }
 
-            // 槽底：与背包的「库存格底色」同源（改 GameAssets 两边一起变）
+            // ---- 槽底：与背包的「库存格底色」同源（改 GameAssets 两边一起变）----
             if (_hbBg[i] != null) _hbBg[i].color = BackpackPanel.CellColor();
 
-            // 槽框：当前手上那一把高亮（颜色与背包同一套 → 改 GameAssets 两边一起变）
+            // ---- 槽框：武器格 = 当前手上那把高亮；魔法格冷却中压暗；其余普通色 ----
             if (_hbFrame[i] != null)
-                _hbFrame[i].color = (!isMedkit && i == cur) ? BackpackPanel.SlotActiveColor() : BackpackPanel.SlotColor();
+            {
+                if (!isMedkit && !isMagic && i == cur)
+                    _hbFrame[i].color = BackpackPanel.SlotActiveColor();
+                else if (isMagic && cdRatio > 0f)
+                    _hbFrame[i].color = BackpackPanel.SlotColor() * new Color(0.65f, 0.65f, 0.65f, 1f);
+                else
+                    _hbFrame[i].color = BackpackPanel.SlotColor();
+            }
+
+            // ---- 魔法格的键位文字：主动 = E；冷却中 = 剩余秒数；被动 = 被 ----
+            // ⭐ 复用现有的 KeyText 节点，不额外加 UI 元素（改动面最小，也不用改场景节点结构）
+            if (isMagic && _hbKeyText[i] != null)
+            {
+                string label;
+                if (magicCard == null) label = "E";
+                else if (magicCard.isPassive) label = "被";
+                else if (cdRatio > 0f) label = Mathf.CeilToInt(cdLeft).ToString();
+                else label = "E";
+                if (_hbKeyText[i].text != label) _hbKeyText[i].text = label;
+            }
 
             if (!isMedkit) continue;
 
+            // ---- 血包数量圆标（只挂在最后一格）----
             bool show = med > 0;
             if (_hbCountText != null)
             {

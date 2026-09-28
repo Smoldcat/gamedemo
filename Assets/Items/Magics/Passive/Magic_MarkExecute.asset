@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef94c18ea7477e543af4ca08407f827a, type: 3}
+  m_Name: Magic_MarkExecute
+  m_EditorClassIdentifier: 
+  icon: {fileID: 21300000, guid: 90cfe34f87fae6c43834aa20aa6295f5, type: 3}
+  pickupColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  pickupModelPrefab: {fileID: 0}
+  canStack: 0
+  maxStack: 1
+  stackId: 
+  description: "\u88AB\u52A8\u9B54\u6CD5\uFF1A\u88C5\u5907\u5373\u751F\u6548\u3002\n\u653B\u51FB\u654C\u4EBA\u4F1A\u6302\u4E0A\u5370\u8BB0\uFF08\u91CD\u590D\u547D\u4E2D\u5237\u65B0\u65F6\u957F\uFF09\u3002\n\u5370\u8BB0\u671F\u95F4\u654C\u4EBA\u8840\u91CF\u4F4E\u4E8E
+    20% \u2192 \u5929\u964D\u96F7\u51FB\u76F4\u63A5\u65A9\u6740\u3002"
+  baseValue: 30
+  magicName: "\u5370\u8BB0\u65A9\u6740"
+  behaviourTypeName: ConditionMagic, Assembly-CSharp
+  isPassive: 1
+  cooldown: 0
+  level: 1
+  levelScale: 1
+  shortDesc: "\u88AB\u52A8\uFF1A\u653B\u51FB\u654C\u4EBA\u4F1A\u6302\u4E0A\u5370\u8BB0\u3002\u5370\u8BB0\u671F\u95F4\u654C\u4EBA\u8840\u91CF\u4F4E\u4E8E
+    20% \u65F6\uFF0C\u5929\u964D\u96F7\u51FB\u5C06\u5176\u65A9\u6740\u3002"
+  worldIconSize: 0.34
+  worldHoverHeight: 0.2
+  worldShadowSize: 0.3
+  worldShadowAlpha: 0.3
+  conditionType: 0
+  executeThreshold: 0.2
+  checkInterval: 0.2
+  markDuration: 6
+  markIndicator: {fileID: 0}
+  markColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  markHeight: 2.1
+  effectType: 0
+  effectValue: 0
+  triggerMessage: "\u65A9\u6740\uFF01"
+  boltPrefab: {fileID: 0}
+  boltWidth: 1.2
+  boltHeight: 14
+  boltColor: {r: 0.75, g: 0.9, b: 1, a: 1}
+  boltLife: 0.25
+  flashAmount: 0.6
+  triggerSound: {fileID: 0}
+  endSound: {fileID: 0}
+  shakeAmount: 0.25

@@ -10,7 +10,7 @@ using UnityEngine.UI;
 ///
 /// 关于 Tab（用户 2026-09-25 定）：**商店打开期间 Tab = 关闭商店组**，且**不允许打开背包** ——
 ///   <see cref="HoldsTabKey"/> 就是给 `BackpackPanel` 让位用的（带"关闭那一帧"的帧号互斥，
-///   否则按一下 Tab 会出现"商店关了、背包却打开了"，与 E 键双拾取用 `PickupEConsumedFrame` 同一套思路）。
+///   否则按一下 Tab 会出现"商店关了、背包却打开了"，与交互键 F 的 `InteractConsumedFrame` 同一套思路）。
 ///
 /// 布局：标题（商店名，左）+ 金币（右）；5 列网格 —— 格子 68×68（与背包一致），
 ///       **价格数字画在格子正下方**（用户 2026-09-25 定的"参考图"风格）、库存数字在格子右上角；
@@ -163,6 +163,10 @@ public class ShopPanel : MonoBehaviour
         _root.gameObject.SetActive(false);
         Sfx.CloseInventory();
         UIState.Pop();
+
+        // ⚠️ 记下"这一帧的 F 已经用掉了"：关闭键与交互键同为 F，而交互焦点的执行顺序不确定 ——
+        //    不记这一笔，就会出现"按下 F 关店的同一帧又被焦点重新打开"（与箱子面板同一处理）。
+        GameState.InteractConsumedFrame = Time.frameCount;
 
         // 一起关（对方内部也有幂等守卫 → 不会递归打转）
         if (ShopInventoryPanel.Instance != null) ShopInventoryPanel.Instance.Close();

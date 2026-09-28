@@ -134,6 +134,11 @@ public class ChestPanel : MonoBehaviour
         Sfx.CloseInventory();
         UIState.Pop();
 
+        // ⚠️ 记下"这一帧的 F 已经用掉了"：关闭键与交互键同为 F，而交互焦点（在
+        //    PlayerController.Update 末尾跑）与本组件 Update 的执行顺序不确定 ——
+        //    不记这一笔，就会出现"按下 F 关箱的**同一帧**又被焦点重新打开"。
+        GameState.InteractConsumedFrame = Time.frameCount;
+
         // 一起关（BackpackPanel.Close 内部也有幂等守卫 → 不会递归打转）
         if (BackpackPanel.Instance != null) BackpackPanel.Instance.Close();
 

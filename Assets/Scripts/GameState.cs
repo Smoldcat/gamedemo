@@ -19,8 +19,12 @@ public static class GameState
     /// 全部释放后才真正恢复时间。</summary>
     static int _pauseCount;
 
-    /// <summary>E 键被拾取逻辑消费的帧号（-1 = 本帧未用）。武器和血包共用，防止同帧按 E 双拾取。</summary>
-    public static int PickupEConsumedFrame = -1;
+    /// <summary>「交互键（<b>F</b>）已被消费」的帧号（-1 = 本帧未用）。
+    /// 用途：F 既是"拾取 / 开箱 / 开商店"、又是"关闭面板"的键，两边各读一次按下事件，
+    /// 而谁先跑不确定 → 用这一层**帧号互斥**保证"一次按键只被消费一次"
+    /// （典型场景：关箱那一帧，交互焦点不能再把同一个箱子打开）。
+    /// 与 `ShopPanel.HoldsTabKey` 的帧号互斥是同一套思路。</summary>
+    public static int InteractConsumedFrame = -1;
 
     /// <summary>
     /// 统一暂停入口（替代「直接写 Paused + Time.timeScale」的旧写法）。
@@ -59,6 +63,6 @@ public static class GameState
         GameOver = false;
         Gold = 0;          // 每局从 0 开始（开局资金由 WaveManager.BeginRound 在 Reset 之后写入）
         ClearPause();
-        PickupEConsumedFrame = -1;
+        InteractConsumedFrame = -1;
     }
 }

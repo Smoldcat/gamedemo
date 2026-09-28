@@ -90,6 +90,14 @@ MonoBehaviour:
     weight: 1
     minCount: 7
     maxCount: 14
+  - item: {fileID: 11400000, guid: b486626727cdb6f4c93a13621cc0d05f, type: 2}
+    weight: 1
+    minCount: 1
+    maxCount: 1
+  - item: {fileID: 11400000, guid: 8631e3d87f4fdf34395aec179a47f8de, type: 2}
+    weight: 1
+    minCount: 1
+    maxCount: 1
   guaranteedItem: {fileID: 11400000, guid: e65dcfe7be1b5744b8c7ddb5f6009783, type: 2}
   guaranteedMin: 1
   guaranteedMax: 1

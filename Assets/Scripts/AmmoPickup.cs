@@ -166,7 +166,7 @@ public class AmmoPickup : MonoBehaviour, IInteractable
 
     public Transform InteractAnchor => transform;
     public string InteractLabel => data != null ? data.DisplayName + " ×" + packSize : "弹药";
-    public string InteractKey => "E";
+    public string InteractKey => "F";
     public float InteractRange => PickupRange;
 
     /// <summary>按键拾取（由交互焦点调用）。

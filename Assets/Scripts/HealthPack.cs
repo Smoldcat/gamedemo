@@ -106,7 +106,7 @@ public class HealthPack : MonoBehaviour, IInteractable
     // ==================== IInteractable ====================
 
     public Transform InteractAnchor => transform;
-    public string InteractKey => "E";
+    public string InteractKey => "F";
     public float InteractRange => PickupRange;
 
     /// <summary>气泡里的名字：用物品定义卡的显示名（所以"大血包"这类新卡会自动显示成自己的名字）。</summary>
