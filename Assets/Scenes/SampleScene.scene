@@ -2464,6 +2464,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 1fd61426dbdecc14989f473b306bbc03, type: 2}
   - {fileID: 11400000, guid: 2b66471c1e4f2ae40a804b56c16d6c85, type: 2}
   - {fileID: 11400000, guid: 16b3462b435ba7144bd0c8964583f3f1, type: 2}
+  initialAmmoPacksPerType: 2
   enemyPool:
   - config: {fileID: 11400000, guid: c44da850a9dc82b4bb3a1929d9fecbab, type: 2}
     weight: 1
