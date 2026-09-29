@@ -148,6 +148,14 @@ public class MagicMark : MonoBehaviour
         PlayBolt(h.transform.position);                              // 表现：雷柱落下
         if (_d.shakeAmount > 0f) CameraRig.Shake(_d.shakeAmount);     // 震屏
         Effects.Decal(h.transform.position, new Color(0.12f, 0.12f, 0.15f));   // 地面焦痕
+
+        // ⭐ 触发闪光（强度 = 卡上的 flashAmount；0 = 不闪）
+        //    ⚠️ 这个字段以前**没有任何代码读取**（2026-09-29 外部审查发现：Tooltip 写着"触发时的闪光强度"，
+        //       但改它完全没效果）。现在真正接上了——位置抬到胸口高度，避免闪光被地面遮住。
+        if (_d.flashAmount > 0f)
+            Effects.Impact(h.transform.position + Vector3.up * 1.0f,
+                           _d.boltColor, 1.5f + _d.flashAmount * 3f);
+
         if (_d.triggerSound != null) Sfx.Play(_d.triggerSound);
 
         switch (_d.effectType)

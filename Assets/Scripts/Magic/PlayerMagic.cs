@@ -42,6 +42,17 @@ public class PlayerMagic : MonoBehaviour
     MagicBehaviour _behaviour;   // 由卡反射创建的行为实例
     float _cdRemaining;
 
+    /// <summary>**每张卡各自的冷却剩余**（秒）。键 = 卡资产。
+    /// ⚠️ 为什么需要它（2026-09-29 外部审查发现的漏洞）：
+    ///    `_cdRemaining` 只表示"当前装备那张卡"的冷却；换卡时若把它直接清零，
+    ///    那么"卸下 → 装回**同一张卡**"就能白嫖掉冷却（实测两次施放只隔 2 帧、场上出现 10 颗球）。
+    ///    现在换卡时先存旧卡的剩余、再取新卡的剩余 —— 换**别的**卡仍然立刻可用（旧行为不变），
+    ///    但换**回同一张**会接着走原来的冷却。
+    /// ⚠️ 本表是**实例字段**（随 PlayerMagic 对象销毁而消失），不需要登记 StaticReset
+    ///    —— 与该处"只清单例、不碰实例字段"的约定一致。</summary>
+    readonly System.Collections.Generic.Dictionary<MagicData, float> _cdByCard
+        = new System.Collections.Generic.Dictionary<MagicData, float>();
+
     /// <summary>当前装备的魔法卡（null = 空槽）。</summary>
     public MagicData Equipped => _equipped;
 
@@ -124,9 +135,17 @@ public class PlayerMagic : MonoBehaviour
         }
         if (ReferenceEquals(want, _equipped)) return;   // 没变（绝大多数帧都走这里）
 
+        // ⭐ 换卡时的冷却处理（2026-09-29 修）：
+        //    先把"当前卡的剩余"存回表，再把"新卡的剩余"取出来 ——
+        //    ⚠️ 以前是直接 `_cdRemaining = 0f`，导致"卸下 → 装回同一张卡"能白嫖掉冷却
+        //       （外部审查实测：两次施放只隔 2 帧）。
+        //    换到**另一张卡**时读到的是它自己的剩余（通常是 0 = 立刻可用），
+        //    所以"换了魔法就能用"这条旧行为不变；变的只是"换回同一张不再重置"。
+        if (_equipped != null) _cdByCard[_equipped] = _cdRemaining;
+
         DestroyBehaviour();          // 旧行为必须**先**卸下（成对清理），再建新的
         _equipped = want;
-        _cdRemaining = 0f;           // 换魔法 = 冷却归零（新魔法立刻可用；这是刻意的，避免"换了还在转 CD"的困惑）
+        _cdRemaining = (want != null && _cdByCard.TryGetValue(want, out float cd)) ? cd : 0f;
 
         if (want != null) CreateBehaviour(want);
 

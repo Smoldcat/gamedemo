@@ -44,7 +44,7 @@ MonoBehaviour:
   effectValue: 0
   triggerMessage: "\u65A9\u6740\uFF01"
   boltPrefab: {fileID: 0}
-  boltWidth: 1.2
+  boltWidth: 0.1
   boltHeight: 14
   boltColor: {r: 0.75, g: 0.9, b: 1, a: 1}
   boltLife: 0.25

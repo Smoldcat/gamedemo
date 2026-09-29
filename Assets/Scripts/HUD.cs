@@ -149,7 +149,7 @@ public class HUD : MonoBehaviour
     int _sHp = int.MinValue, _sMaxHp = int.MinValue;
     bool _sHasWeapon, _sReloading;
     int _sMag = int.MinValue, _sMagSize = int.MinValue;
-    int _sReserve = int.MinValue;   // 备弹（-1 = 无限：武器 `ammoKind == None`，如 RPG）
+    int _sReserve = int.MinValue;   // 备弹（-1 = 无限：**仅**武器 `ammoKind == None`，如 RPG；0 = 该等级一颗都没有）
     int _sTier = int.MinValue;      // 弹匣当前等级（徽标用；0 = 不分级 / 拿不到卡）
     string _sWeaponName;
     bool _sRunning = true;
@@ -447,15 +447,20 @@ public class HUD : MonoBehaviour
             int magSize = hasWeapon ? pc.weapon.magSize : 0;
             // ⚠️ 「槽N」与「血包×N」已于 2026-09-22 **移出**这行：底部快捷栏（1/2/3/Q）已经在表达这两项，
             //    同屏重复反而更难扫读。想恢复就把它们加回下面的字符串。
-            // 备弹：按这杆枪的口径统计（`AmmoKind.None` = 不吃弹药 → 显示 ∞）
             // 备弹：**弹匣当前这一级**的库存（分级系统 2026-09-27 起 —— 用户明确"各等级不能加在一起显示"）。
-            // `AmmoKind.None` = 不吃弹药（RPG）→ ∞。
             // ⚠️ 弹匣等级未知（`magAmmoId == null`，如刚捡的新枪 / 旧数据）→ 预览"该口径**有货的最低等级**"，
             //    与换弹时 `ResolveAmmo` 的实际选择一致：玩家看到的数字就是下次装填会装的那一级。
-            var ammoCard = (hasWeapon && pc.weapon.ammoKind != AmmoKind.None && pc.backpack != null)
-                         ? (pc.magAmmoId != null ? pc.magAmmoId : pc.backpack.LowestOwnedAmmo(pc.weapon.ammoKind))
-                         : null;
-            int reserve = ammoCard != null ? pc.backpack.CountAmmo(ammoCard) : -1;   // -1 = 无限
+            //
+            // ⚠️⚠️ 【∞】**只能**在一种情况下出现：`ammoKind == None`（不吃弹药的枪，如 RPG）。
+            //    以前这里把 `ammoCard == null` 也当成 -1（无限），于是【背包里一颗这种子弹都没有】时
+            //    会误显示"备弹无限"（2026-09-29 报障 + 实测：开局捡任意一把枪，7 把普通枪全部显示 ∞）——
+            //    玩家以为备弹无限，打空弹匣却发现换不了弹，像是卡了。
+            //    现在 `ammoCard == null` 一律按 **0**（真的一颗都没有）处理。
+            bool infiniteAmmo = hasWeapon && pc.weapon.ammoKind == AmmoKind.None;
+            AmmoData ammoCard = null;
+            if (!infiniteAmmo && hasWeapon && pc.backpack != null)
+                ammoCard = pc.magAmmoId != null ? pc.magAmmoId : pc.backpack.LowestOwnedAmmo(pc.weapon.ammoKind);
+            int reserve = infiniteAmmo ? -1 : (ammoCard != null ? pc.backpack.CountAmmo(ammoCard) : 0);   // -1 = 无限
             int tier = ammoCard != null ? ammoCard.tier : 0;
             string tierMark = ammoCard != null ? ammoCard.TierMark : "";
 

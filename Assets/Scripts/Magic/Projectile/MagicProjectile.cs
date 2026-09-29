@@ -236,31 +236,45 @@ public class MagicProjectile : MonoBehaviour
 
     /// <summary>由 <see cref="ProjectileGroupMagic"/> **每帧**调用：把自己摆到环绕轨道的第 `index` 位。
     ///
-    /// ⚠️ 每帧**重算目标角度**（而不是自己累加）的关键好处：只要有球被派出去，
-    ///    剩下的球下一帧就会朝新的均分位置靠拢（不会留下空位）—— 这就是诸葛亮被动的观感。
-    /// ⭐ 但靠拢是**限速滑动**（<see cref="ProjectileMagicData.orbitCatchUpSpeed"/> 度/秒），不是直接吸附：
+    /// 两件事**分开做**（2026-09-29 起）：
+    ///   ① **公转**：每帧按 `orbitSpeed` 推进自己的角度 —— 不论补不补位，球都一直在绕圈；
+    ///   ② **补位**：只有 `allowCatchUp == true` 时才朝【当前剩余数量的均分位置】限速靠拢。
+    ///      ⚠️ 为什么拆开：用户要的是"派出后先观察一小会儿，确认这一波派完了再统一补位"，
+    ///        放行与否由管理器按 `ProjectileMagicData.catchUpDelay` 决定。
+    ///        拆开还有一个好处：`orbitCatchUpSpeed = 0` 也**不会**把球的公转一起钉死（旧实现会）。
+    ///
+    /// ⭐ 补位是**限速滑动**（<see cref="ProjectileMagicData.orbitCatchUpSpeed"/> 度/秒），不是直接吸附：
     ///    直接吸附会让【5 等分 → 4 等分】时最外侧那颗**瞬间平移 1.09 米**（2026-09-28 实测），非常突兀。
     /// ⚠️ 已进入 <see cref="OrbPhase.Chasing"/> 的球会忽略本调用（它在自己飞）。
     /// ⚠️ 还在播"出现插值"（`!_flying`）时也忽略 —— 否则会和 `Update` 里的插值**抢位置**
     ///    （实测侥幸没出问题，但那依赖脚本执行顺序，不可靠）。</summary>
-    public void SetOrbit(int index, int count, float phaseRad)
+    public void SetOrbit(int index, int count, float phaseRad, bool allowCatchUp)
     {
         if (_phase != OrbPhase.Orbiting || _d == null || !_flying) return;
 
-        // 目标角度 = 公共相位 + 均分偏移
-        float target = phaseRad + (Mathf.PI * 2f / Mathf.Max(1, count)) * index;
+        // 本球"该在"的角度（公共相位 + 均分偏移）
+        float slot = phaseRad + (Mathf.PI * 2f / Mathf.Max(1, count)) * index;
 
         if (float.IsNaN(_orbitAngle))
         {
-            _orbitAngle = target;                     // 第一次：直接吸附到本位
+            _orbitAngle = slot;                       // 第一次（刚生成）：直接吸附到本位，不延迟
         }
         else
         {
-            // 朝目标角度限速靠拢。⚠️ 必须走最短弧：把角度差归一化到 [-180°, 180°]，
-            //    否则 350° → 10° 会被算成"倒着转 340°"。
-            float delta = Mathf.DeltaAngle(_orbitAngle * Mathf.Rad2Deg, target * Mathf.Rad2Deg) * Mathf.Deg2Rad;
-            float maxStep = Mathf.Max(0f, _d.orbitCatchUpSpeed) * Mathf.Deg2Rad * Time.deltaTime;
-            _orbitAngle += Mathf.Clamp(delta, -maxStep, maxStep);
+            // ① 公转：**永远**推进（球一直在绕圈，与补不补位无关）
+            _orbitAngle += _d.orbitSpeed * Mathf.Deg2Rad * Time.deltaTime;
+
+            // ② 补位：只有放行时才朝"均分位置"限速靠拢。
+            //    ⚠️ 因为 `_orbitAngle` 与 `phaseRad` 以**同样的速率**前进，这里的差值只反映【相对偏移】，
+            //       所以"公转 + 补位"叠加不会造成双倍公转。
+            //    ⚠️ 必须走最短弧：把角度差归一化到 [-180°, 180°]，否则 350° → 10° 会被算成"倒着转 340°"。
+            if (allowCatchUp)
+            {
+                float delta = Mathf.DeltaAngle(_orbitAngle * Mathf.Rad2Deg, slot * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+                float maxStep = Mathf.Max(0f, _d.orbitCatchUpSpeed) * Mathf.Deg2Rad * Time.deltaTime;
+                _orbitAngle += Mathf.Clamp(delta, -maxStep, maxStep);
+            }
+
             // ⚠️ 归一化到 [0, 2π)：不归一的话角度会随游玩时间**无限增大**
             //    （实测仅 3 分钟就累到 972°），float 精度会越来越粗 → 长时间游玩后公转会变顿。
             //    安全性：位置由 cos/sin 算（周期函数，折返无影响）；靠拢用 `Mathf.DeltaAngle`（走最短弧），也不怕折返。

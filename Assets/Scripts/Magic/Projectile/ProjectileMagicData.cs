@@ -135,6 +135,14 @@ public class ProjectileMagicData : MagicData
              "⚠️ 从前是【直接吸附】：5 等分变 4 等分时，最外侧那颗会**瞬移 1.09 米**（2026-09-28 实测），非常突兀")]
     [Min(0f)] public float orbitCatchUpSpeed = 720f;
 
+    [Tooltip("补位延迟（秒）：某颗球被派出去之后，剩下的球【必须先等这么久、期间没有新的派出】才开始重新均分圆环。\n" +
+             "  · 0    = 立刻补位（旧行为：每走一颗就全体滑一次，敌人多时会连续抖）\n" +
+             "  · 0.7  = 推荐：连续派发期间不补位，停下来才补 —— 空位看得见、观感更稳\n" +
+             "  · 很大 = 等价于【永不补位】（球各守最初的角度，走一个留一个空位）\n" +
+             "⭐ 一个参数覆盖三种手感 —— 拓展性来自这里\n" +
+             "⚠️ 只影响【挂载中的球之间】的相对位置；每个球自己的公转、以及跟随玩家位置都不受影响")]
+    [Min(0f)] public float catchUpDelay = 0.7f;
+
     protected override void OnValidate()
     {
         base.OnValidate();

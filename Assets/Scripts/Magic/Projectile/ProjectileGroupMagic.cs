@@ -26,6 +26,7 @@ public class ProjectileGroupMagic : MagicBehaviour
 
     float _orbitPhase;        // 公转相位（所有挂载球共享 → 保证均匀分布 + 同步旋转）
     float _dispatchTimer;     // 距离下一次"派人"还有多久
+    float _sinceDispatch;     // 距**上一次真正派出**过去了多久（派出瞬间清零）—— 给"补位延迟"用
 
     protected override void OnInit()
     {
@@ -64,6 +65,10 @@ public class ProjectileGroupMagic : MagicBehaviour
         // ⚠️ 0 = 下一个 Tick 就派第一颗（按下 E 就有反应）。
         //    用户说的是"间隔一到才开始搜寻" —— t=0 也算"第一个间隔到点"，之后严格按 launchInterval 走。
         _dispatchTimer = 0f;
+
+        // ⚠️ 刚施法 → 视作"刚刚派出过"：这样补位延迟从 0 起算。
+        //    （不影响开局：新球的 `_orbitAngle` 还是 NaN，第一次摆位会直接吸附到均分位置，不走补位逻辑。）
+        _sinceDispatch = 0f;
     }
 
     public override void Tick(float dt)
@@ -74,11 +79,17 @@ public class ProjectileGroupMagic : MagicBehaviour
 
         if (_orbs.Count == 0) return;
 
-        // ② 公转 + 把每颗球摆到"当前剩余球数"均分的位置上
-        //    ⚠️ 每帧重算 index/count → 有球被派出去后，剩下的**自动重新均分圆环**（诸葛亮被动的观感）
+        // ② 公转 + 摆位
+        //    ⚠️ 是否【允许补位】由 `catchUpDelay` 决定（2026-09-29 用户定）：
+        //       距上一次"真正派出"还不到 catchUpDelay 秒 → **先不补位**（各球守原位，空位看得见）；
+        //       超过之后（说明这一波已经派完、范围内没了敌人）→ 剩下的球一起平滑补位。
+        //       catchUpDelay = 0   → 老行为（立刻补位）
+        //       catchUpDelay 很大  → 等价于"永不补位"（球自己 6 秒就消散，永远等不到）
         _orbitPhase += _d.orbitSpeed * Mathf.Deg2Rad * dt;
+        _sinceDispatch += dt;
+        bool allowCatchUp = _sinceDispatch >= _d.catchUpDelay;
         for (int i = 0; i < _orbs.Count; i++)
-            _orbs[i].SetOrbit(i, _orbs.Count, _orbitPhase);
+            _orbs[i].SetOrbit(i, _orbs.Count, _orbitPhase, allowCatchUp);
 
         // ③ 到点派人：让"待命最久"的那颗去搜敌
         _dispatchTimer -= dt;
@@ -86,7 +97,12 @@ public class ProjectileGroupMagic : MagicBehaviour
         // ⚠️ Max 兜底：卡上填 0 时不该变成"每帧全派完"
         _dispatchTimer = Mathf.Max(0.0001f, _d.launchInterval);
 
-        if (_orbs[0].TryDispatch()) _orbs.RemoveAt(0);   // 打出去了 → 从身上摘掉；没打到 → 继续挂着
+        if (_orbs[0].TryDispatch())
+        {
+            _orbs.RemoveAt(0);        // 打出去了 → 从身上摘掉
+            _sinceDispatch = 0f;      // ⭐ 刚派出一颗 → 补位延迟**重新计时**（连续派发期间就不会补位）
+        }
+        // 没打到 → 继续挂着：**不**重置 `_sinceDispatch`（没有新球出去，该补位就补位）
     }
 
     /// <summary>卸下 / 换魔法：把还挂在身上的球全部清掉，别留下"无主法球"绕着空转。</summary>
@@ -98,6 +114,7 @@ public class ProjectileGroupMagic : MagicBehaviour
             if (_orbs[i] != null) Destroy(_orbs[i].gameObject);
         _orbs.Clear();
         _dispatchTimer = 0f;
+        _sinceDispatch = 0f;
     }
 
     /// <summary>取玩家 transform。⚠️ 宿主可能已经销毁（换魔法 / 玩家死亡）→ 兜底用自己的 transform，

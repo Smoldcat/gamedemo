@@ -34,9 +34,7 @@ MonoBehaviour:
   worldShadowAlpha: 0.3
   orbCount: 5
   damage: 25
-  searchRadius: 6
-  retargetInterval: 0.15
-  targetMode: 0
+  searchRadius: 8
   spawnRadius: 1.2
   spawnHeight: 0.25
   spawnDuration: 0
@@ -56,4 +54,6 @@ MonoBehaviour:
   hitSound: {fileID: 0}
   endSound: {fileID: 0}
   castDelay: 0
-  launchInterval: 0.5
+  launchInterval: 0.3
+  orbitCatchUpSpeed: 480
+  catchUpDelay: 0.5
