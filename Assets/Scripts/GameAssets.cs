@@ -150,7 +150,29 @@ public class GameAssets : ScriptableObject
     [Tooltip("爆炸音效：RPG 命中与自爆兵自爆共用。留空 = 代码合成的低频爆炸声")]
     public AudioClip explosion;
 
-    // ---------------- 商店音效（2026-09-25 新增） ----------------
+    // ---------------- HUD 风格（2026-09-25 新增：把 HUD 的信息块统一成「快捷栏 / 背包」那套容器风格） ----------------
+    // 做法 = 与快捷栏完全同族：**结构/图片由编辑器工具预置进场景**（菜单 `Tools/游戏/优化 HUD 风格`），
+    //   **颜色由代码驱动、集中在本表**（HUD.ApplyHudStyle 每局读一次）→ 想调色只改这里，不必动场景。
+    // ⚠️ 物理位置在**末尾**（§6.8）；Inspector 分组由 `GameAssetsEditor.Fields` 决定。
+    [Tooltip("HUD 容器化风格的**总开关**：取消勾选 = 代码完全不碰 HUD 的血条模式与各卡片颜色（回到老样子）。\n" +
+             "⚠️ 卡片节点由菜单 `Tools/游戏/优化 HUD 风格` 生成并接线；没跑过工具时本开关无效果（没有节点可驱动）。")]
+    public bool hudUseNewStyle = true;
+    [Tooltip("HUD 卡片底色（左下角状态卡片 / 顶部波次与击杀卡片 / 死亡面板卡片）。默认 = 背包「库存格底色」，保持同族")]
+    public Color hudCardColor = new Color(0.16f, 0.18f, 0.26f, 0.92f);
+    [Tooltip("HUD 卡片描边色（细圆角描边）。默认 = 快捷槽边框色")]
+    public Color hudFrameColor = new Color(0.32f, 0.36f, 0.44f, 0.9f);
+    [Tooltip("血条底色（比卡片再深一档，让填充更醒目）")]
+    public Color hudBarBgColor = new Color(0.09f, 0.11f, 0.17f, 0.95f);
+    [Tooltip("HUD 主文字色（血量数值 / 波次 等）")]
+    public Color hudTextColor = new Color(0.90f, 0.93f, 0.98f, 1f);
+    [Tooltip("HUD 次要文字色（模式提示 / 空手提示 等）")]
+    public Color hudDimTextColor = new Color(0.62f, 0.68f, 0.80f, 1f);
+    [Tooltip("低血量警示色：血量低于 35% 时，血条描边会脉动到这个颜色")]
+    public Color hudLowHpColor = new Color(1f, 0.25f, 0.2f, 1f);
+    [Tooltip("死亡结算面板 · 「重新开始」按钮的文字色（卡片为深色底，用浅色字更清楚）")]
+    public Color hudButtonTextColor = new Color(0.95f, 0.97f, 1f, 1f);
+
+    // ---------------- 商店音效（2026-09-25 新增；2026-09-30 补回被旧版文件覆盖掉的这两个字段） ----------------
     // ⚠️ 物理位置在**末尾**（§6.8「新字段只能在已有字段之后追加」）；Inspector 里归「商店音效」分组
     //    （分组与顺序由 GameAssetsEditor.Fields 决定，与类里的物理位置无关）。
     [Tooltip("商店**买入成功**的音效（收银机「叮」）。留空 = 代码合成的占位音")]

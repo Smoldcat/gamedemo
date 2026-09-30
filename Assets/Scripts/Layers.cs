@@ -3,8 +3,11 @@ using UnityEngine;
 /// <summary>
 /// 层（Layer）常量与 LayerMask 的收敛点。
 ///
-/// ✅ **V-12 已全部完成**（2026-09-18）：项目里 5 处 `Physics.Raycast` **全部**显式传了 LayerMask + `QueryTriggerInteraction.Ignore`：
-///   视线（EnemyAI）、绕障（EnemyAI）、弹道（Bullet）、爆炸遮挡（Bullet）、红线截断（EnemySniperBehaviour）。
+/// ✅ **V-12 已全部完成**（2026-09-18）：项目里**所有** `Physics.Raycast` 都显式传了
+///   LayerMask + `QueryTriggerInteraction.Ignore`。
+///   ⚠️ 这里刻意**不列"几处 / 分别是哪里"**：那种清单必然随新增代码过期
+///      （2026-09-29 注释审查时，原清单已经漏了 `Combat` 的爆炸遮挡和 `LaserBeam` 的激光，
+///        还把爆炸遮挡错记在 `Bullet` 名下）。加新的射线时照这个约定写就行，不用回来改本行。
 ///   场景里的阻挡物也已分层（**动它们时记得一起维护**）：Ground→Ground、4 面墙 + 9 个箱子→Obstacle、Player→Player；
 ///   敌人由 `WaveManager.SpawnEnemy` 设 Enemy；血包 / 武器拾取物设 Pickup；特效设 FX。
 ///

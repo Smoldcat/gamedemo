@@ -27,8 +27,10 @@ using UnityEngine.UI;
 ///      **热点取 Sprite 自己的 pivot**（在 Sprite Editor 里拖 pivot 即可指定"指针尖在哪"，无需额外字段）。
 ///
 /// ⚠️ 本类跨界：**视觉那一半是 UI**（走 `UIUtil` 那套规范：`NewOverlayCanvas` / UI 层 / 成对销毁 Sprite），
-///    **位置来源与注入 EventSystem 属于输入层**。所以它是"UI 的第 6 块画布"（sortingOrder=400，
-///    盖住 HUD 0 / 准星 100 / 击杀反馈 150 / 背包 200 / 飘字 300）。
+///    **位置来源与注入 EventSystem 属于输入层**。所以它是「UI 里 sortingOrder 最高的一块画布」
+///    （sortingOrder=400，盖住 HUD 0 / 准星 100 / 击杀反馈 150 / 背包、箱子、商店、商店库存 200 / 飘字 300）。
+///    ⚠️ 别写"第 N 块画布"这种序号：画布数量会随新面板增加
+///       （2026-09-29 注释审查时已经不止 6 块了，而"400 是最高的"这条永远成立）。
 ///
 /// ⚠️ 为什么必须是**独立根画布**、不能塞进现有任何一块：
 ///    ① 它要盖在最上层；② 打开背包时 `HUD.SetContentVisible(false)` 会把 HUD 那块画布**整个关掉**
@@ -152,7 +154,7 @@ public static class VirtualCursor
     {
         if (_canvas != null) return;
 
-        // 第 6 块画布：必须独立、且在最上层（见类注释里的三条理由）
+        // sortingOrder 最高的一块画布：必须独立、且在最上层（见类注释里的三条理由）
         _canvas = UIUtil.NewOverlayCanvas("VirtualCursorCanvas", 400);
 
         // ---- 外观：**资源优先 + 代码兜底**（与 Hotbar / 拾取气泡同一套路）----

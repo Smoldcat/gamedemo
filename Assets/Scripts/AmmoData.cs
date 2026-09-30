@@ -13,14 +13,15 @@ public enum AmmoKind
 }
 
 /// <summary>
-/// 弹药定义卡（<see cref="ItemData"/> 的具体子类之一）—— **一种弹药 = 一张卡**（当前 5 种）。
+/// 弹药定义卡（<see cref="ItemData"/> 的具体子类之一）—— **一种弹药 = 一张卡**
+/// （5 个口径 × 每个等级各一张；⚠️ 别写"当前 5 种"，那是只有一级时的旧数量）。
 ///
 /// 设计要点：
 /// · **武器只认 <see cref="ammoKind"/>**（口径）：一把枪能用哪些弹只看这一项 —— **等级不参与匹配**。
 ///   换弹时按「弹匣当前装的那张卡」（`Slot.ammoId` / `ItemStack.ammoId`）统计与扣除，
 ///   唯一入口是 `PlayerBackpack.CountAmmo(AmmoData)` / `TakeAmmo(AmmoData, int)`（**按卡**的那对）。
 ///   ⚠️ 别用按口径求和 —— 那会把一级 + 二级加在一起（按口径的那对已于 2026-09-27 删除）。
-/// · <see cref="packSize"/> = 地上"一包"多少发，同时也是按 E 捡起时进背包的数量；编辑器可调。
+/// · <see cref="packSize"/> = 地上"一包"多少发，同时也是按 **F** 捡起时进背包的数量；编辑器可调。
 /// · 弹药**可堆叠**：在 Inspector 里勾 `canStack` + `maxStack` 填 999（本类不改基类的堆叠语义）。
 /// · 世界外观**不用 3D 模型**：地上直接显示图标（见 `AmmoPickup`），图标走 `ItemVisuals.IconOf`。
 ///
@@ -41,7 +42,7 @@ public class AmmoData : ItemData
     public string itemName = "弹药";
     [Tooltip("口径：武器按它匹配（手枪 / 步枪 / 狙击 / 冲锋 / 霰弹）")]
     public AmmoKind ammoKind = AmmoKind.Rifle;
-    [Tooltip("地上「一包」多少发，也是按 E 捡起时进背包的数量。\n" +
+    [Tooltip("地上「一包」多少发，也是按 F 捡起时进背包的数量。\n" +
              "默认取该口径主力武器的弹匣量（手枪 8 / 步枪 30 / 狙击 5 / 冲锋 34 / 霰弹 7），可自由调。")]
     [Min(1)] public int packSize = 30;
 

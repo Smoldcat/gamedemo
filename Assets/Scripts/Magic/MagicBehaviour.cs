@@ -4,7 +4,8 @@ using UnityEngine;
 /// **魔法行为基类**（策略模式）—— 与 <see cref="EnemyBehaviour"/> 完全同一套设计，
 /// 因为两者面对的是同一个问题："一套框架 + N 种各不相同的具体做法"。
 ///
-/// ⭐ 新增魔法 = 写一个继承本类的脚本 + 建一张卡（卡上的「行为类型」下拉会自动出现它）——
+/// ⭐ 新增魔法 = 写一个继承本类的脚本 + 建一张卡（卡的最下方有「行为类型（下拉选）」，
+///    会自动列出本类的所有子类 —— 见 `Assets/Editor/MagicDataEditor.cs`）——
 ///    **不需要改 <see cref="PlayerMagic"/> / HUD / 背包 / 战斗系统的任何代码**。
 ///
 /// 分工（这条线要守住，否则每个魔法都会重复写一遍公共逻辑）：
@@ -78,7 +79,10 @@ public abstract class MagicBehaviour : MonoBehaviour
     protected void DenyCast(string msg)
         => HUD.Announce(msg, 1.0f, 26, new Color(0.9f, 0.7f, 0.4f));
 
-    /// <summary>取本魔法的数值成长系数（第一期恒为 1）。
+    /// <summary>取本魔法的数值成长系数。
+    /// ⚠️ 别写成"第一期恒为 1"（这里曾经这么写过）：**算法本身已经在按等级缩放**
+    ///    （`Pow(levelScale, level-1)`，见 <see cref="LevelMulOf"/>）——
+    ///    现在之所以都是 1，只是因为**两张卡的 `level` 都是 1**；填了 levelScale 就会立刻生效。
     /// 具体魔法算伤害时写成 `基础值 × LevelMulOf(卡)` 的形式即可 ——
     /// 这样以后开了升级，数值自动跟着走，不用回头改结构。</summary>
     protected float LevelMul() => LevelMulOf(data);

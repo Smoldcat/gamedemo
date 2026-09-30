@@ -367,14 +367,39 @@ public class MagicProjectile : MonoBehaviour
         return false;
     }
 
-    /// <summary>结算一次命中。返回 true = 有效命中（已造成伤害）。
+    /// <summary>结算一次命中。返回 true = 这一帧的检测到此为止（有效命中，或撞墙消散）。
     /// ⚠️ 用 `GetComponentInParent&lt;Health&gt;()`：敌人的碰撞体可能挂在子物体上，
-    ///    直接 `GetComponent` 会拿不到（表现是"打中了但没伤害"，极难查）。</summary>
+    ///    直接 `GetComponent` 会拿不到（表现是"打中了但没伤害"，极难查）。
+    ///
+    /// ⭐ **撞墙分支**（2026-09-29 补上 —— 之前是个"假开关"）：
+    ///    卡上勾了 <see cref="ProjectileMagicData.blockedByObstacle"/> 时，墙 / 箱子 / 地面
+    ///    也会被算进检测掩码（见 <see cref="Setup"/>），于是"扫到一个**没有 `Health`** 的碰撞体"
+    ///    就意味着**撞到墙了** → 在这里消散。<br/>
+    ///    ⚠️ 之前这里只判"有没有 Health"，没有 Health 就直接跳过 →
+    ///       勾了开关球照样穿墙（静默失效：既不报错、也不生效）。
+    ///    ⚠️ 反过来，**没勾**开关时掩码里根本没有墙 → 这个分支永远不会进来 → 天然穿墙、零开销。
+    ///    ⚠️ 注意判 `!h.alive`：**已死敌人**的碰撞体仍在掩码内，但那是"打完的尸体"不是墙 ——
+    ///       应该忽略它继续飞（否则球会被尸体挡住）。</summary>
     bool HandleHit(Collider col, Vector3 point)
     {
         if (col == null) return false;
         var h = col.GetComponentInParent<Health>();
-        if (h == null || !h.alive || h.team == Health.Team.Player) return false;
+
+        if (h == null)
+        {
+            // 走到这里 = 扫到了非敌人的东西 = 墙 / 箱子 / 地面（只有勾了开关才会进掩码）
+            if (_d != null && _d.blockedByObstacle)
+            {
+                Effects.Impact(point, _d.orbColor, 1.2f);
+                Expire();
+                return true;          // 已消散 → 本帧不再继续检测
+            }
+            return false;             // 没勾开关（理论上进不来）→ 忽略、继续飞
+        }
+
+        // 已死敌人 / 玩家 → 不是有效目标，忽略并继续（不消散）
+        if (!h.alive || h.team == Health.Team.Player) return false;
+
         OnHit(h, point);
         return true;
     }

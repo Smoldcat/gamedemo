@@ -43,7 +43,7 @@ MonoBehaviour:
   orbSpeed: 14
   turnSpeed: 720
   homing: 1
-  orbLifetime: 6
+  orbLifetime: 8
   pierceCount: 0
   blockedByObstacle: 0
   endDuration: 0
@@ -54,6 +54,6 @@ MonoBehaviour:
   hitSound: {fileID: 0}
   endSound: {fileID: 0}
   castDelay: 0
-  launchInterval: 0.3
+  launchInterval: 0.35
   orbitCatchUpSpeed: 480
   catchUpDelay: 0.5

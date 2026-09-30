@@ -195,7 +195,7 @@ internal static class ShopUI
 
     // ==================== 悬停提示（tooltip） ====================
 
-    /// <summary>建 tooltip（内容 / 摆位都复用背包的 public static 实现，见 <see cref="ShowTooltip"/>）。
+    /// <summary>建 tooltip（内容 / 摆位都复用背包的 public static 实现，见 <see cref="PlaceTooltip"/>）。
     /// ⚠️ 必须建在格子**之后**：uGUI 同层按兄弟顺序绘制，后建的盖在上面。</summary>
     public static void CreateTooltip(Transform parent, out GameObject go, out RectTransform rect, out Text text)
     {

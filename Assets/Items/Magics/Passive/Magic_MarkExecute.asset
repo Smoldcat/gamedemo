@@ -24,7 +24,7 @@ MonoBehaviour:
   magicName: "\u5370\u8BB0\u65A9\u6740"
   behaviourTypeName: ConditionMagic, Assembly-CSharp
   isPassive: 1
-  cooldown: 0
+  cooldown: 5
   level: 1
   levelScale: 1
   shortDesc: "\u88AB\u52A8\uFF1A\u653B\u51FB\u654C\u4EBA\u4F1A\u6302\u4E0A\u5370\u8BB0\u3002\u5370\u8BB0\u671F\u95F4\u654C\u4EBA\u8840\u91CF\u4F4E\u4E8E
@@ -36,7 +36,7 @@ MonoBehaviour:
   conditionType: 0
   executeThreshold: 0.2
   checkInterval: 0.2
-  markDuration: 6
+  markDuration: 1
   markIndicator: {fileID: 0}
   markColor: {r: 1, g: 0.85, b: 0.3, a: 1}
   markHeight: 2.1

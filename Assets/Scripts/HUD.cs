@@ -37,6 +37,16 @@ public class HUD : MonoBehaviour
     [Header("死亡面板内部元素（可选）")]
     public Text restartBtnLabel;
 
+    [Header("HUD 风格（由菜单 Tools/游戏/优化 HUD 风格 生成并接线；留空 = 该块不做任何改动）")]
+    [Tooltip("左下角「状态卡片」根节点（血条 + 血量 / 武器 / 模式）。\n配了它：卡片与描边颜色由代码从 GameAssets「HUD 风格」组驱动，血条描边做低血警示。\n留空 = 这一块完全不动（老样子）")]
+    public RectTransform statusCard;
+    [Tooltip("顶部「波次卡片」根节点（节点名约定：CardBg / CardFrame）。留空 = 不驱动它")]
+    public RectTransform waveCard;
+    [Tooltip("顶部「击杀卡片」根节点。留空 = 不驱动它")]
+    public RectTransform killCard;
+    [Tooltip("死亡结算面板的中央卡片根节点。留空 = 不驱动它")]
+    public RectTransform deathCard;
+
     [Header("字体")]
     [Tooltip("找不到系统雅黑时用这个内置字体兜底")]
     public Font fallbackFont;
@@ -161,6 +171,13 @@ public class HUD : MonoBehaviour
     bool _killFlashing;
     Color _killBaseColor = new Color(1f, 0.92f, 0f);
 
+    // ---- HUD 容器化风格（由 ApplyHudStyle 写入；详见该方法注释）----
+    bool _hpFillFilled;                                         // 血条是否走 Filled 模式（没跑过工具 = false → 自动退回旧的"改宽度"写法）
+    Image _hpBarFrame;                                          // 血条描边（低血时脉动到警示色）
+    Color _styleFrame = new Color(0.32f, 0.36f, 0.44f, 0.9f);   // 卡片 / 血条描边基色（= 快捷槽边框色）
+    Color _styleLowHp = new Color(1f, 0.25f, 0.2f, 1f);         // 低血警示色
+    Color _styleDim = new Color(0.7f, 0.7f, 0.7f);              // 次要文字色（空手提示等；默认 = 老样子）
+
     /// <summary>
     /// 显示"拾取气泡"：在**物体旁边**显示一个气泡（物品名 + 按键圆标，如 `AK74 ⓔ`）。
     /// 调用方**每帧调用续期**（超过 0.12s 不调即自动消失），语义与已被它取代的"底部一行提示"一致。
@@ -261,6 +278,7 @@ public class HUD : MonoBehaviour
         BuildDamageArrow();      // 受伤方向指示箭头（默认隐藏）
         BuildPickupBubble();     // 拾取气泡（靠近可拾取物时显示，默认隐藏）
         BuildHotbar();           // 快捷栏（1/2/3 = 武器槽、Q = 血包；场景预置优先，留空则代码生成）
+        ApplyHudStyle();         // HUD 容器化风格（颜色统一从 GameAssets「HUD 风格」组读；引用留空则完全不动）
 
         // 纯显示元素不需要接收点击：关掉 raycastTarget，每帧 UI 射线检测只剩重启按钮
         DisableDisplayRaycasts();
@@ -288,6 +306,88 @@ public class HUD : MonoBehaviour
         if (o == null) Debug.LogWarning($"[HUD] Inspector 引用「{field}」没有拖 → {symptom}。");
     }
 #endif
+
+    /// <summary>
+    /// **HUD 容器化风格**（唯一实现）：把「快捷栏 / 背包」那套视觉（深色半透明圆角底 + 细圆角描边 + 统一文字色）
+    /// 应用到 HUD 的信息块上。颜色**只在开局读一次**（`GameAssets` 的「HUD 风格」组）——
+    /// 与快捷栏同一条约定：**颜色由代码驱动，节点上调色无效**（想改色请改资源总表）。
+    ///
+    /// 三项职责：
+    ///   ① 卡片配色：`statusCard` / `waveCard` / `killCard` / `deathCard` 的底与描边（按子节点名 `CardBg` / `CardFrame` 递归找）；
+    ///   ② 血条：底色 + 描边（低血脉动在 `Update` 里）+ **探测能否走 Filled 模式**（跑过菜单 `Tools/游戏/优化 HUD 风格` 才会切成 Filled）；
+    ///   ③ 文字：血量 / 波次 = 主文字色，模式 / 空手提示 = 次要文字色，死亡按钮文字 = 按钮文字色。
+    ///
+    /// ⚠️ 引用留空 = 这一块**一个字节都不碰**（老场景 / 没跑过工具的工程照常跑）。
+    /// ⚠️ `GameAssets.hudUseNewStyle` 取消勾选 → 整个方法直接返回（= 一键回退开关）。
+    /// </summary>
+    void ApplyHudStyle()
+    {
+        var ga = GameAssets.I;
+        if (ga != null && !ga.hudUseNewStyle) return;   // 回退开关：一个字节都不碰
+
+        Color card  = ga != null ? ga.hudCardColor    : new Color(0.16f, 0.18f, 0.26f, 0.92f);
+        Color frame = ga != null ? ga.hudFrameColor   : new Color(0.32f, 0.36f, 0.44f, 0.9f);
+        Color barBg = ga != null ? ga.hudBarBgColor   : new Color(0.09f, 0.11f, 0.17f, 0.95f);
+        Color text  = ga != null ? ga.hudTextColor    : new Color(0.9f, 0.93f, 0.98f, 1f);
+        Color dim   = ga != null ? ga.hudDimTextColor : new Color(0.62f, 0.68f, 0.8f, 1f);
+        _styleFrame = frame;
+        _styleLowHp = ga != null ? ga.hudLowHpColor : new Color(1f, 0.25f, 0.2f, 1f);
+        _styleDim   = dim;
+
+        StyleCard(statusCard, card, frame);
+        StyleCard(waveCard, card, frame);
+        StyleCard(killCard, card, frame);
+        StyleCard(deathCard, card, frame);
+
+        if (hpText != null) hpText.color = text;
+        if (waveText != null) waveText.color = text;
+        if (killText != null) killText.color = _killBaseColor;   // 击杀保持自己的语义色（闪白动画的基准，只在 Awake 缓存一次）
+        if (deathStat != null) deathStat.color = dim;
+
+        // 血条：底 / 描边 / 填充模式探测
+        if (hpFill != null)
+        {
+            var barRoot = hpFill.transform.parent;
+            if (barRoot != null)
+            {
+                var bgImg = barRoot.GetComponent<Image>();
+                if (bgImg != null) bgImg.color = barBg;
+                var frameTr = FindDeep(barRoot, "HpFrame");
+                _hpBarFrame = frameTr != null ? frameTr.GetComponent<Image>() : null;
+                if (_hpBarFrame != null) _hpBarFrame.color = frame;
+            }
+            // 新风格走 Filled；Type 不是 Filled（= 没跑过工具）时自动退回旧的"改宽度"写法
+            _hpFillFilled = hpFill.sprite != null && hpFill.type == Image.Type.Filled;
+        }
+
+        // 死亡按钮：底 / 描边 / 文字
+        if (restartBtn != null)
+        {
+            if (restartBtn.targetGraphic is Image btnImg)
+                btnImg.color = new Color(frame.r, frame.g, frame.b, 1f);
+            var btnFrameTr = FindDeep(restartBtn.transform, "BtnFrame");
+            var btnFrameImg = btnFrameTr != null ? btnFrameTr.GetComponent<Image>() : null;
+            if (btnFrameImg != null) btnFrameImg.color = BackpackPanel.SlotActiveColor();
+            if (restartBtnLabel != null)
+                restartBtnLabel.color = ga != null ? ga.hudButtonTextColor : new Color(0.95f, 0.97f, 1f, 1f);
+        }
+    }
+
+    /// <summary>
+    /// 给一张卡片上色：`CardBg` / `CardFrame` 两个子节点按名字**递归**找（与快捷栏同一套"节点名契约"；
+    /// `Transform.Find` 只找直接子节点，层级一变就会拿到 null → 与快捷栏一样用 `FindDeep`）。
+    /// 找不到就跳过 —— 结构不完整时只失去这一块的配色，不会报错。
+    /// </summary>
+    static void StyleCard(RectTransform card, Color bg, Color frame)
+    {
+        if (card == null) return;
+        var bgTr = FindDeep(card, "CardBg");
+        var bgImg = bgTr != null ? bgTr.GetComponent<Image>() : null;
+        if (bgImg != null) bgImg.color = bg;
+        var frameTr = FindDeep(card, "CardFrame");
+        var frameImg = frameTr != null ? frameTr.GetComponent<Image>() : null;
+        if (frameImg != null) frameImg.color = frame;
+    }
 
     /// <summary>
     /// 核对**主 HUD 这块画布**（手搭在场景里、参数写在场景 YAML 里）的 `CanvasScaler` 是否与全项目基准一致。
@@ -428,8 +528,19 @@ public class HUD : MonoBehaviour
         _hpShown = Mathf.MoveTowards(_hpShown, ratio, Time.deltaTime * 2.5f);
         if (hpFill != null)
         {
-            hpFill.rectTransform.sizeDelta = new Vector2(_hpFullSize.x * _hpShown, _hpFullSize.y);
+            // 新风格：血条走 Filled（圆角九宫格在低血量时不会被挤扁）；
+            // 没跑过工具 / 把开关关掉时 `_hpFillFilled=false` → 自动退回旧的"改宽度"写法（逐位等于老样子）。
+            if (_hpFillFilled) hpFill.fillAmount = _hpShown;
+            else hpFill.rectTransform.sizeDelta = new Vector2(_hpFullSize.x * _hpShown, _hpFullSize.y);
             hpFill.color = Color.Lerp(new Color(0.9f, 0.2f, 0.15f), new Color(0.2f, 0.85f, 0.3f), _hpShown);
+        }
+        // 低血量：血条描边脉动到警示色（与受伤红晕同一条时间线；读的是"真实血量比例"而不是平滑值）
+        if (_hpBarFrame != null)
+        {
+            float low = Mathf.Clamp01((0.35f - ratio) / 0.35f);
+            _hpBarFrame.color = low > 0f
+                ? Color.Lerp(_styleFrame, _styleLowHp, low * (0.6f + 0.4f * Mathf.Sin(Time.time * 5f)))
+                : _styleFrame;
         }
         int hpInt = health != null ? Mathf.RoundToInt(health.hp) : 0;
         int maxHpInt = health != null ? Mathf.RoundToInt(health.maxHp) : 0;
@@ -481,7 +592,8 @@ public class HUD : MonoBehaviour
                                     : $"{pc.weapon.weaponName}  {mag}/" + (reserve < 0 ? "∞" : reserve.ToString())
                                       + (tierMark.Length > 0 ? "  " + tierMark : ""));
             }
-            weaponText.color = hasWeapon ? pc.weapon.pickupColor : new Color(0.7f, 0.7f, 0.7f);
+            // 空手色走「次要文字色」（新风格下与卡片配色同族；未启用风格时 = 原来的灰 (0.7,0.7,0.7)）
+            weaponText.color = hasWeapon ? pc.weapon.pickupColor : _styleDim;
         }
 
         // 模式（只在切换时改文本）

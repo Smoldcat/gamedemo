@@ -33,7 +33,9 @@ public abstract class MagicData : ItemData
 
     [Tooltip("行为类名，格式 \"类名, 程序集名\"。\n" +
              "例：ProjectileGroupMagic, Assembly-CSharp\n" +
-             "⚠️ 别手打 —— 用下面的「行为类型」下拉框选（手打容易漏程序集名，运行时静默失效）。")]
+             "⭐ 不用手打 —— 卡的最下方有「行为类型（下拉选）」，自动列出所有 MagicBehaviour 子类。\n" +
+             "⚠️ 真手打了也没关系：格式不对 / 类不存在时，装备后会报一条**带卡名和期望格式**的 LogError\n" +
+             "   （不是静默失效，见 PlayerMagic.CreateBehaviour）。")]
     public string behaviourTypeName = "";
 
     [Tooltip("被动魔法 = 装备即生效、不需要按键（例：印记斩杀）。\n" +
@@ -41,7 +43,12 @@ public abstract class MagicData : ItemData
              "⚠️ 这只是「触发方式」，不是两类不同的东西 —— 所以共用同一张卡，而不是两个基类。")]
     public bool isPassive;
 
-    [Tooltip("冷却秒数（主动魔法用；被动可填 0）。\n" +
+    [Tooltip("冷却秒数。**主动与被动都读这个字段**（2026-09-29 起被动也有冷却）：\n" +
+             "  · 主动：按 E 释放后进冷却（例：魔法球群 12）\n" +
+             "  · 被动：生效一次后进冷却 —— 冷却期间**完全不生效**\n" +
+             "    （不挂新印记，场上已挂的印记也不会触发；覆盖在敌人身上的印记图标会留着，冷却一好立刻判）\n" +
+             "  · 填 0 = 永远就绪 = 【时刻生效】（被动想要【无冷却】就填 0）\n" +
+             "📌 HUD 会自动显示剩余秒数（主动与被动一样，就在快捷栏那一格里）\n" +
              "第一期只有 CD，没有蓝量 —— 以后要做蓝量，是加一个【消耗字段 + 资源系统】，不用改这里。")]
     [Min(0f)] public float cooldown = 8f;
 
@@ -53,7 +60,9 @@ public abstract class MagicData : ItemData
     [Min(1)] public int level = 1;
 
     [Tooltip("每级数值成长系数：具体魔法类读它来缩放自己的数值（例：伤害 × levelScale 的 (level-1) 次方）。\n" +
-             "第一期用不到，留着是为了以后加升级时不用改卡的结构。")]
+             "⚠️ 别以为它【还没接上】（这里曾经这么写过）：**已经真的在生效** ——\n" +
+             "   算法 `Pow(levelScale, level-1)` 已接进投射物伤害（MagicBehaviour.LevelMulOf → MagicProjectile.OnHit）。\n" +
+             "   现在看不出差别，只是因为所有卡的 level 都是 1；把 level 调成 2 就会立刻看到数值变化。")]
     [Min(0.01f)] public float levelScale = 1f;
 
     // ==================== 展示 ====================

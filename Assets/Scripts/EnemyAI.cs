@@ -3,8 +3,10 @@ using UnityEngine;
 
 /// <summary>
 /// 敌人AI核心：感知（巡逻 → 发现玩家）+ 追击状态 + 移动 + 血条 + 死亡。
-/// 「怎么攻击」（近战砍 / 远程射击 / 未来的自爆）不在本类，由挂载的 EnemyBehaviour 行为组件负责：
-/// WaveManager 生成敌人时按配置挂上对应行为组件，本类每帧驱动它的 Tick()。
+/// 「怎么攻击」（近战砍 / 远程射击 / 自爆）不在本类，由挂载的 EnemyBehaviour 行为组件负责：
+/// WaveManager 生成敌人时按配置挂上对应行为组件。
+/// ⚠️ 本类**不是每帧**驱动它（这里曾经写成"每帧驱动 Tick()"）：只在**追击状态**下、
+///    于 `FixedUpdate` 里调用 `behaviour.Tick()` —— 巡逻分支不会调用。
 /// 要新增敌人行为 = 新建一个继承 EnemyBehaviour 的脚本即可，本类不需要改。
 /// </summary>
 [RequireComponent(typeof(Health))]

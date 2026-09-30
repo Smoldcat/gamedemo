@@ -181,7 +181,8 @@ public static class Effects
     // ⚠️ `GameObject.CreatePrimitive` 每次调用都会**新建一份网格**（且会带一个碰撞体，项目各处都在删它）。
     // 血条 / 拾取物 / 代码兜底身体 / 特效球这类"每次生成都要造图元"的地方会持续产垃圾，
     // 而且这些网格要等场景卸载才回收。这里统一改成"共享网格只建一次、全部实例共用"。
-    // （项目早就为子弹这么做过，见 `Bullet._cubeMesh`；现在把这条经验推广到全项目。）
+    // （项目早就为子弹这么做过 —— 子弹的网格现在也统一走 `Effects.SharedMesh`；
+    //   ⚠️ 别再引用 `Bullet._cubeMesh`：那个字段已经删掉了，2026-09-29 注释审查修正。）
     static readonly Dictionary<PrimitiveType, Mesh> _meshCache = new Dictionary<PrimitiveType, Mesh>();
 
     /// <summary>取内置图元的共享网格（只创建一次）。</summary>

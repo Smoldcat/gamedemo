@@ -73,11 +73,24 @@ public class PlayerMagic : MonoBehaviour
     /// <summary>当前行为实例（可能为 null：没装备，或卡上的行为类名解析失败）。</summary>
     public MagicBehaviour Behaviour => _behaviour;
 
-    /// <summary>现在能不能放（冷却就绪 + 魔法自己的条件）。HUD 可用它决定图标灰不灰。</summary>
+    /// <summary>现在能不能放（冷却就绪 + 魔法自己的条件）。HUD 可用它决定图标灰不灰。
+    /// ⚠️ 被动魔法恒为 false（被动没有"放"这个动作）—— 它的就绪状态看 <see cref="PassiveReady"/>。</summary>
     public bool CanCastNow
         => _equipped != null && !_equipped.isPassive
            && _cdRemaining <= 0f
            && _behaviour != null && _behaviour.CanCast();
+
+    /// <summary>**被动魔法**是否就绪（不在冷却中）。主动走 <see cref="CanCastNow"/>，被动走这里。
+    ///
+    /// ⭐ 用户 2026-09-29 定的设计：被动也能有冷却，冷却期间**完全不生效**。
+    ///    · 卡上 `cooldown` 填 **0** → 恒为 true = **时刻生效**（这就是"一个字段覆盖两种行为"）
+    ///    · 填大于 0 → 生效一次后进冷却，冷却走完才恢复
+    ///
+    /// ⚠️ 为什么必须放在本类（"技能层"）而不是挂在敌人身上的 <see cref="MagicMark"/>：
+    ///    `MagicMark` 是**每个被标记的敌人一份**，冷却写在那里就变成"每个敌人各算各的 CD"
+    ///    → 3 个敌人都低于阈值时会被**一次连斩 3 个**，那不是技能冷却。
+    ///    只有放在这里（全场一份）才能保证"斩一次 → 其他敌人身上的印记也得等"。</summary>
+    public bool PassiveReady => _cdRemaining <= 0f;
 
     // ==================== 生命周期 ====================
 
@@ -181,7 +194,15 @@ public class PlayerMagic : MonoBehaviour
     // ==================== 对外入口 ====================
 
     /// <summary>玩家按下魔法键（E）时由 <see cref="PlayerController"/> 调用。
-    /// 所有失败路径都会给玩家一句**说清原因**的提示（不静默 —— 与武器换弹的提示风格一致）。</summary>
+    ///
+    /// ⚠️ 提示策略（这里曾经写成"所有失败路径都会提示"，与代码不符，2026-09-29 修正）：
+    ///    **会**提示（说清原因，与武器换弹的提示风格一致）：
+    ///      · 冷却中 → 报剩余秒数
+    ///      · 魔法自己拒绝（<see cref="MagicBehaviour.CanCast"/> + <see cref="MagicBehaviour.DenyCast"/>）
+    ///    **静默返回**（这是有意的，不是漏写）：
+    ///      · 空槽（没装魔法）—— 正常状态，按 E 就刷屏反而烦
+    ///      · 被动魔法 —— 它没有"释放"这回事，装备即生效
+    ///      · 行为实例为 null —— 装备时 <see cref="CreateBehaviour"/> 已经报过一条 LogError 了</summary>
     public void TryCast()
     {
         if (_equipped == null) return;                       // 空槽：什么都不做（不提示，避免"没装备"也刷屏）
@@ -210,6 +231,29 @@ public class PlayerMagic : MonoBehaviour
     {
         if (enemy == null || _behaviour == null || _equipped == null || !_equipped.isPassive) return;
         _behaviour.OnPlayerHitEnemy(enemy, headshot);
+    }
+
+    /// <summary>⭐ 被动魔法**成功生效后**由它自己调用（例：<see cref="MagicMark"/> 斩杀成功）→ 开始转冷却。
+    ///
+    /// ⚠️ 必须是"**成功生效**之后"才调，不能"检测到条件就调"——
+    ///    否则会出现"没斩到（被别人抢了人头 / 目标已死）却白转一圈冷却"。
+    /// ⚠️ 卡上 `cooldown` 填 0 时**直接返回、不进冷却** → 就是"时刻生效"（用户要的默认行为）。
+    ///
+    /// ⚠️ **必须判 `isPassive`**（2026-09-29 全面审查补的边界）：
+    ///    印记触发的时刻，`_equipped` 理论上应该是"挂印记的那张被动卡"，但**同一帧换卡**时
+    ///    `SyncFromBackpack` 可能已经把 `_equipped` 换成别的卡了 —— 若不判就会给**主动卡**
+    ///    误设冷却（玩家会看到"刚换上的魔法自己进冷却"）。判一下 `isPassive` 即可挡住。
+    ///
+    /// ⚠️ **HUD 需要改（这里曾经写错，已修正）**：我原以为"<see cref="CooldownRatio"/> 不判被动
+    ///    → HUD 一行不用改"。实际只对了一半：`HUD.UpdateHotbar` 里**键位文字**那个分支
+    ///    把"被动"判在"冷却"之前 → 被动恒显示「被」、看不到秒数。
+    ///    已在 `HUD.cs` 把冷却判断提前（现在被动冷却中会显示剩余秒数，与主动一致）。</summary>
+    public void NotifyPassiveTriggered()
+    {
+        // ⚠️ 只认【被动卡】：防"同帧换卡"时给主动卡误设冷却（见上方注释）
+        if (_equipped == null || !_equipped.isPassive || _equipped.cooldown <= 0f) return;
+        _cdRemaining = _equipped.cooldown;
+        OnCooldownStart?.Invoke(_equipped);
     }
 
     /// <summary>供魔法子类上报"我触发了一个效果"（例：印记斩杀）→ 本类广播给外部（HUD / 音效 / 统计）。

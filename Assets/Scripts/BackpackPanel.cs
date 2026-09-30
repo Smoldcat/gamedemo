@@ -25,7 +25,9 @@ using UnityEngine.UI;
 /// </code>
 /// 任一必需部件找不到 → 判结构不合格 → 自动退回代码生成并在 Console 打警告（不会白屏）。
 ///
-/// 打开背包 → GameState.SetPaused(true)（内部置 Paused + Time.timeScale=0，敌人/子弹冻结）；关闭时只释放自己那次请求。
+/// 打开背包 → `UIState.Push()`（**唯一出口**：统一暂停 + 隐藏整块 HUD + 隐藏准星）；关闭 → `UIState.Pop()`。
+/// ⚠️ 面板自己**不许**再直接调 `GameState.SetPaused`（`UIState` 里的明文规矩）。
+/// （这里曾经写成"打开时 SetPaused(true)、关闭时只释放自己那次请求"，与实现不符，2026-09-29 修正。）
 /// 开关键（**Tab / B**；用户 2026-09-24 定：Esc 不再参与）统一在本组件 Update 处理
 ///（PlayerController 不再监听，避免同帧双触发）。
 /// </summary>
@@ -742,7 +744,7 @@ public class BackpackPanel : MonoBehaviour
         // 血包汇总行（血包本体就在上面的库存格子里，这里只是汇总 + 操作提示）
         _medkitText.text = bp != null && bp.Medkits > 0
             ? "血包 ×" + bp.Medkits + "   （每个占 1 格 · 按 Q 使用，需未满血）"
-            : "血包 ×0   （地图上的药箱按 E 拾取，每个占 1 格）";
+            : "血包 ×0   （地图上的药箱按 F 拾取，每个占 1 格）";
 
         // 库存格子是每次 Refresh 新建的（会重新落到 Default 层）→ 每次刷完统一设回 UI 层
         UIUtil.SetLayerRecursively(_invGrid, UIUtil.UILayer);

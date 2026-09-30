@@ -178,11 +178,25 @@ public class MagicMark : MonoBehaviour
         if (_owner != null) _owner.ReportExecute(h);
     }
 
+    /// <summary>条件满足 → 结算效果。
+    ///
+    /// ⭐ **冷却门**（用户 2026-09-29 定）：技能在冷却中时**不触发**，但**印记继续挂着**（`_done` 保持 false）。
+    ///    为什么"继续挂着"而不是直接撤掉：冷却一好，<see cref="Update"/> 的兜底轮询
+    ///    （或目标再受一次伤）就会重新判到它 → **不用玩家再补一刀**，
+    ///    这就是"冷却开始前已挂的印记"的价值。
+    ///
+    /// ⚠️ 冷却加在 <see cref="PlayerMagic.PassiveReady"/>（**技能层**）而不是本组件上 ——
+    ///    本组件是**每个敌人一份**，写在这里会导致"3 个低血敌人被一次连斩 3 个"。
+    /// ⚠️ <see cref="PlayerMagic.NotifyPassiveTriggered"/> 必须放在 <see cref="ApplyEffect"/> **之后**：
+    ///    要"真正斩成功了"才进冷却（不然没斩到却白转一圈）。</summary>
     void Trigger()
     {
         if (_done) return;
+        if (_owner != null && !_owner.PassiveReady) return;   // ⭐ 技能冷却中 → 这次不触发
+
         _done = true;
         ApplyEffect(_hp);
+        if (_owner != null) _owner.NotifyPassiveTriggered();  // ⭐ 生效成功 → 技能开始转冷却
         Cleanup();
     }
 

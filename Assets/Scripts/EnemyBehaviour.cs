@@ -6,7 +6,9 @@ using UnityEngine;
 /// 新增行为 = 写一个继承本类的脚本，敌人配置的「行为类型」下拉会自动出现它，
 /// 不需要改 EnemyAI / WaveManager 的任何代码。
 ///
-/// 本组件只负责「怎么打」；巡逻/索敌/追击/移动等通用逻辑由 EnemyAI 每帧驱动本组件的 Tick()。
+/// 本组件只负责「怎么打」；巡逻/索敌/追击/移动等通用逻辑由 EnemyAI 负责 ——
+/// ⚠️ 它只在**追击状态**下、于 `FixedUpdate` 里调用本组件的 `Tick()`（**巡逻分支不调**，
+///    所以别把"待机/巡逻时也该做的事"放进 Tick，那样永远不会执行）。
 /// </summary>
 [RequireComponent(typeof(EnemyAI))]
 public abstract class EnemyBehaviour : MonoBehaviour

@@ -30,11 +30,20 @@ public class ConditionMagic : MagicBehaviour
     }
 
     /// <summary>玩家命中敌人（由 <see cref="PlayerMagic.NotifyHitEnemy"/> 转发，来源是 <see cref="Combat"/>）。
-    /// 给敌人挂上/刷新印记。</summary>
+    /// 给敌人挂上/刷新印记。
+    ///
+    /// ⭐ **冷却中不挂**（用户 2026-09-29 定的方案 B）。为什么这样定：
+    ///    · 本技能定位是**收尾斩杀**，不是"给敌人挂负面效果"；
+    ///    · `markDuration` 已经压到 1 秒（比 `cooldown` 短）→ 冷却期间挂上的印记
+    ///      **必然在冷却结束前就消散**，等于白挂（还多一次 AddComponent + 销毁）；
+    ///    · 一次只能斩一个人 → 场上多留几个印记**没有实际价值**。
+    /// ⚠️ 注意这里只挡"**新挂**"：冷却**开始前**已经挂上的印记**不主动撤** ——
+    ///    它们才是"冷却一好立刻斩"的候补（这才是多印记唯一有价值的场景）。</summary>
     public override void OnPlayerHitEnemy(Health enemy, bool headshot)
     {
         if (_d == null || enemy == null || !enemy.alive) return;
         if (enemy.team != Health.Team.Enemy) return;
+        if (host != null && !host.PassiveReady) return;      // ⭐ 冷却中 → 不挂新印记
 
         var mark = enemy.GetComponent<MagicMark>();
         if (mark == null) mark = enemy.gameObject.AddComponent<MagicMark>();

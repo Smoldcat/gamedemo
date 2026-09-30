@@ -3,7 +3,12 @@ using UnityEngine;
 /// <summary>
 /// 远程行为：与玩家保持距离进行三点射。
 /// 枪模型与武器数值在初始化时准备（数值取自敌人配置，武器用配置基枪克隆或默认冲锋枪，
-/// 绝不改资源本体）；死亡掉枪时由 WaveManager 拿 shootWeapon 生成掉落物。
+/// 绝不改资源本体）。
+///
+/// ⚠️ **死亡掉枪不在本类**（这里曾经写错成"由 WaveManager 拿 `shootWeapon` 生成"，已修正）：
+///    实际走 <see cref="EnemyAI.OnDead"/>，而且掉的是 **`EnemyConfig.shooterWeapon`（配置里的基础武器）**
+///    —— 不是本类的 `shootWeapon`。后者被配置里的射速/伤害**覆盖过**，
+///    掉给玩家会破坏武器数值（`EnemyAI` 那边专门写了警告，别顺手"统一"成 shootWeapon）。
 /// </summary>
 [BehaviourName("远程")]
 public class EnemyShooterBehaviour : EnemyBehaviour

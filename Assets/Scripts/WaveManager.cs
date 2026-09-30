@@ -428,7 +428,9 @@ public class WaveManager : MonoBehaviour
         Vector3 pos = SpawnPosition.FindOpenSpot(6f, SpawnPosition.RangeEnemy, occupied);
         var e = new GameObject("Enemy_" + cfg.displayName + "_W" + GameState.Wave);
         e.transform.position = pos;
-        // 统一进「敌人」层：供 EnemyAI 视线射线排除（否则敌人互相挡视线，后排会"站着不动"）。
+        // 统一进「敌人」层：真正依赖它的是 `Layers.BulletMask`（子弹弹道要能命中敌人）
+        // 与 `Layers.AvoidMask`（绕障时躲开同伴）—— 视线 `SightMask` 本来就不含敌人层，
+        // 所以设这层对"敌人互相挡视线"没有影响（这里曾经这么写过，2026-09-29 注释审查修正）。
         // 层未定义时保持默认层 —— 行为与改动前完全一致，不会静默出问题。
         if (Layers.Enemy >= 0) e.layer = Layers.Enemy;
 

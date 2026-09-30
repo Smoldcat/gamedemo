@@ -164,8 +164,11 @@ public class ShopPanel : MonoBehaviour
         Sfx.CloseInventory();
         UIState.Pop();
 
-        // ⚠️ 记下"这一帧的 F 已经用掉了"：关闭键与交互键同为 F，而交互焦点的执行顺序不确定 ——
-        //    不记这一笔，就会出现"按下 F 关店的同一帧又被焦点重新打开"（与箱子面板同一处理）。
+        // ⚠️ 记下"这一帧已经用掉了一次交互"：不记这一笔，就会出现
+        //    "关店的同一帧又被交互焦点重新打开"（与箱子面板同一处理）。
+        // ⚠️ 更正（2026-09-29 注释审查）：关闭键**不是** F，而是 **Tab**
+        //    （见本文件 Update 里的 `Input.GetKeyDown(KeyCode.Tab)`，结果记在 `_tabConsumedFrame`）。
+        //    这一行记的是**交互键 F** 的帧号，供 `InteractFocus` 判"这一帧别重复响应"。
         GameState.InteractConsumedFrame = Time.frameCount;
 
         // 一起关（对方内部也有幂等守卫 → 不会递归打转）
