@@ -9,8 +9,8 @@ using UnityEngine.SceneManagement;
 ///   hpText / hpFill / weaponText / modeText —— 左下角血条与武器信息
 ///   waveText / killText                     —— 顶部中央波次与击杀数
 ///   announceText                            —— 屏幕中央公告
-///   deathPanel / deathText / deathStat / restartBtn —— 死亡结算面板
-///   hotbar                                  —— 底部中央快捷栏（1/2/3 = 武器槽、Q = 血包；留空会自动生成）
+///   deathPanel / deathStat / restartBtn     —— 死亡结算面板（面板里的 `DeathText` 标题节点无 Inspector 引用，由编辑器工具按名字找）
+///   hotbar                                  —— 底部中央快捷栏（1/2/3 = 武器槽、E = 魔法格、Q = 血包；留空会自动生成）
 /// </summary>
 public class HUD : MonoBehaviour
 {

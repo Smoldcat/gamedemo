@@ -1285,6 +1285,10 @@ MonoBehaviour:
   deathStat: {fileID: 1734087261}
   restartBtn: {fileID: 1602636564}
   restartBtnLabel: {fileID: 562727651}
+  statusCard: {fileID: 0}
+  waveCard: {fileID: 0}
+  killCard: {fileID: 0}
+  deathCard: {fileID: 0}
   fallbackFont: {fileID: 0}
   pickupBubble: {fileID: 1083709216}
   pickupBubbleEdge: {fileID: 1570802598}

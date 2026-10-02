@@ -1,0 +1,724 @@
+fileFormatVersion: 2
+guid: CitL5H/8AHiXc2fKRLp3TqaevyrHvt7JmzLwi8DLI0MV4vC0X3Ik9SM=
+ModelImporter:
+  serializedVersion: 22361
+  internalIDToNameTable: []
+  externalObjects: {}
+  materials:
+    materialImportMode: 2
+    materialName: 0
+    materialSearch: 1
+    materialLocation: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleCurves: 1
+    optimizeGameObjects: 0
+    removeConstantScaleCurves: 0
+    motionNodeName: 
+    rigImportErrors: 
+    rigImportWarnings: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
+    animationDoRetargetingWarnings: 0
+    importAnimatedCustomProperties: 0
+    importConstraints: 0
+    animationCompression: 1
+    aCLCompressionLevel: 3
+    aCLCurvePrecision: 0.01
+    aCLFastSampleMode: 1
+    animationRotationError: 0.5
+    animationPositionError: 0.5
+    animationScaleError: 0.5
+    animationWrapMode: 0
+    extraExposedTransformPaths: []
+    extraUserProperties: []
+    clipAnimations: []
+    isReadable: 0
+    tuanjieGIEnable: 0
+    tuanjieGIGenSDFFactor: 1
+    tuanjieGIGenSDFBias: 0.25
+    tuanjieGIDoubleSidedMode: 0
+    tuanjieGIGenFacetNums: 12
+  meshes:
+    lODScreenPercentages: []
+    globalScale: 1
+    meshCompression: 0
+    totalVerticesCount: 3474
+    totalTrianglesCount: 1672
+    addColliders: 0
+    useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
+    importPhysicalCameras: 1
+    importVisibility: 1
+    importBlendShapes: 1
+    importCameras: 1
+    importLights: 1
+    nodeNameCollisionStrategy: 1
+    fileIdsGeneration: 2
+    swapUVChannels: 0
+    generateSecondaryUV: 0
+    useFileUnits: 1
+    keepQuads: 0
+    weldVertices: 1
+    bakeAxisConversion: 0
+    preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    meshOptimizationFlags: -1
+    indexFormat: 0
+    secondaryUVAngleDistortion: 8
+    secondaryUVAreaDistortion: 15.000001
+    secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 1
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
+    secondaryUVPackMargin: 4
+    useFileScale: 1
+    strictVertexDataChecks: 0
+  virtualGeometry:
+    virtualGeometry: 0
+    hasBoneWeight: 0
+    useTransparent: 0
+    setVGForeachMesh: 0
+    isFirstUse: 1
+    virtualGeometrySettings:
+      generateGeometryBuffer: 0
+      surfaceCompensation: 0
+      allMeshUse: 1
+      ignoreSimpleMesh: 0
+      transformScaleState: 0
+      isPossibleOverflow: 0
+    virtualGeometryPlatformSettings: []
+    selectedVGMeshes:
+    - index: 0
+      meshName: "\u5185\u5899_0_0"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 1
+      meshName: "\u5185\u5899_1_210"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 2
+      meshName: "\u5185\u5899_2_0"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 3
+      meshName: "\u5408\u9875.002"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 4
+      meshName: "\u5408\u9875.003"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 5
+      meshName: "\u5899\u88D9_\u4E1C.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 6
+      meshName: "\u5899\u88D9_\u5317.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 7
+      meshName: "\u5899\u88D9_\u5357.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 8
+      meshName: "\u5899\u88D9_\u897F.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 9
+      meshName: "\u5916\u5899_\u4E1C_0_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 10
+      meshName: "\u5916\u5899_\u4E1C_1_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 11
+      meshName: "\u5916\u5899_\u4E1C_1_200"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 12
+      meshName: "\u5916\u5899_\u4E1C_2_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 13
+      meshName: "\u5916\u5899_\u5317_0_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 14
+      meshName: "\u5916\u5899_\u5317_1_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 15
+      meshName: "\u5916\u5899_\u5317_1_200"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 16
+      meshName: "\u5916\u5899_\u5317_2_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 17
+      meshName: "\u5916\u5899_\u5317_3_225.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 18
+      meshName: "\u5916\u5899_\u5317_4_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 19
+      meshName: "\u5916\u5899_\u5357_0_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 20
+      meshName: "\u5916\u5899_\u5357_1_225"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 21
+      meshName: "\u5916\u5899_\u5357_2_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 22
+      meshName: "\u5916\u5899_\u5357_3_0"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 23
+      meshName: "\u5916\u5899_\u5357_3_200"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 24
+      meshName: "\u5916\u5899_\u5357_4_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 25
+      meshName: "\u5916\u5899_\u897F_0_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 26
+      meshName: "\u5916\u5899_\u897F_1_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 27
+      meshName: "\u5916\u5899_\u897F_1_200"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 28
+      meshName: "\u5916\u5899_\u897F_2_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 29
+      meshName: "\u5BA4\u5185\u5730\u677F.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 30
+      meshName: "\u5C4B\u9876"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 31
+      meshName: "\u628A\u624B.002"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 32
+      meshName: "\u628A\u624B.003"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 33
+      meshName: "\u70DF\u56F1.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 34
+      meshName: "\u70DF\u56F1\u5E3D.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 35
+      meshName: "\u7A97_\u4E1C_\u4E2D\u6883.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 36
+      meshName: "\u7A97_\u4E1C_\u6846\u4E0A.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 37
+      meshName: "\u7A97_\u4E1C_\u6846\u4E0B.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 38
+      meshName: "\u7A97_\u4E1C_\u6846\u53F3.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 39
+      meshName: "\u7A97_\u4E1C_\u6846\u5DE6.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 40
+      meshName: "\u7A97_\u4E1C_\u73BB\u7483.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 41
+      meshName: "\u7A97_\u5317_\u4E2D\u6883"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 42
+      meshName: "\u7A97_\u5317_\u6846\u4E0A"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 43
+      meshName: "\u7A97_\u5317_\u6846\u4E0B"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 44
+      meshName: "\u7A97_\u5317_\u6846\u53F3"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 45
+      meshName: "\u7A97_\u5317_\u6846\u5DE6"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 46
+      meshName: "\u7A97_\u5317_\u73BB\u7483"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 47
+      meshName: "\u7A97_\u5357_\u4E2D\u6883"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 48
+      meshName: "\u7A97_\u5357_\u6846\u4E0A"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 49
+      meshName: "\u7A97_\u5357_\u6846\u4E0B"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 50
+      meshName: "\u7A97_\u5357_\u6846\u53F3"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 51
+      meshName: "\u7A97_\u5357_\u6846\u5DE6"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 52
+      meshName: "\u7A97_\u5357_\u73BB\u7483"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 53
+      meshName: "\u7A97_\u897F_\u4E2D\u6883.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 54
+      meshName: "\u7A97_\u897F_\u6846\u4E0A.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 55
+      meshName: "\u7A97_\u897F_\u6846\u4E0B.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 56
+      meshName: "\u7A97_\u897F_\u6846\u53F3.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 57
+      meshName: "\u7A97_\u897F_\u6846\u5DE6.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 58
+      meshName: "\u7A97_\u897F_\u73BB\u7483.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 59
+      meshName: "\u95E8\u53E3\u94FA\u88C5.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 60
+      meshName: "\u95E8\u5957_\u5317_\u4E0A.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 61
+      meshName: "\u95E8\u5957_\u5317_\u53F3.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 62
+      meshName: "\u95E8\u5957_\u5317_\u5DE6.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 63
+      meshName: "\u95E8\u5957_\u5357_\u4E0A.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 64
+      meshName: "\u95E8\u5957_\u5357_\u53F3.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 65
+      meshName: "\u95E8\u5957_\u5357_\u5DE6.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 66
+      meshName: "\u95E8\u6247.002"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 67
+      meshName: "\u95E8\u6247.003"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 68
+      meshName: "\u95E8\u6846.003"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 69
+      meshName: "\u95E8\u6846.004"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 70
+      meshName: "\u96E8\u68DA\u6491_-9"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 71
+      meshName: "\u96E8\u68DA\u6491_9"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 72
+      meshName: "\u96E8\u68DA\u677F.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    supportVGMeshes:
+    - index: 0
+      meshName: "\u5185\u5899_0_0"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 1
+      meshName: "\u5185\u5899_1_210"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 2
+      meshName: "\u5185\u5899_2_0"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 3
+      meshName: "\u5408\u9875.002"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 4
+      meshName: "\u5408\u9875.003"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 5
+      meshName: "\u5899\u88D9_\u4E1C.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 6
+      meshName: "\u5899\u88D9_\u5317.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 7
+      meshName: "\u5899\u88D9_\u5357.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 8
+      meshName: "\u5899\u88D9_\u897F.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 9
+      meshName: "\u5916\u5899_\u4E1C_0_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 10
+      meshName: "\u5916\u5899_\u4E1C_1_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 11
+      meshName: "\u5916\u5899_\u4E1C_1_200"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 12
+      meshName: "\u5916\u5899_\u4E1C_2_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 13
+      meshName: "\u5916\u5899_\u5317_0_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 14
+      meshName: "\u5916\u5899_\u5317_1_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 15
+      meshName: "\u5916\u5899_\u5317_1_200"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 16
+      meshName: "\u5916\u5899_\u5317_2_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 17
+      meshName: "\u5916\u5899_\u5317_3_225.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 18
+      meshName: "\u5916\u5899_\u5317_4_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 19
+      meshName: "\u5916\u5899_\u5357_0_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 20
+      meshName: "\u5916\u5899_\u5357_1_225"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 21
+      meshName: "\u5916\u5899_\u5357_2_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 22
+      meshName: "\u5916\u5899_\u5357_3_0"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 23
+      meshName: "\u5916\u5899_\u5357_3_200"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 24
+      meshName: "\u5916\u5899_\u5357_4_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 25
+      meshName: "\u5916\u5899_\u897F_0_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 26
+      meshName: "\u5916\u5899_\u897F_1_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 27
+      meshName: "\u5916\u5899_\u897F_1_200"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 28
+      meshName: "\u5916\u5899_\u897F_2_0.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 29
+      meshName: "\u5BA4\u5185\u5730\u677F.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 30
+      meshName: "\u5C4B\u9876"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 31
+      meshName: "\u628A\u624B.002"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 32
+      meshName: "\u628A\u624B.003"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 33
+      meshName: "\u70DF\u56F1.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 34
+      meshName: "\u70DF\u56F1\u5E3D.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 35
+      meshName: "\u7A97_\u4E1C_\u4E2D\u6883.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 36
+      meshName: "\u7A97_\u4E1C_\u6846\u4E0A.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 37
+      meshName: "\u7A97_\u4E1C_\u6846\u4E0B.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 38
+      meshName: "\u7A97_\u4E1C_\u6846\u53F3.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 39
+      meshName: "\u7A97_\u4E1C_\u6846\u5DE6.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 40
+      meshName: "\u7A97_\u4E1C_\u73BB\u7483.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 41
+      meshName: "\u7A97_\u5317_\u4E2D\u6883"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 42
+      meshName: "\u7A97_\u5317_\u6846\u4E0A"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 43
+      meshName: "\u7A97_\u5317_\u6846\u4E0B"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 44
+      meshName: "\u7A97_\u5317_\u6846\u53F3"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 45
+      meshName: "\u7A97_\u5317_\u6846\u5DE6"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 46
+      meshName: "\u7A97_\u5317_\u73BB\u7483"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 47
+      meshName: "\u7A97_\u5357_\u4E2D\u6883"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 48
+      meshName: "\u7A97_\u5357_\u6846\u4E0A"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 49
+      meshName: "\u7A97_\u5357_\u6846\u4E0B"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 50
+      meshName: "\u7A97_\u5357_\u6846\u53F3"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 51
+      meshName: "\u7A97_\u5357_\u6846\u5DE6"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 52
+      meshName: "\u7A97_\u5357_\u73BB\u7483"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 53
+      meshName: "\u7A97_\u897F_\u4E2D\u6883.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 54
+      meshName: "\u7A97_\u897F_\u6846\u4E0A.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 55
+      meshName: "\u7A97_\u897F_\u6846\u4E0B.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 56
+      meshName: "\u7A97_\u897F_\u6846\u53F3.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 57
+      meshName: "\u7A97_\u897F_\u6846\u5DE6.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 58
+      meshName: "\u7A97_\u897F_\u73BB\u7483.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 59
+      meshName: "\u95E8\u53E3\u94FA\u88C5.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 60
+      meshName: "\u95E8\u5957_\u5317_\u4E0A.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 61
+      meshName: "\u95E8\u5957_\u5317_\u53F3.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 62
+      meshName: "\u95E8\u5957_\u5317_\u5DE6.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 63
+      meshName: "\u95E8\u5957_\u5357_\u4E0A.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 64
+      meshName: "\u95E8\u5957_\u5357_\u53F3.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 65
+      meshName: "\u95E8\u5957_\u5357_\u5DE6.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 66
+      meshName: "\u95E8\u6247.002"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 67
+      meshName: "\u95E8\u6247.003"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 68
+      meshName: "\u95E8\u6846.003"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 69
+      meshName: "\u95E8\u6846.004"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 70
+      meshName: "\u96E8\u68DA\u6491_-9"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 71
+      meshName: "\u96E8\u68DA\u6491_9"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+    - index: 72
+      meshName: "\u96E8\u68DA\u677F.001"
+      lodLevel: 0
+      meshGeometryBuffer: 0
+  tangentSpace:
+    normalSmoothAngle: 60
+    normalImportMode: 0
+    tangentImportMode: 3
+    normalCalculationMode: 4
+    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 0
+    blendShapeNormalImportMode: 1
+    normalSmoothingSource: 0
+  referencedClips: []
+  importAnimation: 1
+  overrideDefaultPose: 0
+  humanDescription:
+    serializedVersion: 3
+    human: []
+    skeleton: []
+    namedPoseList:
+    - name: Default
+      skeleton: []
+    armTwist: 0.5
+    foreArmTwist: 0.5
+    upperLegTwist: 0.5
+    legTwist: 0.5
+    armStretch: 0.05
+    legStretch: 0.05
+    feetSpacing: 0
+    globalScale: 1
+    rootMotionBoneName: 
+    defaultPoseIndex: -1
+    hasTranslationDoF: 0
+    hasExtraRoot: 0
+    skeletonHasParents: 1
+  lastHumanDescriptionAvatarSource: {instanceID: 0}
+  autoGenerateAvatarMappingIfUnspecified: 1
+  animationType: 2
+  humanoidOversampling: 1
+  avatarSetup: 0
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 1
+  importBlendShapeDeformPercent: 1
+  remapMaterialsIfMaterialImportModeIsNone: 0
+  additionalBone: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
