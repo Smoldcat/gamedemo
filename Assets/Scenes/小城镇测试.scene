@@ -164177,6 +164177,7 @@ GameObject:
   - component: {fileID: 1955667757}
   - component: {fileID: 1955667756}
   - component: {fileID: 1955667760}
+  - component: {fileID: 1955667761}
   m_Layer: 0
   m_HasEditorInfo: 1
   m_Name: Main Camera
@@ -164198,6 +164199,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   target: {fileID: 1304821829}
+  offset: {x: -1.7034214, y: 16, z: -8.755903}
+  snapOnStart: 1
   followLerp: 6
   aimLeadRatio: 0.2
   maxAimLead: 2
@@ -164273,7 +164276,7 @@ Transform:
   m_GameObject: {fileID: 1955667755}
   serializedVersion: 2
   m_LocalRotation: {x: 0.5, y: 0, z: 0, w: 0.8660254}
-  m_LocalPosition: {x: -37.2, y: 16, z: -8.28}
+  m_LocalPosition: {x: -30.3, y: 16, z: -8.755903}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -164294,15 +164297,27 @@ MonoBehaviour:
   hideRoofs: 1
   buildingsRootName: "\u5EFA\u7B51"
   roofBuffer: 0.3
-  seeThrough: 1
-  radiusScreenRatio: 0.1
-  softnessScreenRatio: 0.04
-  keepDensity: 0.35
-  occluderLayers:
-    serializedVersion: 2
-    m_Bits: 4096
-  centerHeight: 1
-  disableSeeThroughIndoors: 1
+--- !u!114 &1955667761
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1955667755}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 545391fb1d067cd45b50c136c268b252, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  enable: 1
+  target: {fileID: 0}
+  bodyName: Body
+  extraMeshes: []
+  color: {r: 0.45, g: 0.85, b: 1, a: 1}
+  alpha: 0.55
+  pixelDensity: 0.45
+  depthBias: 0.08
+  edgeGlow: 0.35
 --- !u!1 &1957756892
 GameObject:
   m_ObjectHideFlags: 0

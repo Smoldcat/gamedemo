@@ -14,6 +14,18 @@ public class CameraRig : MonoBehaviour
     [Tooltip("要跟随的目标，一般是场景里的 Player")]
     public Transform target;
 
+    [Header("构图偏移（相机相对玩家的位置）")]
+    [Tooltip("相机相对玩家的**固定偏移**（世界轴向、米）= 相机应当出现的位置。\n" +
+             "  · 默认 (-1.7034, 16, -8.7559) = 相机在玩家「西 1.7m、上 16m、南 8.76m」—— 水平距离 8.9m、俯角约 61°。\n" +
+             "  · ⚠️ **运行时只认这个字段**（2026-10-03 起）：在场景里把 Main Camera 拖到哪儿都**不影响游戏机位**，\n" +
+             "    玩家被拖走也照样跟随 —— 想调构图就改这三个数（z 越接近 0 镜头越近；y 越大越接近正俯视）。\n" +
+             "  · 旧行为是「把场景里相机的位置当偏移」→ 为了看效果随手拖一下相机就会把游戏镜头搞偏（事故记录见 §4 #40）。")]
+    public Vector3 offset = new Vector3(-1.7034214f, 16f, -8.755903f);
+    [Tooltip("进入 Play 时直接把相机落到「玩家 + 偏移」的位置（不滑行）。\n" +
+             "  · 开（默认）= 开场就在正确机位，没有「镜头从别处飞过来」的那一段；\n" +
+             "  · 关 = 保持旧行为：从相机在场景里的当前位置平滑滑到目标（约 0.2~0.5 秒）。")]
+    public bool snapOnStart = true;
+
     [Header("相机参数")]
     [Tooltip("相机跟随目标的平滑速度（每秒向目标位置逼近的比例）：越大跟得越紧、越小越「拖」。\n" +
              "  · 8（默认）≈ 0.1~0.2 秒收敛；\n" +
@@ -75,14 +87,22 @@ public class CameraRig : MonoBehaviour
         Instance = this;
         _basePos = transform.position;
         _baseRot = transform.rotation;
-        // 把场景里的初始位置记作「构图偏移」：之后相机位置 = 跟随点 + 这个偏移
-        _offset = transform.position;
+        // 构图偏移 = **组件上的字段**（2026-10-03 起）：不再读「场景里相机的位置」，
+        // 这样在编辑器里拖动相机 / 玩家都不会影响游戏里的机位（旧行为的事故见 §4 #40）。
+        _offset = offset;
 
         // 容错：没手动拖 target 时自动找玩家
         if (target == null)
         {
             var pc = FindObjectOfType<PlayerController>();
             if (pc != null) target = pc.transform;
+        }
+
+        // 开场就位：直接落到「跟随点 XZ + 偏移」，避免镜头从场景里的位置滑过来
+        if (snapOnStart && target != null)
+        {
+            _basePos = new Vector3(target.position.x, 0f, target.position.z) + _offset;
+            transform.position = _basePos;
         }
 
         // ADS 收窄视角：本组件必须挂在带 Camera 的物体上（Main Camera）。找不到就明确告警，不要静默失效
@@ -217,5 +237,6 @@ public class CameraRig : MonoBehaviour
     {
         if (aimFovNarrow < 0f) aimFovNarrow = 0f;   // 负数 = 反向变宽，不是本参数语义（想变宽就改场景里相机的 FOV）
         if (aimLeadExtra < 0f) aimLeadExtra = 0f;   // 负数 = 往后缩，不是本参数语义
+        if (offset.y < 0.5f) offset.y = 0.5f;       // 相机至少要离地 0.5m，否则会钻到地面以下
     }
 }
