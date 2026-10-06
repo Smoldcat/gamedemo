@@ -164178,6 +164178,7 @@ GameObject:
   - component: {fileID: 1955667756}
   - component: {fileID: 1955667760}
   - component: {fileID: 1955667761}
+  - component: {fileID: 1955667762}
   m_Layer: 0
   m_HasEditorInfo: 1
   m_Name: Main Camera
@@ -164276,7 +164277,7 @@ Transform:
   m_GameObject: {fileID: 1955667755}
   serializedVersion: 2
   m_LocalRotation: {x: 0.5, y: 0, z: 0, w: 0.8660254}
-  m_LocalPosition: {x: -30.3, y: 16, z: -8.755903}
+  m_LocalPosition: {x: -1.7034214, y: 16, z: -8.755903}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -164318,6 +164319,32 @@ MonoBehaviour:
   pixelDensity: 0.45
   depthBias: 0.08
   edgeGlow: 0.35
+--- !u!114 &1955667762
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1955667755}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1d32b4b173d095f48922a8592e1824d9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  fanAngle: 90
+  fanRadius: 25
+  circleRadius: 3
+  blockerLayers:
+    serializedVersion: 2
+    m_Bits: 6144
+  probeHeight: 0.75
+  cornerAlign: 1
+  cornerJitter: 0.35
+  boundaryGuard: 1
+  circleRays: 360
+  enable: 1
+  fogColor: {r: 0, g: 0, b: 0, a: 1}
+  fogAlpha: 0.72
 --- !u!1 &1957756892
 GameObject:
   m_ObjectHideFlags: 0
