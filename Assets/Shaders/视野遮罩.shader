@@ -1,31 +1,21 @@
-// 视野遮罩（stencil 写入层）：把"可见性多边形"的覆盖范围写进模板缓冲（stencil = 1）。
+// 视野遮罩（写 RT 用）：把"可见性多边形"覆盖的范围**写成白色**。
 //
-// 它**不出任何颜色**（ColorMask 0）—— 唯一作用是给后面的「视野暗幕」打标记：
-//   被标记的像素 = 视野内 → 暗幕不画；没被标记 = 视野外 → 暗幕压暗。
+// 数据流（2026-10-09 起）：
+//   PlayerVision 每帧把「可见性多边形」用一个"俯视正交矩阵"画进一张**低分辨率 RT**
+//   （之前它写的是模板缓冲 stencil，已改为 RT 方案 —— 见「视野暗幕」的说明）。
+//   本 shader 只负责"多边形区域 = 白色(1)、其余 = 黑(0)"，黑底由 GL.Clear 负责。
 //
-// 为什么用模板缓冲而不是"直接画一个半透明形状"：
-//   ① 视野多边形是"地面上的形状"，而我们要压暗的是"屏幕上'视野外'的全部像素"（含高处的建筑/树），
-//      两者靠 stencil 对齐最干净、零排序问题；
-//   ② 暗幕始终是"全屏一层"，不受 3D 深度/透明排序影响。
-//
-// ⚠️ 队列必须**早于**「视野暗幕」（暗幕是 Transparent+100）；本 shader 用 Transparent。
-// ⚠️ ZTest Always：可见性多边形是贴地画的，不能让它被地面/建筑用深度挡掉。
+// ⚠️ ZTest Always：多边形是"贴地画的"（y=0.05），不能被地面/建筑用深度挡掉。
+// ⚠️ 不需要 Blend：直接覆盖成白色（同一像素被多个三角形覆盖也无所谓）。
 Shader "Town/VisionMask"
 {
     SubShader
     {
         Tags { "Queue"="Transparent" "RenderType"="Transparent" "IgnoreProjector"="True" }
 
-        ColorMask 0          // 不输出颜色
         ZTest Always
         ZWrite Off
         Cull Off
-        Stencil
-        {
-            Ref 1
-            Comp Always
-            Pass Replace     // 画到哪，哪里就标 1
-        }
 
         Pass
         {
@@ -46,7 +36,7 @@ Shader "Town/VisionMask"
 
             fixed4 frag(v2f i) : SV_Target
             {
-                return fixed4(0, 0, 0, 0);   // 颜色被 ColorMask 屏蔽，这里返回什么都无所谓
+                return fixed4(1, 1, 1, 1);   // 可见 = 白
             }
             ENDCG
         }

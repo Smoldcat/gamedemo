@@ -109554,6 +109554,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Player
       objectReference: {fileID: 0}
+    - target: {fileID: 8946929374040157659, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -164337,14 +164341,16 @@ MonoBehaviour:
   blockerLayers:
     serializedVersion: 2
     m_Bits: 6144
-  probeHeight: 0.75
+  probeHeight: 0.7
+  minObstacleWidth: 0.5
   cornerAlign: 1
-  cornerJitter: 0.35
-  boundaryGuard: 1
   circleRays: 360
+  subSamples: 5
+  rtScale: 6
+  softnessPx: 18
   enable: 1
   fogColor: {r: 0, g: 0, b: 0, a: 1}
-  fogAlpha: 0.72
+  fogAlpha: 0.2
 --- !u!1 &1957756892
 GameObject:
   m_ObjectHideFlags: 0
