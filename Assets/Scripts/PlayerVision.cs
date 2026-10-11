@@ -264,9 +264,9 @@ public class PlayerVision : MonoBehaviour
             _fanDist.Add(sum / sub);
         }
 
-        // 扇形内再做一次**相邻三点平滑**（0.25/0.5/0.25，**两端镜像、不跨扇形边界**）：
+        // 扇形内再做一次**相邻三点平滑**（0.25/0.5/0.25）：
         // 把"边缘处 1 格宽的突变"扩散成"2 格宽的缓坡"（实测这是治抖动的主要功臣）。
-        // ⚠️ 两端**绝不能成环**：`i = 0` 的"左邻居"其实是扇形**另一侧**的边缘样本（相隔 360-fanAngle），
+        // ⚠️ 有真实扇形的两端**绝不能成环**：`i = 0` 的"左邻居"其实是扇形**另一侧**的边缘样本（相隔 360-fanAngle），
         //    取它等于让两端的可见距离被"对面那一片几何"污染（2026-10-10 实测：静态最大 5.2m ≈ 屏幕 116px，
         //    而且对面一动这边就跟着动，逐帧 1.19~1.90m）——那是**跨屏耦合**，必须切断。
         // ⚠️ 缺的那一侧用**唯一邻居镜像补上**（= 0.5 自己 + 0.5 邻居）：
@@ -274,13 +274,25 @@ public class PlayerVision : MonoBehaviour
         //    若改成"夹取"（0.75 自己 + 0.25 邻居），端点自身权重会变成 0.75，
         //    实测端点逐帧跳变反而 +50%（慢转 2.39→3.58m、快转 7.21→9.12m、前进 1.27→1.90m）。
         // 代价是扇形内墙角圆掉约 1 格，但**墙角的锐利由角点采样单独负责**（角点不参与平滑）。
+        // ⚠️ **例外：整圆（fanAngle≥359.9）没有边界** —— 此时两端在几何上本来就相邻（相隔 1 个 fanStep），
+        //    **必须绕圈取邻居**；若仍用"镜像"，正后方那一个方向只做 0.5/0.5、与别处的 0.25/0.5/0.25 不一致
+        //    （2026-10-11 修；实测改前该接缝样本 = 镜像值 14.967130，改后 = 绕圈值 15.014748）。
         for (int i = 0; i < nFan; i++)
         {
             float d = _fanDist[i];
             if (nFan >= 3)
             {
-                int im = i > 0 ? i - 1 : i + 1;              // 左端（i=0）没有左邻居 → 镜像用右邻居
-                int ip = i < nFan - 1 ? i + 1 : i - 1;       // 右端（i=nFan-1）没有右邻居 → 镜像用左邻居
+                int im, ip;
+                if (fullCircle)
+                {
+                    im = (i - 1 + nFan) % nFan;              // 整圆：两端相邻 → 绕圈取邻居
+                    ip = (i + 1) % nFan;
+                }
+                else
+                {
+                    im = i > 0 ? i - 1 : i + 1;              // 左端（i=0）没有左邻居 → 镜像用右邻居
+                    ip = i < nFan - 1 ? i + 1 : i - 1;       // 右端（i=nFan-1）没有右邻居 → 镜像用左邻居
+                }
                 d = 0.25f * _fanDist[im] + 0.5f * d + 0.25f * _fanDist[ip];
             }
             Sample sm; sm.ang = Mathf.Repeat(baseAngle - half + (i + 0.5f) * fanStep, 360f); sm.dist = d;
@@ -328,7 +340,9 @@ public class PlayerVision : MonoBehaviour
                     if (cornerDist < 0.01f) continue;
                     float a = Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg;
                     // 只补"扇形内、且离边界足够远"的角（边界本身已由 4 条精确采样表示）
-                    if (Mathf.Abs(Mathf.DeltaAngle(a, baseAngle)) > half - Mathf.Max(BoundaryGuardDeg, CornerJitter)) continue;
+                    // ⚠️ 整圆时没有边界 → 这个闸门不适用（否则"正后方 1° 内"的角会被无谓排除；
+                    //    2026-10-11 实测该判别姿态下有 4 个角点被误排除、最近的一个离正后方仅 0.05°）
+                    if (!fullCircle && Mathf.Abs(Mathf.DeltaAngle(a, baseAngle)) > half - Mathf.Max(BoundaryGuardDeg, CornerJitter)) continue;
                     TryAddCornerSample(origin, Mathf.Repeat(a - CornerJitter, 360f), fanRadius, probeY, cornerDist);
                     TryAddCornerSample(origin, Mathf.Repeat(a + CornerJitter, 360f), fanRadius, probeY, cornerDist);
                 }
@@ -441,6 +455,12 @@ public class PlayerVision : MonoBehaviour
     ///    （团结引擎实测）；可靠路径 = **专用相机 + 命令缓冲 DrawMesh**。</summary>
     void RenderVisionRT()
     {
+        // ⚠️ 2026-10-12 补：拆除时序的健壮性 —— 曾观测到一次本方法内 `_cb.Clear()` 空引用
+        //    （退出 Play 的帧内拆除顺序可能让 LateUpdate 晚于 OnDestroy 的 `_cb = null` 跑一拍）。
+        //    命令缓冲 / 专用相机任一缺失 → 直接返回（本帧不画视野图案，暗幕读到上一帧 RT：无害；
+        //    ⚠️ 不能判空 `_visionRT` —— 它就是在下面按需创建的）。
+        if (_cb == null || _visionCam == null) return;
+
         // RT 尺寸跟随**相机实际渲染尺寸** ÷ rtScale（用 pixelWidth 而不是 Screen.*：有黑边/缩放时两者会差）
         int scale = Mathf.Max(rtScale, 1);
         int w = Mathf.Max(16, _cam.pixelWidth / scale);

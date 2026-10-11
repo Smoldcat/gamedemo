@@ -147,8 +147,10 @@ public class HUD : MonoBehaviour
     /// <summary>键位文字（每格下方那个小圆角矩形里的字）。武器格恒为 1/2/3；
     /// **魔法格会动态变**（主动 = `E`、冷却中 = 剩余秒数、被动 = `被`）→ 所以必须缓存引用。</summary>
     readonly Text[] _hbKeyText = new Text[HotbarSlotCount];
-    Image _hbCountBg;              // 血包数量圆标（只挂在最后一格）
+    Image _hbCountBg;              // 血包数量圆标（只挂在血包格）
     Text _hbCountText;
+    Image _hbThrCountBg;           // 投掷物数量圆标（只挂在投掷物格，2026-10-12）
+    Text _hbThrCountText;
     int _hbSig = int.MinValue;     // 脏值签名：当前槽 + 血包数 + 前 3 格武器 + 魔法卡 → 变了才重刷（避免每帧重建 Canvas）
 
     // ---- 血条平滑显示（文字仍显示精确血量）----
@@ -740,13 +742,15 @@ public class HUD : MonoBehaviour
 
     // 下面这些像素值**只给「代码生成」兜底路径**用（场景预置时以节点为准）。
     // ⚠️ `HotbarBuilder`（编辑器程序集）读不到 private const，那边有一份同名副本 → 改这里记得一起改。
-    // ⚠️ 2026-09-28：4 → **5**（新增**魔法格**）。槽位顺序固定为：
-    //    前 3 格 = 武器（键盘 1/2/3）、第 4 格 = 魔法（键盘 E）、第 5 格 = 血包（键盘 Q）。
-    //    两个索引由格数推导 → 以后要加武器格只改 WeaponSlotCount 一处。
-    const int   WeaponSlotCount  = 3;                        // 武器格数
-    const int   MagicSlotIndex   = WeaponSlotCount;          // 魔法格下标
-    const int   MedkitSlotIndex  = WeaponSlotCount + 1;      // 血包格下标
-    const int   HotbarSlotCount  = MedkitSlotIndex + 1;      // 总格数（= 5）
+    // ⚠️ 2026-09-28：4 → **5**（新增**魔法格**）；⚠️ 2026-10-12：5 → **6**（新增**投掷物格**）。槽位顺序固定为：
+    //    前 3 格 = 武器（键盘 1/2/3）、第 4 格 = 魔法（键盘 E）、第 5 格 = 血包（键盘 Q）、
+    //    第 6 格 = 投掷物（键盘 G：持弹模式 / 选择器 / 轨迹预览，见 `PlayerThrowable`）。
+    //    索引由格数推导 → 以后要加武器格只改 WeaponSlotCount 一处。
+    const int   WeaponSlotCount    = 3;                        // 武器格数
+    const int   MagicSlotIndex     = WeaponSlotCount;          // 魔法格下标
+    const int   MedkitSlotIndex    = WeaponSlotCount + 1;      // 血包格下标
+    const int   ThrowableSlotIndex = WeaponSlotCount + 2;      // 投掷物格下标（2026-10-12）
+    const int   HotbarSlotCount    = ThrowableSlotIndex + 1;   // 总格数（= 6）
     const float HotbarSlotSize   = 56f;   // 槽框边长
     const float HotbarGap        = 8f;    // 槽间距
     const float HotbarBottom     = 14f;   // 整组距屏幕底部
@@ -776,6 +780,7 @@ public class HUD : MonoBehaviour
                 for (int i = 0; i < HotbarSlotCount; i++)
                     UIUtil.ApplyFont(FindTextDeep(_hotbarRect.Find("Slot" + (i + 1)), "KeyText"), f);
                 UIUtil.ApplyFont(_hbCountText, f);
+                UIUtil.ApplyFont(_hbThrCountText, f);
 
                 // "运行时生成的图存不进场景" → 只给**还空着**的 Image 补占位图（节点上配了真图就不动它）
                 for (int i = 0; i < HotbarSlotCount; i++)
@@ -831,11 +836,16 @@ public class HUD : MonoBehaviour
             _hbKeyText[i] = FindTextDeep(slot, "KeyText");
             if (slot == null || _hbFrame[i] == null || _hbIcon[i] == null) return false;
         }
-        var q = _hotbarRect.Find("Slot" + HotbarSlotCount);
+        var q = _hotbarRect.Find("Slot" + (MedkitSlotIndex + 1));
         _hbCountBg = FindImage(q, "CountBg");           // CountBg 是槽的直接子节点
         // ⚠️ `CountText` 挂在 **`CountBg` 底下** → 必须**递归**找。用直接查找会拿到 null
         //    → 血包数量**永远停在生成工具写的占位值**（踩过：一直显示 2）。
         _hbCountText = FindTextDeep(q, "CountText");
+
+        // 投掷物格的圆标（2026-10-12；同样是"直接子节点 CountBg + 递归 CountText"）
+        var g = _hotbarRect.Find("Slot" + (ThrowableSlotIndex + 1));
+        _hbThrCountBg = FindImage(g, "CountBg");
+        _hbThrCountText = FindTextDeep(g, "CountText");
         return true;
     }
 
@@ -857,17 +867,20 @@ public class HUD : MonoBehaviour
 
         for (int i = 0; i < HotbarSlotCount; i++)
         {
-            bool isLast = i == HotbarSlotCount - 1;
+            bool isMedkit = i == MedkitSlotIndex;
+            bool isThrowable = i == ThrowableSlotIndex;
             float x = -w * 0.5f + HotbarSlotSize * 0.5f + i * (HotbarSlotSize + HotbarGap);
             var slot = NewChildRect(_hotbarRect, "Slot" + (i + 1), new Vector2(HotbarSlotSize, h), new Vector2(x, h * 0.5f));
-            // 键位：前 3 格 = 武器（1/2/3）、第 4 格 = 魔法（E，运行时可能变成剩余秒数或「被」）、最后 1 格 = 血包（Q）
-            string keyLabel = isLast ? "Q" : (i == MagicSlotIndex ? "E" : (i + 1).ToString());
-            BuildHotbarSlotByCode(slot, i, keyLabel, isLast);
+            // 键位：前 3 格 = 武器（1/2/3）、第 4 格 = 魔法（E，运行时可能变成剩余秒数或「被」）、
+            //       第 5 格 = 血包（Q）、第 6 格 = 投掷物（G）
+            string keyLabel = isMedkit ? "Q"
+                : (isThrowable ? "G" : (i == MagicSlotIndex ? "E" : (i + 1).ToString()));
+            BuildHotbarSlotByCode(slot, i, keyLabel, isMedkit, isThrowable);
         }
     }
 
-    /// <summary>代码生成一个快捷槽：槽底 + 描边 + 图标 + 下方键位小圆角矩形（最后一格再加血包数量圆标）</summary>
-    void BuildHotbarSlotByCode(RectTransform slot, int index, string keyLabel, bool withBadge)
+    /// <summary>代码生成一个快捷槽：槽底 + 描边 + 图标 + 下方键位小圆角矩形（血包格 / 投掷物格再加数量圆标）</summary>
+    void BuildHotbarSlotByCode(RectTransform slot, int index, string keyLabel, bool medkitBadge, bool throwableBadge)
     {
         float h = slot.sizeDelta.y;
         float boxY = h - HotbarSlotSize * 0.5f;   // 槽框中心（贴顶，键位在下面）
@@ -901,9 +914,9 @@ public class HUD : MonoBehaviour
         _hbBg[index] = bg;
         _hbKeyText[index] = keyText;   // 魔法格的键位文字会被运行时改写 → 必须留引用
 
-        if (!withBadge) return;
+        if (!medkitBadge && !throwableBadge) return;
 
-        // 血包数量圆标（只有最后一格有；贴在槽框的右下角内侧）
+        // 数量圆标（血包格 / 投掷物格各一个；贴在槽框的右下角内侧）
         float half = HotbarBadgeSize * 0.5f;
         var badge = NewHotbarImage(slot, "CountBg", new Vector2(HotbarBadgeSize, HotbarBadgeSize),
             new Vector2(HotbarSlotSize * 0.5f - half, boxY - HotbarSlotSize * 0.5f + half), BubbleKeyBgColor);
@@ -912,8 +925,8 @@ public class HUD : MonoBehaviour
         StretchToParent(badgeText.rectTransform, badge.rectTransform);
         badge.gameObject.SetActive(false);
         badgeText.gameObject.SetActive(false);
-        _hbCountBg = badge;
-        _hbCountText = badgeText;
+        if (medkitBadge) { _hbCountBg = badge; _hbCountText = badgeText; }
+        if (throwableBadge) { _hbThrCountBg = badge; _hbThrCountText = badgeText; }
     }
 
     /// <summary>
@@ -926,6 +939,11 @@ public class HUD : MonoBehaviour
         if (_hotbarRect == null) return;
 
         var bp = pc.backpack;
+        var thr = pc.throwables;
+        bool throwing = thr != null && thr.Active;                       // 持弹模式：G 格高亮、武器格不高亮
+        var thrDef = thr != null ? thr.Selected : null;                  // G 格显示的种类（没在持弹 = 上次选中 / 库存第一种）
+        int thrCount = (thr != null && thrDef != null) ? thr.CountOf(thrDef) : 0;
+
         int cur = bp != null ? bp.currentSlot : -1;
         int med = bp != null ? bp.Medkits : 0;
         var magicCard = bp != null ? bp.CurrentMagic : null;   // 当前装备的魔法卡（null = 空槽）
@@ -942,6 +960,9 @@ public class HUD : MonoBehaviour
             }
             sig = sig * 31 + (magicCard != null ? magicCard.GetInstanceID() : 0);        // ⚠️ 换魔法必须重刷
             sig = sig * 31 + Mathf.CeilToInt(cdLeft * 10f);                             // ⚠️ 冷却倒数要重刷（0.1s 粒度）
+            sig = sig * 31 + (thrDef != null ? thrDef.GetInstanceID() : 0);             // ⚠️ 换投掷物种类必须重刷
+            sig = sig * 31 + thrCount;
+            sig = sig * 31 + (throwing ? 7 : 0);                                        // ⚠️ 进出持弹模式要重刷高亮
             if (sig == _hbSig) return;
             _hbSig = sig;
         }
@@ -950,9 +971,10 @@ public class HUD : MonoBehaviour
         {
             bool isMedkit = i == MedkitSlotIndex;
             bool isMagic = i == MagicSlotIndex;
-            var w = (isMedkit || isMagic) ? null : SlotWeapon(bp, i);
+            bool isThrow = i == ThrowableSlotIndex;
+            var w = (isMedkit || isMagic || isThrow) ? null : SlotWeapon(bp, i);
 
-            // ---- 图标：武器图标 / 魔法图标 / 血包十字；没有 → 不显示（槽框 + 键位留着，一眼看出这格是空的）----
+            // ---- 图标：武器图标 / 魔法图标 / 血包十字 / 投掷物图标；没有 → 不显示（槽框 + 键位留着）----
             Sprite spr = null;
             Color iconColor = Color.white;
             if (isMedkit)
@@ -965,6 +987,12 @@ public class HUD : MonoBehaviour
                 spr = magicCard != null ? ItemVisuals.IconOf(magicCard) : null;
                 iconColor = magicCard != null ? ItemVisuals.ColorOf(magicCard) : Color.white;
                 if (cdRatio > 0f) iconColor *= new Color(0.45f, 0.45f, 0.5f, 1f);   // 冷却中：压暗
+            }
+            else if (isThrow)
+            {
+                // G 格：显示"当前拿的种类"（没在持弹 = 上次选中的那种 / 库存里第一种）；一颗都没有 = 空框
+                spr = (thrDef != null && thrCount > 0) ? ItemVisuals.IconOf(thrDef) : null;
+                iconColor = thrDef != null ? ItemVisuals.ColorOf(thrDef) : Color.white;
             }
             else if (w != null)
             {
@@ -982,10 +1010,13 @@ public class HUD : MonoBehaviour
             // ---- 槽底：与背包的「库存格底色」同源（改 GameAssets 两边一起变）----
             if (_hbBg[i] != null) _hbBg[i].color = BackpackPanel.CellColor();
 
-            // ---- 槽框：武器格 = 当前手上那把高亮；魔法格冷却中压暗；其余普通色 ----
+            // ---- 槽框：武器格 = 当前手上那把高亮（持弹时不高亮）；魔法格冷却中压暗；投掷物格 = 持弹时高亮 ----
             if (_hbFrame[i] != null)
             {
-                if (!isMedkit && !isMagic && i == cur)
+                if (isThrow)
+                    _hbFrame[i].color = (throwing && thrDef != null && thrCount > 0)
+                        ? BackpackPanel.SlotActiveColor() : BackpackPanel.SlotColor();
+                else if (!isMedkit && !isMagic && i == cur && !throwing)
                     _hbFrame[i].color = BackpackPanel.SlotActiveColor();
                 else if (isMagic && cdRatio > 0f)
                     _hbFrame[i].color = BackpackPanel.SlotColor() * new Color(0.65f, 0.65f, 0.65f, 1f);
@@ -1005,16 +1036,28 @@ public class HUD : MonoBehaviour
                 if (_hbKeyText[i].text != label) _hbKeyText[i].text = label;
             }
 
-            if (!isMedkit) continue;
-
-            // ---- 血包数量圆标（只挂在最后一格）----
-            bool show = med > 0;
-            if (_hbCountText != null)
+            if (isMedkit)
             {
-                _hbCountText.text = med.ToString();
-                if (_hbCountText.gameObject.activeSelf != show) _hbCountText.gameObject.SetActive(show);
+                // ---- 血包数量圆标 ----
+                bool showMed = med > 0;
+                if (_hbCountText != null)
+                {
+                    _hbCountText.text = med.ToString();
+                    if (_hbCountText.gameObject.activeSelf != showMed) _hbCountText.gameObject.SetActive(showMed);
+                }
+                if (_hbCountBg != null && _hbCountBg.gameObject.activeSelf != showMed) _hbCountBg.gameObject.SetActive(showMed);
             }
-            if (_hbCountBg != null && _hbCountBg.gameObject.activeSelf != show) _hbCountBg.gameObject.SetActive(show);
+            else if (isThrow)
+            {
+                // ---- 投掷物数量圆标（数量 = 当前种类共几颗，派生值）----
+                bool showThr = thrDef != null && thrCount > 0;
+                if (_hbThrCountText != null)
+                {
+                    _hbThrCountText.text = Mathf.Max(thrCount, 0).ToString();
+                    if (_hbThrCountText.gameObject.activeSelf != showThr) _hbThrCountText.gameObject.SetActive(showThr);
+                }
+                if (_hbThrCountBg != null && _hbThrCountBg.gameObject.activeSelf != showThr) _hbThrCountBg.gameObject.SetActive(showThr);
+            }
         }
     }
 

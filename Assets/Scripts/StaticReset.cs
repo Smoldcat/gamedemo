@@ -31,6 +31,7 @@ public static class StaticReset
         HealthPack.All.Clear();
         AmmoPickup.All.Clear();          // 弹药包注册表（2026-09-27）
         MagicPickup.All.Clear();         // 地上的魔法卡注册表（2026-09-28）
+        ThrowablePickup.All.Clear();     // 地上的投掷物注册表（2026-10-12）
         MagicMark.ResetStatics();        // 敌人身上的印记注册表（2026-09-28）
         HealthPack.ResetStatics();      // 静态事件 AnyConsumed（漏登记 → 上一局已销毁的 WaveManager 仍会被回调）
         SpawnPosition.ResetStatics();   // 地图边界（漏登记 → 上一局算出的边界残留到下一局）
@@ -56,6 +57,7 @@ public static class StaticReset
         WeaponData.ResetStatics();
         ItemDatabase.ResetStatics();   // 物品清单（便利表）的 Resources 缓存
         PlayerMagic.ResetStatics();    // 魔法管理器单例（2026-09-28；漏了 → 重开一局残留上一局的装备与冷却）
+        PlayerThrowable.ResetStatics(); // 投掷物管理器单例（2026-10-12）
         UIState.ResetStatics();        // 界面总开关的计数（漏了 → 重开一局可能一进去就是暂停）
         InteractFocus.ResetStatics();  // 交互焦点注册表（场景重载后里面会留死引用）
         Chest.ResetStatics();          // 箱子注册表

@@ -87,6 +87,15 @@ public class GameAssetsEditor : Editor
 
         ("virtualCursorSprite", "光标图片",     "虚拟光标（打开背包 / 死亡结算时显示的那个指针）。留空 = 代码生成的白色箭头（白箭头 + 深色描边）。\n⚠️ 导入设置必须是 Sprite；切成多张时取第一张。\n⚠️ 热点（指针尖）取 **Sprite 自己的 pivot** —— 在 Sprite Editor 里把 pivot 拖到箭头尖端；不设则按图片中心。\n⚠️ 只在建画布时读一次 → 换图要重进 Play", "虚拟光标（留空 = 程序生成的箭头）"),
         ("virtualCursorSize",   "光标大小(px)", "显示宽度（参考分辨率 1280×720 下，运行时随 UI 等比缩放）；高度按图片宽高比自动算。默认 24", null),
+
+        ("throwableSelectorTimeout", "无操作自动关(秒)", "在 G 槽上再按一次 G 打开投掷物选择器后，这么久没操作就自动收起。默认 1.5", "投掷物选择器（2026-10-12 新增）"),
+        ("throwableListRowH",        "列表行高(px)",     "选择器每一行的高度（参考分辨率下，运行时随 UI 等比缩放）。默认 24", null),
+        ("throwableListFontSize",    "列表字号",         "选择器列表文字字号（参考分辨率下）。默认 15", null),
+        ("throwableListWidth",       "列表宽度(px)",     "选择器列表宽度（参考分辨率下）。默认 230", null),
+        ("throwableListBgColor",     "普通行底色",       "选择器列表 · 普通行的底色（含透明度）", null),
+        ("throwableListHiColor",     "选中行高亮色",     "选择器列表 · **当前选中行**的高亮底色", null),
+        ("throwableRangeRingColor",  "范围圈·环色",      "投掷物「范围指示圈」的环颜色（含透明度）；改完立刻生效（下次进 Play 看）", "投掷物范围指示圈（2026-10-12 新增）"),
+        ("throwableRangeFillColor",  "范围圈·填充色",    "投掷物「范围指示圈」的填充颜色（含透明度）；默认 10% 橙 = 提亮变暖、一眼看出危险区", null),
     };
 
     readonly HashSet<string> _handled = new HashSet<string>();

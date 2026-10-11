@@ -59,6 +59,11 @@ public class PlayerController : MonoBehaviour
              "⚠️ **不需要手拖**：Start 时若为空会自动 AddComponent 创建（与背包同一套做法）。")]
     public PlayerMagic magic;
 
+    [Header("投掷物")]
+    [Tooltip("投掷物管理器（G 槽：持弹模式 / 选择器 / 轨迹预览 / 投出）。\n" +
+             "⚠️ **不需要手拖**：Start 时若为空会自动 AddComponent 创建（与背包 / 魔法同一套做法）。")]
+    public PlayerThrowable throwables;
+
     [HideInInspector] public bool running = true;
     [HideInInspector] public bool reloading;
     /// <summary>「按 T 换级」的目标卡 —— **非 null = 本次换弹是换级**（完成时要"退旧弹 + 装新弹"）。
@@ -251,9 +256,18 @@ public class PlayerController : MonoBehaviour
     /// ⚠️ 系数**没有上限**（设计自由），但请守住不变量：`aimSpeed × aimMoveSpeedMultiplier ≤ walkSpeed × moveSpeedMultiplier`
     ///    —— 否则某把枪"按住右键"既更准又更快，腰射对它形同虚设（§3.11 的设计意图）。
     /// ⚠️ 取用时 `Mathf.Max(0f, ...)` 是**兜底**：手改 YAML 塞进负数会让移动方向反掉（`OnValidate` 只在编辑器生效）。</summary>
-    public float CurrentMoveSpeed => _aiming
-        ? aimSpeed * (weapon != null ? Mathf.Max(0f, weapon.aimMoveSpeedMultiplier) : 1f)
-        : (running ? runSpeed : walkSpeed) * (weapon != null ? Mathf.Max(0f, weapon.moveSpeedMultiplier) : 1f);
+    public float CurrentMoveSpeed
+    {
+        get
+        {
+            // ⚠️ 持弹模式（手里是投掷物、枪收起）：移速 = 走 / 跑基准，**不看当前武器的速度系数**
+            //    （用户 2026-10-12 定：手雷不受"这把枪跑得慢"这种武器性格影响）
+            bool throwing = throwables != null && throwables.Active;
+            float mulAim = (!throwing && weapon != null) ? Mathf.Max(0f, weapon.aimMoveSpeedMultiplier) : 1f;
+            float mulMove = (!throwing && weapon != null) ? Mathf.Max(0f, weapon.moveSpeedMultiplier) : 1f;
+            return _aiming ? aimSpeed * mulAim : (running ? runSpeed : walkSpeed) * mulMove;
+        }
+    }
 
     /// <summary>「腰射 ↔ 瞄准」的散布过渡进度：0 = 完全腰射，1 = 完全瞄准。
     /// 由 <see cref="AdvanceAds"/> 每帧按 `WeaponData.hipToAimTime` / `aimToHipTime` 定速推进；
@@ -266,8 +280,8 @@ public class PlayerController : MonoBehaviour
     ///    `weapon.hipSpread` / `weapon.aimSpread`，否则"画出来的圈"与"实际弹道"会脱节
     ///    （与 §3.3「准星画在哪子弹就落在哪」是同一条原则）。
     /// ✅ 过渡**只有这一份实现**（`_adsProgress`）→ "屏幕上的圈在收缩"与"子弹在变准"天然同步。</summary>
-    public float CurrentSpread => weapon == null
-        ? 0f
+    public float CurrentSpread => (weapon == null || (throwables != null && throwables.Active))
+        ? 0f                                                    // 空手 / 持弹（枪收起）：没有散布这回事 → 散布圈自然隐藏
         : Mathf.Lerp(weapon.hipSpread, weapon.aimSpread, _adsProgress);
 
     /// <summary>当前纵向后坐（米）= 腰射纵向后坐 × 瞄准倍率（未瞄准时倍率 = 1）。</summary>
@@ -426,6 +440,7 @@ public class PlayerController : MonoBehaviour
     {
         if (backpack == null || i < 0 || i >= backpack.slots.Length) return;
         if (backpack.slots[i].weapon == null) return;   // 空槽不切
+        if (throwables != null) throwables.OnWeaponSwitch();   // 切到枪 = 退出投掷模式
         // 先把手上这把的弹匣存回去 —— **唯一实现**在 `SaveCurrentSlotAmmo()`，别在这里再抄一遍
         // （抄成两份的后果就是"以后改保存规则只改一处"，与 2026-09-26 那个复制 bug 同源）
         SaveCurrentSlotAmmo();
@@ -456,6 +471,10 @@ public class PlayerController : MonoBehaviour
         //    PlayerMagic.Awake 里那次 GetComponent<PlayerBackpack>() 才拿得到引用。
         if (magic == null) magic = GetComponent<PlayerMagic>();
         if (magic == null) magic = gameObject.AddComponent<PlayerMagic>();
+
+        // 投掷物管理器：同样兜底自动挂（**不需要**往场景 / prefab 里预配）
+        if (throwables == null) throwables = GetComponent<PlayerThrowable>();
+        if (throwables == null) throwables = gameObject.AddComponent<PlayerThrowable>();
 
         // 按开局自带的武器刷新一次手上的枪模型（Inspector 里配了武器就要走这一步）
         UpdateGunVisual();
@@ -502,6 +521,9 @@ public class PlayerController : MonoBehaviour
             _mouseDelta = Vector2.zero;
             _aiming = false;                       // 暂停/死亡时退出瞄准：否则恢复后残留瞄准态（右键状态在暂停期间读不到）
             _adsProgress = 0f;                     // 散布过渡进度一并归零：恢复后不会残留"半瞄准"的散布
+            // ⚠️ 投掷物：这里必须"喂一拍"给它 —— 它的 `Tick` 里才有"暂停关选择器 / 死亡退出持弹模式"的收敛，
+            //    而本分支会在 Tick 之前早退 → 不喂的话选择器列表会**一直留在屏幕上**（2026-10-12 修的 bug）。
+            if (throwables != null) throwables.Tick(0f);
             return;
         }
 
@@ -518,17 +540,29 @@ public class PlayerController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha2)) SwitchSlot(1);
         if (Input.GetKeyDown(KeyCode.Alpha3)) SwitchSlot(2);
 
-        // ---- 鼠标滚轮：循环切换快捷武器槽（上 = 上一把 / 下 = 下一把；跳过空槽、绕圈）----
-        // 攒够"一整格"才切一次：标准鼠标一格 = ±1，高精度滚轮 / 触摸板给的是零头，不攒会切得飞快。
-        _scrollAccum += Input.mouseScrollDelta.y;
-        while (_scrollAccum >= 1f) { _scrollAccum -= 1f; CycleSlot(-1); }
-        while (_scrollAccum <= -1f) { _scrollAccum += 1f; CycleSlot(+1); }
+        // ---- G：投掷物（不在投掷模式 → 进入；已在 → 开关选择器）（2026-10-12）----
+        // 逻辑全在 `PlayerThrowable`（与魔法同一套做法：本类只留一个按键入口）。
+        if (Input.GetKeyDown(KeyCode.G) && throwables != null) throwables.OnKeyG();
+
+        // 本帧是否"手里拿着投掷物"（决定 右键 / 左键 / R / T / 移速 的语义）—— 每帧只算一次
+        bool throwing = throwables != null && throwables.Active;
+
+        // ---- 鼠标滚轮：选择器开着时归选择器（选投掷物种类）；否则循环切换武器槽 ----
+        // 攒够"一整格"才动一次：标准鼠标一格 = ±1，高精度滚轮 / 触摸板给的是零头，不攒会切得飞快。
+        float scrollY = Input.mouseScrollDelta.y;
+        if (!(throwables != null && throwables.HandleScrollDelta(scrollY)))
+        {
+            _scrollAccum += scrollY;
+            while (_scrollAccum >= 1f) { _scrollAccum -= 1f; CycleSlot(-1); }
+            while (_scrollAccum <= -1f) { _scrollAccum += 1f; CycleSlot(+1); }
+        }
         // 背包开关（Tab/B）由 BackpackPanel.Update 统一处理（此处不再监听，避免同帧双触发）
 
         // ---- 鼠标右键：瞄准（腰射 ↔ 瞄准）。只改「当前散布 / 当前后坐」，弹道算法完全不变 ----
         // 用 GetMouseButton（按住才算瞄准）。暂停/死亡分支已在上面 early-return 并把 _aiming 复位。
         // ⚠️ 状态推进收在 `UpdateAimState`（含"切枪后必须重新按下"的锁存），别把 `_aiming = ...` 写回来。
-        UpdateAimState(Input.GetMouseButton(1));
+        // ⚠️ 持弹模式：右键是「弹道预览」、不是瞄准 → 不进瞄准态（预览绘制在 `PlayerThrowable.LateUpdate`）。
+        UpdateAimState(Input.GetMouseButton(1) && !throwing);
         // 散布过渡推进：**必须在本帧开火（HandleFire）与准星绘制（Crosshair.LateUpdate）之前** ——
         // 这样"这一枪用的散布"和"屏幕上画出来的圈"是同一个值（同源原则）。
         AdvanceAds(Time.deltaTime);
@@ -592,17 +626,19 @@ public class PlayerController : MonoBehaviour
         }
 
         // ---- 回正标记点 + 回正任务（必须放在 HandleFire 之前：标记点/静默期/横向基准都要用"开火前"的状态）----
-        UpdateRecoveryTask(Input.GetMouseButtonDown(0), Input.GetMouseButton(0), mouseDisturbed);
+        // ⚠️ 持弹模式下左键是"投掷"、不是开火 → 标记点/回正任务按"没按键"处理（别给投掷记后坐标记）
+        UpdateRecoveryTask(Input.GetMouseButtonDown(0) && !throwing, Input.GetMouseButton(0) && !throwing, mouseDisturbed);
 
-        // ---- 开火 ----
-        HandleFire();
+        // ---- 开火 / 投掷（互斥：拿着投掷物时左键 = 投出）----
+        if (throwing) throwables.HandlePrimaryInput();
+        else HandleFire();
 
-        // ---- 换弹 ----
-        if (Input.GetKeyDown(KeyCode.R) && weapon != null && !reloading && magAmmo < weapon.magSize)
+        // ---- 换弹（持弹模式下换弹 / 切弹药等级都无意义：枪不在手上）----
+        if (Input.GetKeyDown(KeyCode.R) && weapon != null && !reloading && !throwing && magAmmo < weapon.magSize)
             StartReload();
         // ---- T：切换弹药等级（同口径、有货、按等级升序循环；没得切会提示）----
         // 与 R 互斥（同一个 `reloading` 挡）；两者的"完成"都走 `FinishReload`（内部分支）。
-        if (Input.GetKeyDown(KeyCode.T) && weapon != null && !reloading)
+        if (Input.GetKeyDown(KeyCode.T) && weapon != null && !reloading && !throwing)
             StartSwitchAmmo();
         if (reloading && Time.time >= _reloadUntil) FinishReload();
 
@@ -614,6 +650,9 @@ public class PlayerController : MonoBehaviour
         // ---- 魔法：每帧推进（核对装备变化 + 冷却 + 行为自己的 Tick）----
         // 放在交互之前：交互（F）可能在这一帧开面板 → 下一帧起暂停，魔法自然停摆（与武器一致）。
         if (magic != null) magic.Tick(Time.deltaTime);
+
+        // ---- 投掷物：每帧推进（库存驱动的自动递补 / 选择器超时 / 死亡或暂停时收敛）----
+        if (throwables != null) throwables.Tick(Time.deltaTime);
 
         // ---- 交互（**单一交互焦点**）：地上的武器 / 血包 / 箱子中"离玩家最近的那个"显示气泡并响应按键 ----
         //    ⚠️ 唯一入口：别在别的脚本里再自己扫一遍 —— 那会抢 HUD 里那唯一一个气泡
@@ -1405,9 +1444,10 @@ public class PlayerController : MonoBehaviour
         var w = def as WeaponData;
         var a = def as AmmoData;
         var m = def as MagicData;
+        var t = def as ThrowableData;
         bool isMedkit = def is MedkitData;
 
-        if (w == null && a == null && m == null && !isMedkit)
+        if (w == null && a == null && m == null && t == null && !isMedkit)
         {
             // 认不出来的物品**不取走**（取走就变没了），只给一句明确的话
             HUD.Announce($"「{def.DisplayName}」还不能丢到地上", 1.2f, 24, new Color(1f, 0.6f, 0.4f));
@@ -1426,6 +1466,7 @@ public class PlayerController : MonoBehaviour
         if (w != null) { WeaponPickup.Create(w, pos, ammo, ammoId); return; }
         if (a != null) { AmmoPickup.Create(a, pos, count); return; }
         if (m != null) { MagicPickup.Create(m, pos); return; }
+        if (t != null) { ThrowablePickup.Create(t, pos, count); return; }   // 投掷物：可堆叠 → 整格掉（N 颗一包）
         if (isMedkit) { HealthPack.Create(pos); return; }
     }
 
@@ -1465,6 +1506,12 @@ public class PlayerController : MonoBehaviour
     /// - 没配但配了「拾取模型 Prefab」→ 复用它（所以只配一个模型就能同时用于地上和手上）
     /// - 都没配 / 空手 → 手里什么都不显示（不再有方块占位枪）
     /// 注意：gunVisual 是纯挂载点，不要往里放别的东西（这里的逻辑会清空它的所有子物体）
+    /// ⚠️ 持弹模式（手里是投掷物）时改画投掷物模型 —— 见本方法开头的分支。
+    public void RefreshGunVisual() => UpdateGunVisual();
+
+    /// <summary>要求"重新按下右键才算瞄准"（供投掷物在**退出持弹模式**时调用：换手 = 重新举枪，与切枪同一条规矩）。</summary>
+    public void RequireAimRepress() => _aimNeedsRepress = true;
+
     void UpdateGunVisual()
     {
         if (gunVisual == null) return;
@@ -1481,6 +1528,32 @@ public class PlayerController : MonoBehaviour
         // 先清掉旧模型：直接清空挂载点，不靠引用追踪，避免残留
         for (int i = gunVisual.childCount - 1; i >= 0; i--)
             DestroyImmediate(gunVisual.GetChild(i).gameObject);
+
+        // ---- 持弹模式：手里拿投掷物（枪收起）----
+        if (throwables != null && throwables.Active && throwables.Selected != null)
+        {
+            var def = throwables.Selected;
+            GameObject tgo;
+            if (def.pickupModelPrefab != null)
+            {
+                tgo = Instantiate(def.pickupModelPrefab, gunVisual);
+                tgo.name = "ThrowableModel";
+            }
+            else
+            {
+                // 没模型 → 代码生成的占位球（颜色 = 卡上的标识色）：新投掷物没有美术也不至于"手里看不见东西"
+                tgo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                tgo.name = "ThrowableModel(占位)";
+                tgo.transform.SetParent(gunVisual, false);
+                tgo.transform.localScale = Vector3.one * 0.18f;
+                var r = tgo.GetComponent<Renderer>();
+                if (r != null) r.sharedMaterial = Effects.Shared(def.pickupColor);
+            }
+            tgo.transform.localPosition = Vector3.zero;
+            tgo.transform.localRotation = Quaternion.identity;
+            foreach (var c in tgo.GetComponentsInChildren<Collider>()) DestroyImmediate(c);
+            return;   // ⚠️ 不调 UpdateGunTip（枪口是给枪算的，投掷物的出手点另有一套）
+        }
 
         // 装上手里的枪模型（可能没有模型，但武器本身仍能开火）
         Transform model = null;

@@ -73,3 +73,13 @@ MonoBehaviour:
   hudDimTextColor: {r: 0.62, g: 0.68, b: 0.8, a: 1}
   hudLowHpColor: {r: 1, g: 0.25, b: 0.2, a: 1}
   hudButtonTextColor: {r: 0.95, g: 0.97, b: 1, a: 1}
+  shopBuy: {fileID: 0}
+  shopSell: {fileID: 0}
+  throwableSelectorTimeout: 1.5
+  throwableListRowH: 24
+  throwableListFontSize: 15
+  throwableListWidth: 230
+  throwableListBgColor: {r: 0, g: 0, b: 0, a: 0.55}
+  throwableListHiColor: {r: 1, g: 0.85, b: 0.35, a: 0.9}
+  throwableRangeRingColor: {r: 1, g: 0.55, b: 0.1, a: 0.95}
+  throwableRangeFillColor: {r: 1, g: 0.55, b: 0.1, a: 0.1}

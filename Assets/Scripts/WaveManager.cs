@@ -35,6 +35,10 @@ public class WaveManager : MonoBehaviour
     [Tooltip("开局每种弹药各铺几包（0 = 不铺）。\n弹药种类**自动从物品清单里找**（不用手拖）—— 加了新弹药后跑一次菜单 Tools/游戏/重建物品清单即可")]
     [Min(0)] public int initialAmmoPacksPerType = 2;
 
+    [Header("初始投掷物")]
+    [Tooltip("开局每种投掷物各铺几包（0 = 不铺）。\n投掷物种类**自动从物品清单里找**（不用手拖）—— 加了新投掷物后跑一次菜单 Tools/游戏/重建物品清单即可")]
+    [Min(0)] public int initialThrowablePacksPerType = 2;
+
     [Header("敌人池（每波随机出怪；推荐用这个）")]
     [Tooltip("把敌人配置拖进每一项，权重/解锁波次直接在面板上调。有几项就会随机出几种敌人")]
     public EnemyPoolEntry[] enemyPool;
@@ -224,6 +228,24 @@ public class WaveManager : MonoBehaviour
             }
             else
                 Debug.LogWarning("[WaveManager] 物品清单缺失（Assets/Resources/ItemDatabase.asset）→ 开局不铺弹药");
+        }
+
+        // 初始投掷物：每种投掷物各铺 N 包。投掷物卡**自动从物品清单里找** → 以后加新投掷物不用改这里
+        // ⚠️ 2026-10-12 修 bug：这段原来被嵌在上面"铺弹药"的 if 里 → `initialAmmoPacksPerType = 0`
+        //    （本关不发弹药）时会**一颗投掷物都不铺**。现在与弹药完全独立。
+        if (initialThrowablePacksPerType > 0)
+        {
+            var db2 = ItemDatabase.I;
+            if (db2 != null && db2.all != null)
+            {
+                foreach (var def in db2.all)
+                {
+                    var th = def as ThrowableData;
+                    if (th == null) continue;
+                    for (int i = 0; i < initialThrowablePacksPerType; i++)
+                        ThrowablePickup.Create(th, SpawnPosition.FindOpenSpot(4f, SpawnPosition.RangeMedkit, spawned));
+                }
+            }
         }
 
         // 初始敌人：从敌人池随机挑（池里几种就随机几种），数量按波次配置，随机落点且彼此拉开

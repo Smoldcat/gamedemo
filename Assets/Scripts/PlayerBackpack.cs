@@ -210,8 +210,13 @@ public class PlayerBackpack : MonoBehaviour
     // ⚠️ 换弹 / HUD / 切换预检都必须用**按卡**的 `CountAmmo(AmmoData)`，**不能**用按口径的总和
     //    （总和会把一级二级加在一起 —— 玩家看到"有 90 发"却换不上，或者换完等级悄悄变了）。
 
-    /// <summary>统计**某一张**弹药卡的数量（跨格求和）。分级系统的关键查询 —— 见上面那段说明。</summary>
-    public int CountAmmo(AmmoData def)
+    /// <summary>统计**某一张**弹药卡的数量（跨格求和）。分级系统的关键查询 —— 见上面那段说明。
+    /// ⚠️ 实现收敛在通用的 <see cref="CountItems"/>（按卡统计的规则**只有一份**）。</summary>
+    public int CountAmmo(AmmoData def) => CountItems(def);
+
+    /// <summary>统计**任意一张物品卡**的数量（跨格求和，按「身份证」`SameKindAs` 匹配）。
+    /// 弹药（分级）与投掷物（G 槽数量 = 派生值）等都走它 —— **按卡统计的唯一实现**。</summary>
+    public int CountItems(ItemData def)
     {
         if (def == null) return 0;
         int total = 0;
@@ -225,8 +230,14 @@ public class PlayerBackpack : MonoBehaviour
         return total;
     }
 
-    /// <summary>扣除**某一张**弹药卡（跨格；返回**实际扣掉**的数量）。与 `CountAmmo(AmmoData)` 成对。</summary>
-    public int TakeAmmo(AmmoData def, int n)
+    /// <summary>扣除**某一张**弹药卡（跨格；返回**实际扣掉**的数量）。与 `CountAmmo(AmmoData)` 成对。
+    /// ⚠️ 实现收敛在通用的 <see cref="TakeItems"/>。</summary>
+    public int TakeAmmo(AmmoData def, int n) => TakeItems(def, n);
+
+    /// <summary>扣除**任意一张物品卡** N 个（跨格、空了自动腾格；返回**实际扣掉**的数量）——
+    /// 与 <see cref="CountItems"/> 成对，是通用的「按卡扣除」**唯一实现**
+    /// （投掷物的"扔一颗"也走它；别在别处直接改 `inventory`）。</summary>
+    public int TakeItems(ItemData def, int n)
     {
         if (def == null || n <= 0) return 0;
         int left = n;

@@ -180,6 +180,27 @@ public class GameAssets : ScriptableObject
     [Tooltip("商店**卖出成功**的音效（金币入袋「叮当」）。留空 = 代码合成的占位音")]
     public AudioClip shopSell;
 
+    // ---------------- 投掷物选择器（2026-10-12 新增） ----------------
+    // ⚠️ 物理位置在**末尾**（§6.8「新字段只能在已有字段之后追加」）；Inspector 里归「投掷物选择器」分组
+    //    （分组与顺序由 `GameAssetsEditor.Fields` 决定，与类里的物理位置无关）。
+    [Tooltip("选择器「无操作自动关」的秒数：在 G 槽上再按一次 G 打开选择器后，这么久没操作就自动收起。\n" +
+             "（排序规则 / 到底绕回这类**语义**不在这里，见 PlayerThrowable 的常量——它们不是调手感的东西）")]
+    [Min(0.1f)] public float throwableSelectorTimeout = 1.5f;
+    [Tooltip("选择器每行高度（px，按参考分辨率 1280×720 填，运行时随 UI 等比缩放）")]
+    [Min(16f)] public float throwableListRowH = 24f;
+    [Tooltip("选择器列表文字字号（参考分辨率下）")]
+    [Min(8)] public int throwableListFontSize = 15;
+    [Tooltip("选择器列表宽度（px，参考分辨率下）")]
+    [Min(80f)] public float throwableListWidth = 230f;
+    [Tooltip("选择器列表 · 普通行底色")]
+    public Color throwableListBgColor = new Color(0f, 0f, 0f, 0.55f);
+    [Tooltip("选择器列表 · **当前选中行**的高亮色")]
+    public Color throwableListHiColor = new Color(1f, 0.85f, 0.35f, 0.9f);
+    [Tooltip("投掷物 · **范围指示圈**的环颜色（含透明度；运行中实时生效）—— 由「效果卡勾了显示范围圈」的投掷物在按住右键预览时使用")]
+    public Color throwableRangeRingColor = new Color(1f, 0.55f, 0.1f, 0.95f);
+    [Tooltip("投掷物 · **范围指示圈**的填充颜色（含透明度；默认 10% 橙 = 地面「提亮变暖」、一眼看出危险区，调大只是更实）")]
+    public Color throwableRangeFillColor = new Color(1f, 0.55f, 0.1f, 0.10f);
+
     const string ResourcePath = "GameAssets";
 
     static GameAssets _instance;

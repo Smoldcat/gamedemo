@@ -31,6 +31,9 @@ public struct ShotProfile
     public float beyondRangeDamage;   // 超出有效射程后的伤害倍率（0~1，1 = 不衰减）
     public float explosionRadius;     // 爆炸半径（mode = Explode 且 > 0 时生效）
     public float explosionDamage;     // 爆炸对范围内敌人的伤害
+    public float selfDamageMultiplier; // **自伤倍率**（2026-10-12 新增）：玩家阵营的爆炸对**玩家自己**的伤害倍率。
+                                       // ⚠️ **默认 0 = 关闭** → 所有既有爆炸（RPG 等）逐位不变；
+                                       //    手雷的效果卡填 1 = 全额自伤（贴脸扔 / 弹回来会炸到自己）。
     public Health.Team team;          // 阵营：只打另一边；友军不挡子弹
     public Color color;               // 命中特效颜色（= 武器曳光色）
     public EnemyAI headshotTarget;    // 开火瞬间锁定的爆头目标（**只有打到它**才吃倍率）
@@ -157,21 +160,32 @@ public static class Combat
                 }
             }
             if (hitAny) Crosshair.HitMark();
+
+            // **自伤**（2026-10-12 新增，默认关）：手雷等"会炸到自己"的爆炸走这里。
+            // ⚠️ 与"敌人阵营炸玩家"共用同一套判据（距离 + 隔墙）—— 规则只有一份实现（见 DamagePlayer）。
+            if (shot.selfDamageMultiplier > 0f)
+                DamagePlayer(point, shot.explosionRadius, shot.explosionDamage * shot.selfDamageMultiplier);
         }
         else
         {
-            var pc = PlayerController.Instance;
-            if (pc != null)
-            {
-                var php = pc.GetComponent<Health>();
-                if (php != null && php.alive
-                    && Vector3.Distance(point, pc.transform.position) <= shot.explosionRadius
-                    && HasClearPath(point, pc.transform.position, pc.transform))
-                {
-                    php.TakeDamage(shot.explosionDamage, (pc.transform.position - point).normalized);
-                    Sfx.Hurt();
-                }
-            }
+            DamagePlayer(point, shot.explosionRadius, shot.explosionDamage);
+        }
+    }
+
+    /// <summary>爆炸伤到玩家：范围内 + **隔墙不掉血** + 活着才扣，并播受伤音 —— **唯一实现**
+    /// （敌人阵营的爆炸 与 玩家自己的"自伤" 共用；别再各写一份距离/视线判据）。</summary>
+    static void DamagePlayer(Vector3 point, float radius, float damage)
+    {
+        var pc = PlayerController.Instance;
+        if (pc == null) return;
+        var php = pc.GetComponent<Health>();
+        // ⚠️ 用 `!= null`（Unity 的 == 重载认"假 null"）——与项目其它处一致
+        if (php != null && php.alive
+            && Vector3.Distance(point, pc.transform.position) <= radius
+            && HasClearPath(point, pc.transform.position, pc.transform))
+        {
+            php.TakeDamage(damage, (pc.transform.position - point).normalized);
+            Sfx.Hurt();
         }
     }
 
