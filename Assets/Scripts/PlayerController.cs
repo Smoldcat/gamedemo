@@ -177,6 +177,9 @@ public class PlayerController : MonoBehaviour
     bool _aiming;               // 是否正按住右键瞄准（腰射 ↔ 瞄准）：决定「散布过渡的目标方向 / 当前后坐 / 移速」，不改弹道算法
     float _adsProgress;         // 「腰射 ↔ 瞄准」的**散布过渡进度** 0~1（0 = 完全腰射，1 = 完全瞄准），由 AdvanceAds 每帧定速推进
                                 // ⚠️ 只有 `CurrentSpread` 由它派生；后坐 / 移速 / 横向闸门仍按 `_aiming` **瞬间**切换（本轮刻意如此）
+    float _scrollAccum;         // 滚轮切槽的"整格"累加器：高精度滚轮一帧可能只给 0.x，攒够 ±1 才切一次（见 CycleSlot）
+    bool _aimNeedsRepress;      // 「切枪后必须重新按下右键」锁存：换枪那一刻置位（见 LoadMirrorFromSlot），
+                                // 右键仍按着也保持腰射；松开右键即解除 → 再按一次才进入瞄准（2026-10-11）
 
     /// <summary>鼠标增量的「噪声死区」（平方像素）：小于它的单帧增量当作浮点噪声，不计入净位移。
     /// ⚠️ 它**只是死区**，不是"是否在动"的判据 —— 判据是 `recoilRecoverJitterRatio`（**累计净位移** vs 屏幕短边比例，帧率/分辨率无关）。
@@ -403,12 +406,16 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        // 换枪（或变成空手）→ 瞄准过渡进度归零：**换枪 = 重新举枪**。
-        // 于是"按住右键换枪"不会白嫖满瞄准精度（新枪要从腰射散布重新过渡一遍），也避免了
-        // "进度停在 1 时切枪 → 新枪直接以完全瞄准态出现、连过渡都没有"的自相矛盾。
+        // 换枪（或变成空手）→ 瞄准过渡进度归零 + **要求重新按下右键**：**换枪 = 重新举枪**。
+        // 于是"按住右键换枪"不会白嫖满瞄准精度，而且**新枪默认保持腰射** —— 右键一直按着也不会自动
+        // 进入瞄准，必须松开、再按一次（`_aimNeedsRepress` 锁存，见 UpdateAimState）。
         // ⚠️ 判据是**武器实例是否变化**：捡到同类武器只是进库存、手上那把没换（引用不变）时，
         //    不会莫名打断正在进行的瞄准。
-        if (!ReferenceEquals(weapon, prevWeapon)) _adsProgress = 0f;
+        if (!ReferenceEquals(weapon, prevWeapon))
+        {
+            _adsProgress = 0f;
+            _aimNeedsRepress = true;
+        }
 
         // 任何分支都要刷枪模型：否则「丢掉手上的枪 / 空手」时旧模型会留在 gunVisual 上一直显示
         UpdateGunVisual();
@@ -424,6 +431,18 @@ public class PlayerController : MonoBehaviour
         SaveCurrentSlotAmmo();
         backpack.currentSlot = i;
         LoadMirrorFromSlot();
+    }
+
+    /// <summary>滚轮循环切槽：沿 dir 方向找下一个**非空**槽（跳过空槽、绕圈找）；找不到别的武器就什么也不做</summary>
+    void CycleSlot(int dir)
+    {
+        if (backpack == null) return;
+        int n = backpack.slots.Length;
+        for (int step = 1; step < n; step++)   // step 最大到 n-1：绕完一圈回到自己 = 没有别的武器
+        {
+            int i = ((backpack.currentSlot + dir * step) % n + n) % n;
+            if (backpack.slots[i].weapon != null) { SwitchSlot(i); return; }
+        }
     }
 
     void Start()
@@ -498,11 +517,18 @@ public class PlayerController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha1)) SwitchSlot(0);
         if (Input.GetKeyDown(KeyCode.Alpha2)) SwitchSlot(1);
         if (Input.GetKeyDown(KeyCode.Alpha3)) SwitchSlot(2);
+
+        // ---- 鼠标滚轮：循环切换快捷武器槽（上 = 上一把 / 下 = 下一把；跳过空槽、绕圈）----
+        // 攒够"一整格"才切一次：标准鼠标一格 = ±1，高精度滚轮 / 触摸板给的是零头，不攒会切得飞快。
+        _scrollAccum += Input.mouseScrollDelta.y;
+        while (_scrollAccum >= 1f) { _scrollAccum -= 1f; CycleSlot(-1); }
+        while (_scrollAccum <= -1f) { _scrollAccum += 1f; CycleSlot(+1); }
         // 背包开关（Tab/B）由 BackpackPanel.Update 统一处理（此处不再监听，避免同帧双触发）
 
         // ---- 鼠标右键：瞄准（腰射 ↔ 瞄准）。只改「当前散布 / 当前后坐」，弹道算法完全不变 ----
         // 用 GetMouseButton（按住才算瞄准）。暂停/死亡分支已在上面 early-return 并把 _aiming 复位。
-        _aiming = Input.GetMouseButton(1);
+        // ⚠️ 状态推进收在 `UpdateAimState`（含"切枪后必须重新按下"的锁存），别把 `_aiming = ...` 写回来。
+        UpdateAimState(Input.GetMouseButton(1));
         // 散布过渡推进：**必须在本帧开火（HandleFire）与准星绘制（Crosshair.LateUpdate）之前** ——
         // 这样"这一枪用的散布"和"屏幕上画出来的圈"是同一个值（同源原则）。
         AdvanceAds(Time.deltaTime);
@@ -854,6 +880,16 @@ public class PlayerController : MonoBehaviour
         Vector2 d = _crosshairEff - new Vector2(ps.x, ps.y);
         if (d.sqrMagnitude < 4f) return;      // 距离 < 2px：方向无意义，沿用上次
         _latRefDir = d.normalized;
+    }
+
+    /// <summary>推进「右键瞄准」状态：`按住右键 && 不需要重新按下`。
+    /// 「切枪后必须重新按下」的锁存在换枪时置位（`LoadMirrorFromSlot`）→ 右键仍按着也保持腰射；
+    /// **松开右键即解除**（于是下次按下就是"重新按了一次"、正常进入瞄准）。
+    /// ⚠️ 这是 `_aiming` 的**唯一写入点**（暂停 / 死亡早退分支里的复位除外）；别在别处再写一份。</summary>
+    void UpdateAimState(bool rmbHeld)
+    {
+        if (!rmbHeld) _aimNeedsRepress = false;
+        _aiming = rmbHeld && !_aimNeedsRepress;
     }
 
     /// <summary>

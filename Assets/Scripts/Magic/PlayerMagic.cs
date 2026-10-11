@@ -96,6 +96,14 @@ public class PlayerMagic : MonoBehaviour
 
     void Awake()
     {
+        // 单例防护：出现重复实例（如场景重载的极端时序）时丢弃后出现的那个
+        // ⚠️ 2026-10-10 补：本类曾是 10 个单例里**唯一**漏了这道防护的（其余 9 个都有，
+        //    见 PlayerController / Crosshair / BackpackPanel 的同款注释与写法）。
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
         Instance = this;
         _backpack = GetComponent<PlayerBackpack>();
     }

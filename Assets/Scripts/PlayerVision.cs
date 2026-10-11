@@ -264,14 +264,25 @@ public class PlayerVision : MonoBehaviour
             _fanDist.Add(sum / sub);
         }
 
-        // 扇形内再做一次**相邻三点平滑**（0.25/0.5/0.25，环形，不跨扇形边界）：
+        // 扇形内再做一次**相邻三点平滑**（0.25/0.5/0.25，**两端镜像、不跨扇形边界**）：
         // 把"边缘处 1 格宽的突变"扩散成"2 格宽的缓坡"（实测这是治抖动的主要功臣）。
+        // ⚠️ 两端**绝不能成环**：`i = 0` 的"左邻居"其实是扇形**另一侧**的边缘样本（相隔 360-fanAngle），
+        //    取它等于让两端的可见距离被"对面那一片几何"污染（2026-10-10 实测：静态最大 5.2m ≈ 屏幕 116px，
+        //    而且对面一动这边就跟着动，逐帧 1.19~1.90m）——那是**跨屏耦合**，必须切断。
+        // ⚠️ 缺的那一侧用**唯一邻居镜像补上**（= 0.5 自己 + 0.5 邻居）：
+        //    这样每个样本的"自身权重"恒为 0.5（与扇区内完全一致，是图像处理里的标准边界处理）；
+        //    若改成"夹取"（0.75 自己 + 0.25 邻居），端点自身权重会变成 0.75，
+        //    实测端点逐帧跳变反而 +50%（慢转 2.39→3.58m、快转 7.21→9.12m、前进 1.27→1.90m）。
         // 代价是扇形内墙角圆掉约 1 格，但**墙角的锐利由角点采样单独负责**（角点不参与平滑）。
         for (int i = 0; i < nFan; i++)
         {
             float d = _fanDist[i];
             if (nFan >= 3)
-                d = 0.25f * _fanDist[(i - 1 + nFan) % nFan] + 0.5f * d + 0.25f * _fanDist[(i + 1) % nFan];
+            {
+                int im = i > 0 ? i - 1 : i + 1;              // 左端（i=0）没有左邻居 → 镜像用右邻居
+                int ip = i < nFan - 1 ? i + 1 : i - 1;       // 右端（i=nFan-1）没有右邻居 → 镜像用左邻居
+                d = 0.25f * _fanDist[im] + 0.5f * d + 0.25f * _fanDist[ip];
+            }
             Sample sm; sm.ang = Mathf.Repeat(baseAngle - half + (i + 0.5f) * fanStep, 360f); sm.dist = d;
             _samples.Add(sm);
         }
@@ -283,10 +294,14 @@ public class PlayerVision : MonoBehaviour
         {
             // ② 扇形两条**精确边界**：外条取正边界角（= 圆半径）、内条取"边界内侧 0.01°"（= 扇形半径）
             //    → 形成一条干净的"悬崖边"（跳变只跨 0.01°），随朝向平滑旋转、永不翻转。
+            //    ⚠️ 2026-10-10（A/B 实验）内条**加子射线平均**：实测它扫过建筑边缘时逐帧跳 11.9m
+            //       （屏幕 175px，是全系统最大的单点跳变；慢转 120 帧里 8 次 >1m）。
+            //       ⚠️ 这不是"三点邻域平滑"（那条对扇形边界仍然禁止）：没有跨方向的状态，
+            //          悬崖仍然只跨 0.01° —— 只是**尖端的半径**更稳（突跳摊成 1/sub）。
             float bL = baseAngle - half, bR = baseAngle + half;
             AddSample(origin, Mathf.Repeat(bL, 360f), circleRadius, probeY, false);
-            AddSample(origin, Mathf.Repeat(bL + 0.01f, 360f), fanRadius, probeY, false);
-            AddSample(origin, Mathf.Repeat(bR - 0.01f, 360f), fanRadius, probeY, false);
+            AddBoundarySampleSub(origin, Mathf.Repeat(bL + 0.01f, 360f), fanRadius, probeY, sub, subStep);
+            AddBoundarySampleSub(origin, Mathf.Repeat(bR - 0.01f, 360f), fanRadius, probeY, sub, subStep);
             AddSample(origin, Mathf.Repeat(bR, 360f), circleRadius, probeY, false);
         }
 
@@ -348,6 +363,25 @@ public class PlayerVision : MonoBehaviour
         if (d < 0f) d = maxD;                                     // 没命中 → 该方向的上限
         if (collect && col != null && !_hitCols.Contains(col)) _hitCols.Add(col);
         Sample s; s.ang = angle; s.dist = d;
+        _samples.Add(s);
+    }
+
+    /// <summary>扇形边界"内条"专用采样：与扇内**同一套**子射线平均（空间抗锯齿），但**不做邻域平滑**。
+    /// ⚠️ 为什么单独一个函数：这两条是斜边尖端的收口样本（上限 = 扇形半径），扫过物体边缘时距离会整段突跳
+    ///    （实测 11.9m / 屏幕 175px）；取平均把突跳摊成 1/sub，而**悬崖本身仍然只跨 0.01°**。
+    /// ⚠️ 与"三点邻域平滑"的区别：这里没有任何跨方向的状态——只是在同一条方向上取 ±(sub-1)/2 个子步的平均。</summary>
+    void AddBoundarySampleSub(Vector3 origin, float angle, float maxDist, float probeY, int sub, float subStep)
+    {
+        float maxD = Mathf.Max(maxDist, 0.01f);
+        float sum = 0f;
+        for (int k = 0; k < sub; k++)
+        {
+            float off = (k - (sub - 1) * 0.5f) * subStep;
+            Collider c;
+            float d = CastDistance(origin, DirOf(angle + off), maxD, probeY, out c);
+            sum += d < 0f ? maxD : d;
+        }
+        Sample s; s.ang = angle; s.dist = sum / sub;
         _samples.Add(s);
     }
 

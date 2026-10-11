@@ -260,7 +260,7 @@ public class WaveManager : MonoBehaviour
                 {
                     bool anyCombat = false;
                     foreach (var ai in EnemyAI.All)
-                        if (ai.InCombat) { anyCombat = true; break; }
+                        if (ai != null && ai.InCombat) { anyCombat = true; break; }   // 判空与本文件其它遍历保持一致
 
                     if (!anyCombat)
                     {
@@ -271,6 +271,7 @@ public class WaveManager : MonoBehaviour
                             int moved = 0;
                             foreach (var ai in EnemyAI.All)
                             {
+                                if (ai == null) continue;              // 列表里可能残留"假 null"（2026-10-10 补）
                                 var h = ai.GetComponent<Health>();
                                 if (h != null && h.alive)
                                 {

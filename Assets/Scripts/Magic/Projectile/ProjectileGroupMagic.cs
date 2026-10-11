@@ -85,7 +85,9 @@ public class ProjectileGroupMagic : MagicBehaviour
         //       超过之后（说明这一波已经派完、范围内没了敌人）→ 剩下的球一起平滑补位。
         //       catchUpDelay = 0   → 老行为（立刻补位）
         //       catchUpDelay 很大  → 等价于"永不补位"（球自己 6 秒就消散，永远等不到）
-        _orbitPhase += _d.orbitSpeed * Mathf.Deg2Rad * dt;
+        // ⚠️ 归一化到 [0, 2π)：相位只喂给三角函数，长局无限累加会丢精度
+        //    （2026-10-10 补；对照 `MagicProjectile` 的 `_orbitAngle` 用的是 `Mathf.Repeat`）
+        _orbitPhase = Mathf.Repeat(_orbitPhase + _d.orbitSpeed * Mathf.Deg2Rad * dt, Mathf.PI * 2f);
         _sinceDispatch += dt;
         bool allowCatchUp = _sinceDispatch >= _d.catchUpDelay;
         for (int i = 0; i < _orbs.Count; i++)

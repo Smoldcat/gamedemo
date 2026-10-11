@@ -115,7 +115,12 @@ public static class Combat
         // ⚠️ 只在**玩家开火**时转发（敌人子弹不该触发玩家的被动魔法）。
         // ⚠️ `h.alive` —— 已死的就不用挂印记了。
         if (shot.team == Health.Team.Player && h.team == Health.Team.Enemy && h.alive)
-            PlayerMagic.Instance?.NotifyHitEnemy(h, headshot);
+        {
+            // ⚠️ 用 `!= null`（Unity 的 == 重载认"假 null"），**不要**写 `Instance?.`：
+            //    `?.` 走的是引用比较，销毁后到 OnDestroy 清空之间的窗口里会调进已销毁对象（2026-10-10 修）
+            var pm = PlayerMagic.Instance;
+            if (pm != null) pm.NotifyHitEnemy(h, headshot);
+        }
 
         return HitResult.Consumed;
     }
@@ -148,7 +153,7 @@ public static class Combat
                     hitAny = true;
                     // 魔法系统的被动钩子：爆炸 AOE 也算【玩家命中】（例：RPG 炸到也能挂印记）。
                     // 本分支已经在 `shot.team == Player` 里，所以不必再判阵营；`h.alive` 同上。
-                    if (h.alive) PlayerMagic.Instance?.NotifyHitEnemy(h, false);
+                    if (h.alive) { var pm2 = PlayerMagic.Instance; if (pm2 != null) pm2.NotifyHitEnemy(h, false); }
                 }
             }
             if (hitAny) Crosshair.HitMark();
