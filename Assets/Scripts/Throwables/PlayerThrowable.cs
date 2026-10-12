@@ -144,7 +144,9 @@ public class PlayerThrowable : MonoBehaviour
         if (!_active) return;
         _active = false;
         CloseSelector();
-        if (_pc != null) _pc.RequireAimRepress();
+        // 枪切回来 = 一次「换手」→ 走 PlayerController 的**唯一实现** `BeginHandSwap()`
+        //（① 右键要重新按；② 手上要有动作 → 起算切枪锁火窗，与 1/2/3 切枪同一条时间口径）。
+        if (_pc != null) _pc.BeginHandSwap();
         RefreshVisual();
     }
 

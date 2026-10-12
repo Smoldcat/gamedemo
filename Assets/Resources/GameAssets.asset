@@ -83,3 +83,4 @@ MonoBehaviour:
   throwableListHiColor: {r: 1, g: 0.85, b: 0.35, a: 0.9}
   throwableRangeRingColor: {r: 1, g: 0.55, b: 0.1, a: 0.95}
   throwableRangeFillColor: {r: 1, g: 0.55, b: 0.1, a: 0.1}
+  switchWindup: 0.4

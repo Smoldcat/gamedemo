@@ -201,6 +201,15 @@ public class GameAssets : ScriptableObject
     [Tooltip("投掷物 · **范围指示圈**的填充颜色（含透明度；默认 10% 橙 = 地面「提亮变暖」、一眼看出危险区，调大只是更实）")]
     public Color throwableRangeFillColor = new Color(1f, 0.55f, 0.1f, 0.10f);
 
+    // ---------------- 切枪动作（2026-10-12 新增） ----------------
+    // ⚠️ 物理位置在**末尾**（§6.8「新字段只能在已有字段之后追加」）；Inspector 里归「切枪动作」分组
+    //    （分组与顺序由 `GameAssetsEditor.Fields` 决定，与类里的物理位置无关）。
+    [Tooltip("切枪动作时长（秒）：**从按下切枪键那一刻起、到「新枪可以开火」之间的时间** —— 收枪段 + 出枪段都算，\n" +
+             "这段时间内不能开火、不能起手换弹 / 按 T 换级（换手 = 手上要动一次）。\n" +
+             "以后做了切枪动画：把这个数**填成动画的实际长度**即可（动作 = 先放下旧枪、再拿起新枪）。\n" +
+             "⚠️ 填 0 = 关闭（退回「切完枪立刻能开火」）。默认 0.3")]
+    [Min(0f)] public float switchWindup = 0.3f;
+
     const string ResourcePath = "GameAssets";
 
     static GameAssets _instance;

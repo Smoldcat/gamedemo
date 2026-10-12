@@ -96,6 +96,8 @@ public class GameAssetsEditor : Editor
         ("throwableListHiColor",     "选中行高亮色",     "选择器列表 · **当前选中行**的高亮底色", null),
         ("throwableRangeRingColor",  "范围圈·环色",      "投掷物「范围指示圈」的环颜色（含透明度）；改完立刻生效（下次进 Play 看）", "投掷物范围指示圈（2026-10-12 新增）"),
         ("throwableRangeFillColor",  "范围圈·填充色",    "投掷物「范围指示圈」的填充颜色（含透明度）；默认 10% 橙 = 提亮变暖、一眼看出危险区", null),
+
+        ("switchWindup", "切枪动作时长(秒)", "从按下切枪键到「新枪可以开火」之间的时间（收枪段 + 出枪段都算）：期间不能开火、不能起手换弹 / 按 T 换级。\n以后做了切枪动画 → 把这个数填成动画的实际长度即可。⚠️ 填 0 = 关闭（切完枪立刻能开火）。默认 0.3", "切枪动作（2026-10-12 新增）"),
     };
 
     readonly HashSet<string> _handled = new HashSet<string>();

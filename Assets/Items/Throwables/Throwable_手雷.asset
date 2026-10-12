@@ -27,7 +27,7 @@ MonoBehaviour:
   peakHeight: 3
   throwSpeed: 12
   bounceNormal: 0.4
-  bounceTangential: 0.7
+  bounceTangential: 0.2
   stopSpeed: 1.2
   groundFuse: 1
   impactFuse: 0

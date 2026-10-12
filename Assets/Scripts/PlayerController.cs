@@ -185,6 +185,9 @@ public class PlayerController : MonoBehaviour
     float _scrollAccum;         // 滚轮切槽的"整格"累加器：高精度滚轮一帧可能只给 0.x，攒够 ±1 才切一次（见 CycleSlot）
     bool _aimNeedsRepress;      // 「切枪后必须重新按下右键」锁存：换枪那一刻置位（见 LoadMirrorFromSlot），
                                 // 右键仍按着也保持腰射；松开右键即解除 → 再按一次才进入瞄准（2026-10-11）
+    float _fireLockUntil;       // 「切枪动作」的锁火截止时刻（Time.time）：换手那一刻起算 —— 起算的**唯一入口**是
+                                // `BeginHandSwap()`（换枪分支 + 投掷物 ExitMode）；到点前不能开火 / 起手换弹；
+                                // 对外只暴露判据 `FireLocked`（时长 = GameAssets.switchWindup）（2026-10-12）
 
     /// <summary>鼠标增量的「噪声死区」（平方像素）：小于它的单帧增量当作浮点噪声，不计入净位移。
     /// ⚠️ 它**只是死区**，不是"是否在动"的判据 —— 判据是 `recoilRecoverJitterRatio`（**累计净位移** vs 屏幕短边比例，帧率/分辨率无关）。
@@ -420,15 +423,16 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        // 换枪（或变成空手）→ 瞄准过渡进度归零 + **要求重新按下右键**：**换枪 = 重新举枪**。
-        // 于是"按住右键换枪"不会白嫖满瞄准精度，而且**新枪默认保持腰射** —— 右键一直按着也不会自动
-        // 进入瞄准，必须松开、再按一次（`_aimNeedsRepress` 锁存，见 UpdateAimState）。
-        // ⚠️ 判据是**武器实例是否变化**：捡到同类武器只是进库存、手上那把没换（引用不变）时，
-        //    不会莫名打断正在进行的瞄准。
+        // 换枪（或变成空手）→ **换手**：散布过渡归零 + 走 `BeginHandSwap()`（重按右键 + 起算切枪锁火窗，
+        // 这两件事的说明都在那个方法上）。于是"按住右键换枪"不会白嫖满瞄准精度、新枪默认保持腰射，
+        // 而且**换手那一下打不出枪**（堵掉"按住左键猛切枪刷射速"）。
+        // ⚠️ 判据是**武器实例是否变化**，且这里是「换手」判据的**唯一一处**：捡到同类武器只是进库存、
+        //    手上那把没换（引用不变）时，既不打断正在进行的瞄准、也不锁火；按同一个槽号同理
+        //    （按住数字键不会把自己锁住）。→ 1/2/3、滚轮、捡枪自动装备、丢弃后换枪**全部自动覆盖**。
         if (!ReferenceEquals(weapon, prevWeapon))
         {
             _adsProgress = 0f;
-            _aimNeedsRepress = true;
+            BeginHandSwap();
         }
 
         // 任何分支都要刷枪模型：否则「丢掉手上的枪 / 空手」时旧模型会留在 gunVisual 上一直显示
@@ -952,6 +956,9 @@ public class PlayerController : MonoBehaviour
     void HandleFire()
     {
         if (weapon == null) return;
+        // ⚠️ 「切枪动作」没做完（收枪 + 出枪）→ **不能开火**：这是"切枪前摇"的**唯一闸门**（判据 `FireLocked`）。
+        //    早退在这里 = 连"空弹自动换弹"那支也不会走（动作没做完，枪还没在手上）。
+        if (FireLocked) return;
         if (Input.GetMouseButton(0) && !reloading && Time.time >= _nextFireTime)
         {
             if (magAmmo <= 0) { StartReload(); return; }
@@ -1191,6 +1198,8 @@ public class PlayerController : MonoBehaviour
     void StartReload()
     {
         if (weapon == null || reloading) return;
+        // ⚠️ 「切枪动作」没做完 → **不能起手换弹**（与禁开火同一个窗口、同一个判据 `FireLocked`）
+        if (FireLocked) return;
         // ⚠️ 不吃弹药的枪（`AmmoKind.None`，如 RPG）永远能换；其余枪**当前这一级一颗备弹都没有就拒绝换弹**并提示 ——
         //    否则会出现"吭哧换完，弹匣还是空的"，玩家会以为卡了。
         // ⚠️ 分级系统（2026-09-27）起这里只看**弹匣当前等级**那张卡的库存，不再用按口径的总和：
@@ -1278,6 +1287,8 @@ public class PlayerController : MonoBehaviour
     void StartSwitchAmmo()
     {
         if (weapon == null || reloading || backpack == null) return;
+        // ⚠️ 「切枪动作」没做完 → **不能起手换级**（同 StartReload：同一个窗口、同一个判据 `FireLocked`）
+        if (FireLocked) return;
         if (weapon.ammoKind == AmmoKind.None) return;      // RPG 那类不吃弹药 → 按 T 无效
 
         var cur = ResolveAmmo(weapon, magAmmoId);
@@ -1509,8 +1520,28 @@ public class PlayerController : MonoBehaviour
     /// ⚠️ 持弹模式（手里是投掷物）时改画投掷物模型 —— 见本方法开头的分支。
     public void RefreshGunVisual() => UpdateGunVisual();
 
-    /// <summary>要求"重新按下右键才算瞄准"（供投掷物在**退出持弹模式**时调用：换手 = 重新举枪，与切枪同一条规矩）。</summary>
-    public void RequireAimRepress() => _aimNeedsRepress = true;
+    /// <summary>「换手」时必做的两件事 —— **唯一实现**（换枪分支与投掷物 `ExitMode` 共用）：
+    /// ① 要求"重新按下右键才算瞄准"（换枪 = 重新举枪：右键仍按着也保持腰射）；
+    /// ② 起算「切枪动作」的锁火窗（换手 = 手上要动一次，时长 = `GameAssets.switchWindup`）。
+    /// ⚠️ 以后任何"手上那把换了"的新路径都调它 —— 别只做一半（只重按右键、或只锁火）。</summary>
+    public void BeginHandSwap()
+    {
+        _aimNeedsRepress = true;
+        _fireLockUntil = Time.time + SwitchWindup;
+    }
+
+    /// <summary>「切枪动作」是否**还没做完** = 不能开火 / 不能起手换弹 / 不能换级。
+    /// ⚠️ 判据只此一处：`HandleFire` / `StartReload` / `StartSwitchAmmo` 都用它 ——
+    /// 别在别处再写 `Time.time < _fireLockUntil`（散开了迟早有一处忘改）。</summary>
+    bool FireLocked => Time.time < _fireLockUntil;
+
+    /// <summary>「切枪动作」时长（秒，来自资源总表 `GameAssets.switchWindup`；没放资源表时用兜底 0.3）。
+    /// 语义 = **从换手那一刻到新枪可以开火**之间的时间（收枪段 + 出枪段都算）；0 = 关闭（退回"切完枪立刻能开火"）。
+    /// ⚠️ 以后做了切枪动画：把这个数**填成动画的实际长度**即可 —— 别改这里的逻辑。</summary>
+    static float SwitchWindup
+    {
+        get { var a = GameAssets.I; return a != null ? Mathf.Max(0f, a.switchWindup) : 0.3f; }
+    }
 
     void UpdateGunVisual()
     {
