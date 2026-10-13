@@ -32,6 +32,7 @@ public static class StaticReset
         AmmoPickup.All.Clear();          // 弹药包注册表（2026-09-27）
         MagicPickup.All.Clear();         // 地上的魔法卡注册表（2026-09-28）
         ThrowablePickup.All.Clear();     // 地上的投掷物注册表（2026-10-12）
+        SmokeVolume.All.Clear();         // 烟云注册表（2026-10-13；漏登记 → 重开一局残留死引用、且会"幽灵挡视线"）
         MagicMark.ResetStatics();        // 敌人身上的印记注册表（2026-09-28）
         HealthPack.ResetStatics();      // 静态事件 AnyConsumed（漏登记 → 上一局已销毁的 WaveManager 仍会被回调）
         SpawnPosition.ResetStatics();   // 地图边界（漏登记 → 上一局算出的边界残留到下一局）

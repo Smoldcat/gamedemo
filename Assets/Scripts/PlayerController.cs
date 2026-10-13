@@ -64,6 +64,11 @@ public class PlayerController : MonoBehaviour
              "⚠️ **不需要手拖**：Start 时若为空会自动 AddComponent 创建（与背包 / 魔法同一套做法）。")]
     public PlayerThrowable throwables;
 
+    [Header("弹药等级选择器")]
+    [Tooltip("弹药等级（子弹档位）选择器（T 槽：开/关选择器、滚轮选档、再按 T / 左键提交换级，仿投掷物选择器）。\n" +
+             "⚠️ **不需要手拖**：Start 时若为空会自动 AddComponent 创建（与背包 / 魔法 / 投掷物同一套做法）。")]
+    public AmmoSelector ammoSel;
+
     [HideInInspector] public bool running = true;
     [HideInInspector] public bool reloading;
     /// <summary>「按 T 换级」的目标卡 —— **非 null = 本次换弹是换级**（完成时要"退旧弹 + 装新弹"）。
@@ -445,6 +450,7 @@ public class PlayerController : MonoBehaviour
         if (backpack == null || i < 0 || i >= backpack.slots.Length) return;
         if (backpack.slots[i].weapon == null) return;   // 空槽不切
         if (throwables != null) throwables.OnWeaponSwitch();   // 切到枪 = 退出投掷模式
+        if (ammoSel != null) ammoSel.OnWeaponSwitch();          // 切到枪 = 取消弹药等级选择器（目标口径会变）
         // 先把手上这把的弹匣存回去 —— **唯一实现**在 `SaveCurrentSlotAmmo()`，别在这里再抄一遍
         // （抄成两份的后果就是"以后改保存规则只改一处"，与 2026-09-26 那个复制 bug 同源）
         SaveCurrentSlotAmmo();
@@ -479,6 +485,10 @@ public class PlayerController : MonoBehaviour
         // 投掷物管理器：同样兜底自动挂（**不需要**往场景 / prefab 里预配）
         if (throwables == null) throwables = GetComponent<PlayerThrowable>();
         if (throwables == null) throwables = gameObject.AddComponent<PlayerThrowable>();
+
+        // 弹药等级选择器：同样兜底自动挂（**不需要**往场景 / prefab 里预配）
+        if (ammoSel == null) ammoSel = GetComponent<AmmoSelector>();
+        if (ammoSel == null) ammoSel = gameObject.AddComponent<AmmoSelector>();
 
         // 按开局自带的武器刷新一次手上的枪模型（Inspector 里配了武器就要走这一步）
         UpdateGunVisual();
@@ -550,11 +560,15 @@ public class PlayerController : MonoBehaviour
 
         // 本帧是否"手里拿着投掷物"（决定 右键 / 左键 / R / T / 移速 的语义）—— 每帧只算一次
         bool throwing = throwables != null && throwables.Active;
+        // 本帧是否"弹药等级选择器开着"（决定 左键 = 确认换级；不射击 / 不记后坐 / 不瞄准）—— 每帧只算一次
+        bool ammoSelecting = ammoSel != null && ammoSel.SelectorOpen;
 
-        // ---- 鼠标滚轮：选择器开着时归选择器（选投掷物种类）；否则循环切换武器槽 ----
-        // 攒够"一整格"才动一次：标准鼠标一格 = ±1，高精度滚轮 / 触摸板给的是零头，不攒会切得飞快。
+        // ---- 鼠标滚轮：优先级 = 投掷物选择器 > 弹药等级选择器 > 切武器槽 ----
+        // 选择器开着时滚轮归它（选档）；否则循环切换武器槽。攒够"一整格"才动一次：标准鼠标一格 = ±1，
+        // 高精度滚轮 / 触摸板给的是零头，不攒会切得飞快。
         float scrollY = Input.mouseScrollDelta.y;
-        if (!(throwables != null && throwables.HandleScrollDelta(scrollY)))
+        if (!(throwables != null && throwables.HandleScrollDelta(scrollY))
+            && !(ammoSel != null && ammoSel.HandleScrollDelta(scrollY)))
         {
             _scrollAccum += scrollY;
             while (_scrollAccum >= 1f) { _scrollAccum -= 1f; CycleSlot(-1); }
@@ -566,7 +580,7 @@ public class PlayerController : MonoBehaviour
         // 用 GetMouseButton（按住才算瞄准）。暂停/死亡分支已在上面 early-return 并把 _aiming 复位。
         // ⚠️ 状态推进收在 `UpdateAimState`（含"切枪后必须重新按下"的锁存），别把 `_aiming = ...` 写回来。
         // ⚠️ 持弹模式：右键是「弹道预览」、不是瞄准 → 不进瞄准态（预览绘制在 `PlayerThrowable.LateUpdate`）。
-        UpdateAimState(Input.GetMouseButton(1) && !throwing);
+        UpdateAimState(Input.GetMouseButton(1) && !throwing && !ammoSelecting);
         // 散布过渡推进：**必须在本帧开火（HandleFire）与准星绘制（Crosshair.LateUpdate）之前** ——
         // 这样"这一枪用的散布"和"屏幕上画出来的圈"是同一个值（同源原则）。
         AdvanceAds(Time.deltaTime);
@@ -630,20 +644,22 @@ public class PlayerController : MonoBehaviour
         }
 
         // ---- 回正标记点 + 回正任务（必须放在 HandleFire 之前：标记点/静默期/横向基准都要用"开火前"的状态）----
-        // ⚠️ 持弹模式下左键是"投掷"、不是开火 → 标记点/回正任务按"没按键"处理（别给投掷记后坐标记）
-        UpdateRecoveryTask(Input.GetMouseButtonDown(0) && !throwing, Input.GetMouseButton(0) && !throwing, mouseDisturbed);
+        // ⚠️ 持弹模式 / 弹药选择器模式下左键都不是"开火"（投掷 / 确认换级）→ 标记点/回正任务按"没按键"处理（别记错后坐标）
+        UpdateRecoveryTask(Input.GetMouseButtonDown(0) && !throwing && !ammoSelecting,
+                            Input.GetMouseButton(0) && !throwing && !ammoSelecting, mouseDisturbed);
 
-        // ---- 开火 / 投掷（互斥：拿着投掷物时左键 = 投出）----
+        // ---- 开火 / 投掷 / 确认弹药换级（互斥：左键语义随模式变）----
         if (throwing) throwables.HandlePrimaryInput();
+        else if (ammoSel != null && ammoSel.SelectorOpen) { if (Input.GetMouseButtonDown(0)) ammoSel.Confirm(); }
         else HandleFire();
 
         // ---- 换弹（持弹模式下换弹 / 切弹药等级都无意义：枪不在手上）----
         if (Input.GetKeyDown(KeyCode.R) && weapon != null && !reloading && !throwing && magAmmo < weapon.magSize)
             StartReload();
-        // ---- T：切换弹药等级（同口径、有货、按等级升序循环；没得切会提示）----
-        // 与 R 互斥（同一个 `reloading` 挡）；两者的"完成"都走 `FinishReload`（内部分支）。
-        if (Input.GetKeyDown(KeyCode.T) && weapon != null && !reloading && !throwing)
-            StartSwitchAmmo();
+        // ---- T：弹药等级选择器（按 T 开/关、滚轮选档、再按 T / 左键提交换级；仿投掷物选择器）----
+        // 逻辑全在 `AmmoSelector`（`PlayerController` 只留这一个按键入口）；与 R 互斥（同一个 `reloading` 挡）。
+        if (Input.GetKeyDown(KeyCode.T) && weapon != null && !reloading && !throwing && ammoSel != null)
+            ammoSel.OnKeyT();
         if (reloading && Time.time >= _reloadUntil) FinishReload();
 
         // ---- E：释放魔法（主动魔法；被动魔法不需要按键，装备即生效）----
@@ -657,6 +673,7 @@ public class PlayerController : MonoBehaviour
 
         // ---- 投掷物：每帧推进（库存驱动的自动递补 / 选择器超时 / 死亡或暂停时收敛）----
         if (throwables != null) throwables.Tick(Time.deltaTime);
+        if (ammoSel != null) ammoSel.Tick(Time.deltaTime);
 
         // ---- 交互（**单一交互焦点**）：地上的武器 / 血包 / 箱子中"离玩家最近的那个"显示气泡并响应按键 ----
         //    ⚠️ 唯一入口：别在别的脚本里再自己扫一遍 —— 那会抢 HUD 里那唯一一个气泡
@@ -1277,36 +1294,41 @@ public class PlayerController : MonoBehaviour
         return backpack != null ? backpack.LowestOwnedAmmo(w.ammoKind) : null;
     }
 
-    /// <summary>按 T：切到"下一级"（同口径、**有货**、等级升序；到顶绕回有货的最低等级）。
+    /// <summary>弹药等级选择器提交：换到**选定的那一档**（`target`）。由 `AmmoSelector.CloseSelector` 调用。
     ///
     /// **切换 = 一次换弹**（用户 2026-09-27 定）：这里只做**预检 + 记下目标卡**，
     /// 真正的"退旧弹 / 装新弹"在 `FinishSwitchAmmo` 里完成时**一次性**执行（原子）——
     /// 中途被打断（切枪 / 丢弃会走 `LoadMirrorFromSlot` 清掉 `_switchTarget`）就等于什么都没发生，
     /// 绝不会出现"旧弹退了、新弹没装上"这种半截状态。
-    /// 预检走 `CanSwapMag`：判定基准是"**取走新弹之后**"的背包状态（用户定的语义）。</summary>
-    void StartSwitchAmmo()
+    /// 预检走 `CanSwapMag`：判定基准是"**取走新弹之后**"的背包状态（用户定的语义）。
+    /// 与旧版区别：旧版 `StartSwitchAmmo` 自己算"下一档"；本方法认调用方选定的 `target`（选择器自由选档）。</summary>
+    public void BeginAmmoGradeSwap(AmmoData target)
     {
-        if (weapon == null || reloading || backpack == null) return;
+        if (weapon == null || reloading || backpack == null || target == null) return;
         // ⚠️ 「切枪动作」没做完 → **不能起手换级**（同 StartReload：同一个窗口、同一个判据 `FireLocked`）
         if (FireLocked) return;
-        if (weapon.ammoKind == AmmoKind.None) return;      // RPG 那类不吃弹药 → 按 T 无效
-
-        var cur = ResolveAmmo(weapon, magAmmoId);
-        var next = backpack.NextAmmo(weapon.ammoKind, cur);
-        if (next == null)
+        if (weapon.ammoKind == AmmoKind.None) return;      // RPG 那类不吃弹药 → 无效
+        if (target.ammoKind != weapon.ammoKind)            // 口径对不上（脏数据 / 跨口径）→ 拒绝
         {
-            WarnAmmoOnce("没有其他等级的" + AmmoData.DisplayOf(weapon.ammoKind) + "了", new Color(0.9f, 0.85f, 0.5f));
+            WarnAmmoOnce("该武器不能用这级弹药", new Color(1f, 0.62f, 0.42f));
+            return;
+        }
+
+        var cur = ResolveAmmo(weapon, magAmmoId);          // 当前这一匣的档（HUD / 退弹都读它）
+        if (target == cur)                                 // 选的就是当前档 → 不用换（提示一下，不白耗换弹）
+        {
+            WarnAmmoOnce("已是" + target.DisplayName, new Color(0.9f, 0.85f, 0.5f));
             return;
         }
 
         int willLoad;
-        if (!backpack.CanSwapMag(weapon, next, magAmmo, cur, out willLoad))
+        if (!backpack.CanSwapMag(weapon, target, magAmmo, cur, out willLoad))
         {
             WarnAmmoOnce("背包放不下退弹，先腾个格子", new Color(1f, 0.62f, 0.42f));
             return;
         }
 
-        _switchTarget = next;
+        _switchTarget = target;
         reloading = true;
         _reloadUntil = Time.time + weapon.reloadTime;   // 复用换弹时长（用户定：换级就是要换弹）
         _markValid = false;
@@ -1531,7 +1553,7 @@ public class PlayerController : MonoBehaviour
     }
 
     /// <summary>「切枪动作」是否**还没做完** = 不能开火 / 不能起手换弹 / 不能换级。
-    /// ⚠️ 判据只此一处：`HandleFire` / `StartReload` / `StartSwitchAmmo` 都用它 ——
+    /// ⚠️ 判据只此一处：`HandleFire` / `StartReload` / `BeginAmmoGradeSwap` 都用它 ——
     /// 别在别处再写 `Time.time < _fireLockUntil`（散开了迟早有一处忘改）。</summary>
     bool FireLocked => Time.time < _fireLockUntil;
 

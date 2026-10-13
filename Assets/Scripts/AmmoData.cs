@@ -30,7 +30,8 @@ public enum AmmoKind
 ///     **武器侧零改动** ✓
 ///   · 一 / 二级是**两张不同的卡** → `StackId` 不同 → 背包里天然**各占一格**（用户要的"分开存储"）
 ///   · 统计 / 扣除 / HUD 显示一律**按卡**（`CountAmmo(AmmoData)`）—— 绝不能求和
-///   · 按 **T** 换级 = 一次换弹（旧弹退回背包）：见 `PlayerController.StartSwitchAmmo` / `FinishSwitchAmmo`
+///   · 按 **T** 开弹药等级选择器、滚轮选档、再按 T / 左键提交 = 一次换弹（旧弹退回背包）：
+///     见 `PlayerController.BeginAmmoGradeSwap`（由 `AmmoSelector` 调用）/ `FinishSwitchAmmo`
 ///   · 伤害倍率在 `Bullet.Spawn` 一次乘进 `ShotProfile.damage`
 ///   · 等级描边（绿框区分外观）在 `ItemVisuals.AmmoIconOutlined`（`tierOutlineColor` + `outlineWidth`）
 /// </summary>

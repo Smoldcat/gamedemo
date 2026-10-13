@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f5d4284f3e7c324bbf2b10ff9cb661a, type: 3}
+  m_Name: "Throwable_\u70DF\u96FE\u5F39"
+  m_EditorClassIdentifier: 
+  icon: {fileID: 21300000, guid: ab7204deb8bc7b442b45acc8d489c87e, type: 3}
+  pickupColor: {r: 0.78, g: 0.8, b: 0.85, a: 1}
+  pickupModelPrefab: {fileID: 0}
+  canStack: 1
+  maxStack: 3
+  stackId: 
+  description: "\u843D\u5730 0.5 \u79D2\u540E\u8D77\u70DF\uFF08\u78B0\u5899/\u7BB1\u5B50
+    0.5 \u79D2\u8D77\u70DF\u3001\u51FA\u624B 5 \u79D2\u4FDD\u5E95\uFF09\u3002\u70DF\u4E91\u534A\u5F84
+    6 \u7C73\u3001\u6301\u7EED 14 \u79D2\uFF0C**\u70DF\u91CC\u7684\u654C\u4EBA\u770B\u4E0D\u89C1\u4F60**\u3002\u6309
+    G \u62FF\u51FA\uFF0C\u6309\u4F4F\u53F3\u952E\u770B\u5F39\u9053\uFF0C\u5DE6\u952E\u6295\u51FA\u3002"
+  baseValue: 180
+  throwableName: "\u70DF\u96FE\u5F39"
+  maxThrowDistance: 18
+  peakHeight: 3.5
+  throwSpeed: 12
+  bounceNormal: 0.4
+  bounceTangential: 0.6
+  stopSpeed: 1.2
+  groundFuse: 0.5
+  impactFuse: 0.5
+  maxLife: 5
+  effect: {fileID: 11400000, guid: 5b5f908538158e245b6f8f8647a44706, type: 2}
+  worldIconSize: 0.3
+  worldHoverHeight: 0.16
+  worldShadowSize: 0.26
+  worldShadowAlpha: 0.3

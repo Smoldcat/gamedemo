@@ -269,32 +269,6 @@ public class PlayerBackpack : MonoBehaviour
         return best;
     }
 
-    /// <summary>按 T 时"下一级"该切到哪张卡（用户 2026-09-27 定）：
-    /// 同口径、**有货**、等级比当前**高**的那张里最低的一张；没有了就绕回**有货的最低等级**。
-    /// 当前卡为 null（不知道等级）→ 直接给"有货的最低等级"。
-    /// ⚠️ 只在**有货**的卡里循环（跳过没备弹的等级）；`None` 口径（RPG）永远返回 null（按 T 无效）。
-    /// 返回 null 表示**没得切**（只有一张 / 就是当前那张）。</summary>
-    public AmmoData NextAmmo(AmmoKind kind, AmmoData current)
-    {
-        if (kind == AmmoKind.None) return null;
-        var db = ItemDatabase.I;
-        if (db == null || db.all == null) return null;
-
-        int curTier = current != null ? current.tier : -1;
-        AmmoData higher = null, any = null;
-        for (int i = 0; i < db.all.Count; i++)
-        {
-            var a = db.all[i] as AmmoData;
-            if (a == null || a.ammoKind != kind || a.tier <= 0) continue;
-            if (CountAmmo(a) <= 0) continue;                 // 没货 → 跳过
-            if (any == null || a.tier < any.tier) any = a;   // 有货的最低等级（绕回目标）
-            if (a.tier > curTier && (higher == null || a.tier < higher.tier)) higher = a;
-        }
-
-        AmmoData next = higher != null ? higher : any;
-        return next != current ? next : null;                // 只有一张 / 就是当前那张 → 没得切
-    }
-
     /// <summary>按 T 换级的**纯模拟预检**（用户 2026-09-27 定的语义：判定基准是"取走新弹之后"的背包状态）。
     /// 例：弹匣 30 发一级、背包正好 30 发二级 → 取走 30 发后那格空了 → 退下的 30 发一级**正好占这个空位**（可换 ✓）；
     ///     若背包是 35 发二级 → 取走 30 后还剩 5 发仍占着那格 → 退下的 30 发一级没地方放（不可换 ✗）。

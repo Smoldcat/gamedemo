@@ -173,6 +173,12 @@ public class EnemyAI : MonoBehaviour
         //（玩家感受："后面的敌人像傻子一样站着"）。
         // ⚠️ 这是 V-12 的**正掩码**方案：场景阻挡物（地面 / 4 面墙 / 9 个箱子）已按 Ground / Obstacle 分层，
         //    见 Layers 的注释；改动分层方案时必须"物体分层 + 所有射线"一次做完，否则会射线穿墙。
+        // 烟雾遮挡（2026-10-13 新增）：**烟云体积挡视线** —— 烟里的玩家，敌人看不见（会去"最后目击点"找）。
+        // ⚠️ 判据只有这一处：所有敌人行为都吃本函数返回的 `seesPlayer` → 一处生效、全类敌人自动覆盖。
+        // ⚠️ 刻意**不走**"给烟加碰撞体 + 新层加进 SightMask"那条路：那要动工程分层与物理碰撞矩阵，
+        //    而且烟会变成实体（玩家/敌人被挡住走不进去）。改用静态注册表的几何判定，见 SmokeVolume.BlocksLine。
+        if (SmokeVolume.BlocksLine(transform.position, _player.position)) return false;
+
         Vector3 origin = transform.position + Vector3.up * 0.4f;
         Vector3 dir = toPlayer.normalized;
         if (Physics.Raycast(origin, dir, out RaycastHit hit, dist, Layers.SightMask, QueryTriggerInteraction.Ignore))

@@ -19,7 +19,7 @@ using UnityEngine;
 /// → **射线穿墙**（比不传 mask 更糟，见 §4 #24）。
 ///
 /// ⚠️ 用之前必须先给物体设置 Layer（Inspector 右上角 Layer 下拉）：mask 为 0 代表「什么都打不到」。
-/// 工程里已定义：Player=8 / Enemy=9 / Pickup=10 / Ground=11 / Obstacle=12 / FX=13。
+/// 工程里已定义：Player=8 / Enemy=9 / Pickup=10 / Ground=11 / Obstacle=12 / FX=13 / **Smoke=14**（2026-10-13 加）。
 /// 用到的层若未定义，ValidateOnce() 会在进入 Play 时报错提示。
 /// </summary>
 public static class Layers
@@ -30,6 +30,7 @@ public static class Layers
     public const string GroundName = "Ground";
     public const string ObstacleName = "Obstacle";
     public const string FxName = "FX";
+    public const string SmokeName = "Smoke";
 
     /// <summary>玩家层索引（-1 = 工程里未定义该层）</summary>
     public static readonly int Player = LayerMask.NameToLayer(PlayerName);
@@ -43,6 +44,10 @@ public static class Layers
     public static readonly int Obstacle = LayerMask.NameToLayer(ObstacleName);
     /// <summary>纯表现特效层索引（-1 = 工程里未定义该层）</summary>
     public static readonly int FX = LayerMask.NameToLayer(FxName);
+    /// <summary>烟云层索引（-1 = 工程里未定义该层）。
+    /// ⚠️ 从 FX 里**独立出来**的唯一理由：烟是"要按半分辨率单独渲染 / 特殊排序"的那一类，
+    ///    混在 FX 层里会连爆炸 / 枪口火光 / 激光 / 弹孔一起被处理。它**同样不在任何射线掩码里**。</summary>
+    public static readonly int Smoke = LayerMask.NameToLayer(SmokeName);
 
     /// <summary>射线遮挡物：地面 + 阻挡物（视线与弹道应该被它们打断）</summary>
     public static readonly LayerMask Blocker = ToMask(Obstacle, Ground);
@@ -75,6 +80,7 @@ public static class Layers
         Check(Ground, GroundName);
         Check(Obstacle, ObstacleName);
         Check(FX, FxName);
+        Check(Smoke, SmokeName);
     }
 
     static void Check(int layerIndex, string layerName)
