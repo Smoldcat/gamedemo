@@ -46,7 +46,7 @@ internal static class ShopUI
     public static float CellX(int col) => col * (CellW + CellGap);
     public static float CellY(int row) => -(row * (RowUnit + RowGap));
     public static float PriceY(int row) => -(row * (RowUnit + RowGap) + CellH + PriceGap);
-    public static int RowsFor(int slots) => Mathf.Max(1, Mathf.CeilToInt(slots / (float)Cols));
+    // 行数计算已收敛到 InvGridUI.RowsFor（2026-10-14 清理），这里不再留第二份实现
 
     // ==================== 金币 ====================
 
@@ -90,14 +90,7 @@ internal static class ShopUI
         rt.anchoredPosition = offset;
     }
 
-    /// <summary>锚到父节点右下角（数量角标用 —— 与背包 / 箱子的角标位置同一约定）。</summary>
-    public static void BottomRight(RectTransform rt, Vector2 offset)
-    {
-        if (rt == null) return;
-        rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f);
-        rt.pivot = new Vector2(1f, 0f);
-        rt.anchoredPosition = offset;
-    }
+    // 原 BottomRight（数量角标专用）已删：角标统一走 InvGridUI.CreateCountBadge（2026-10-14 清理）
 
     public static Image NewImage(Transform parent, string name, Vector2 size, Vector2 pos, Color color)
     {

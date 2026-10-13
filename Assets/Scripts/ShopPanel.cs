@@ -193,7 +193,7 @@ public class ShopPanel : MonoBehaviour
         _title.text = _shop.ShopName;
 
         int slots = _shop.SlotCount;
-        int rows = ShopUI.RowsFor(slots);
+        int rows = InvGridUI.RowsFor(slots);
         float gridH = ShopUI.GridHeight(rows);
         float h = Pad + TitleH + HeadGap + gridH + Pad + ToastRowH;
 

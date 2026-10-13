@@ -23,7 +23,7 @@
       "url": "https://packages.tuanjie.cn"
     },
     "com.coplaydev.unity-mcp": {
-      "version": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity",
+      "version": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v10.3.0",
       "depth": 0,
       "source": "git",
       "dependencies": {
@@ -37,7 +37,7 @@
         "com.unity.nuget.newtonsoft-json": "3.0.2",
         "com.unity.test-framework": "1.1.31"
       },
-      "hash": "2fcc17957823f2494b7b1f7ade92c0fb56f4adb1"
+      "hash": "aa5fc638d623f56178d50329d9ad8c541a57fe66"
     },
     "com.unity.collab-proxy": {
       "version": "2.12.4",

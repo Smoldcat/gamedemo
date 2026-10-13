@@ -44,7 +44,7 @@ MonoBehaviour:
   killFeedNameFontSize: 20
   killFeedMaxCount: 0
   headshotHit: {fileID: 0}
-  backpackInventorySlots: 20
+  backpackInventorySlots: 50
   backpackPanelSprite: {fileID: 0}
   backpackFrameSprite: {fileID: 0}
   backpackSlotFrameSprite: {fileID: 0}

@@ -156,7 +156,7 @@ public class ShopInventoryPanel : MonoBehaviour
         ShopUI.SetGold(_gold, GameState.Gold);
         _title.text = "背包   " + used + "/" + cap;
 
-        int rows = ShopUI.RowsFor(cap);
+        int rows = InvGridUI.RowsFor(cap);
         float contentH = ShopUI.GridHeight(rows);                       // 内容真实高（可超过可视区）
         float viewH = ShopUI.GridHeight(Mathf.Min(rows, MaxViewRows));  // 可视区高：≤6 行全见，再多靠滚轮
         float h = Pad + TitleH + HeadGap + viewH + Pad + ToastRowH;     // 面板高度只按**可视区**算（不再无限长高）

@@ -16,7 +16,10 @@ MonoBehaviour:
   description: "\u843D\u70B9\u751F\u6210\u4E00\u7247\u70DF\u4E91\uFF1A\u6301\u7EED
     14 \u79D2\uFF08+6 \u79D2\u81EA\u7136\u6D88\u6563\uFF09\uFF0C\u534A\u5F84 6 \u7C73\u5185**\u6321\u4F4F\u654C\u4EBA\u89C6\u7EBF**\u3002"
   showRangeIndicator: 1
-  radius: 5
+  radius: 7
+  smokeHeight: 1.7
+  fillRatio: 0.92
+  blockRatio: 0.9
   duration: 10
   fadeOut: 6
   density: 1.35
@@ -24,13 +27,10 @@ MonoBehaviour:
   particleLifetime: 3.4
   particleSize: 2.3
   emitRate: 48
-  maxRise: 1.6
   curl: 0.55
   curlFrequency: 0.28
   curlSpeed: 0.12
   sizeGrow: 1.15
-  spawnFlatness: 0.55
-  groundHug: 1
   blockTailRatio: 0.6
   spinDegPerSec: 20
   driftSpeed: 0.16
