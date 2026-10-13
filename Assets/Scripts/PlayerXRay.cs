@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -19,7 +20,11 @@ using UnityEngine;
 ///   · 运行时材质自己 `new` 并 `Destroy`（不产生资产、不泄漏材质实例）；
 ///   · **零 static 状态**（不涉及 StaticReset）；层参数取网格自身所在层，保证相机一定渲染它；
 ///   · 默认**只画身体**：枪是玩家子物体且偏在身侧（会让轮廓中心偏离玩家真实位置），
-///     想把枪/背包一起纳入就往 `extraMeshes` 里拖。
+///     想把枪/背包一起纳入就往 `extraMeshes` 里拖；
+///   · **自遮挡豁免**（2026-10-13）：玩家的装备（Body 以外的网格）不算"遮挡物"——
+///     每帧用 玩家X光掩码.shader 给它们在可见像素上盖模板章，幽灵跳过（否则枪盖住身体处浮点阵）。
+///     装备被墙挡住时不盖章，墙后的身体照常幽灵；`extraMeshes` 里登记的网格不盖章（它们要画幽灵）。
+///     以后有新部件想豁免，无需改代码 —— 挂在玩家层级下即自动生效。
 /// </summary>
 [DefaultExecutionOrder(110)]   // 排在 CameraRig(默认 0) / CameraOcclusion(100) 之后
 public class PlayerXRay : MonoBehaviour
@@ -50,6 +55,8 @@ public class PlayerXRay : MonoBehaviour
     Camera _cam;
     MeshFilter _body;
     Material _mat;
+    Material _maskMat;                 // 自遮挡豁免掩码（装备可见处往模板盖章 → 幽灵跳过，见 玩家X光掩码.shader）
+    readonly List<MeshFilter> _selfMeshes = new List<MeshFilter>();   // 待盖章网格（Body 以外，每帧重收集）
     DepthTextureMode _prevDepthMode;   // 进入前相机本来的深度需求（归还时按它还原，不误关别人）
     bool _depthOn;                     // 当前是否"由本组件开着"深度纹理（跟随 enable）
 
@@ -81,6 +88,15 @@ public class PlayerXRay : MonoBehaviour
             _mat.name = "玩家X光（运行时）";
         }
         else Debug.LogWarning("[PlayerXRay] 找不到着色器 Town/PlayerXRay（是不是 玩家X光.shader 编译失败了？）→ X 光不会生效。", this);
+
+        // 自遮挡豁免掩码：找不到不拦总开关 —— 只是退化回旧行为（装备盖住身体处会浮网点），幽灵照常工作
+        var maskSh = Shader.Find("Hidden/PlayerXRayMask");
+        if (maskSh != null)
+        {
+            _maskMat = new Material(maskSh);
+            _maskMat.name = "玩家X光掩码（运行时）";
+        }
+        else Debug.LogWarning("[PlayerXRay] 找不到着色器 Hidden/PlayerXRayMask（玩家X光掩码.shader）→ 枪等装备会被当成遮挡物。", this);
 
         if (target == null) Debug.LogWarning("[PlayerXRay] 场景里没有 PlayerController → X 光不会生效。", this);
         else if (_body == null) Debug.LogWarning("[PlayerXRay] 玩家身上找不到名为「" + bodyName + "」的网格 → X 光不会生效。", this);
@@ -115,6 +131,7 @@ public class PlayerXRay : MonoBehaviour
         _mat.SetFloat("_DepthBias", depthBias);
         _mat.SetFloat("_EdgeGlow", edgeGlow);
 
+        StampSelfMeshes();   // 先盖章（自遮挡豁免），再画幽灵
         Draw(_body);
 
         if (extraMeshes != null)
@@ -137,6 +154,45 @@ public class PlayerXRay : MonoBehaviour
                           false, false, false);   // 不投影、不接收阴影、不用光照探针
     }
 
+    /// <summary>
+    /// 给玩家自己的装备（<c>Body</c> 以外的网格：枪 / 手 / 背包…）盖章 —— X 光幽灵跳过这些像素，
+    /// 自己的东西不算"遮挡物"（2026-10-13 修：枪盖住身体处会浮出幽灵点阵，无墙时也会）。
+    /// 每帧重收集：切枪 / 换装时子节点会增删与显隐，缓存反而容易漏；
+    /// 玩家层级就十几个节点，非分配版 GetComponentsInChildren 开销可忽略。
+    /// ⚠️ <see cref="extraMeshes"/> 里登记的网格（用户显式要求画幽灵的）**不盖章** ——
+    ///    否则它们自己的幽灵会被自己的章挡掉。
+    /// </summary>
+    void StampSelfMeshes()
+    {
+        if (_maskMat == null || target == null || _cam == null) return;
+
+        _selfMeshes.Clear();
+        target.GetComponentsInChildren<MeshFilter>(false, _selfMeshes);
+        for (int i = 0; i < _selfMeshes.Count; i++)
+        {
+            var mf = _selfMeshes[i];
+            if (mf == _body || mf.sharedMesh == null) continue;   // 身体本身不算"自己的装备"
+            if (IsInExtraMeshes(mf)) continue;
+            DrawMask(mf);
+        }
+    }
+
+    bool IsInExtraMeshes(MeshFilter mf)
+    {
+        if (extraMeshes == null) return false;
+        for (int i = 0; i < extraMeshes.Length; i++)
+            if (extraMeshes[i] == mf) return true;
+        return false;
+    }
+
+    /// <summary>用掩码材质再画一遍：ColorMask 0 → 画面零变化，只往模板写标记（状态见 玩家X光掩码.shader）。</summary>
+    void DrawMask(MeshFilter mf)
+    {
+        Graphics.DrawMesh(mf.sharedMesh, mf.transform.localToWorldMatrix, _maskMat,
+                          mf.gameObject.layer, _cam, 0, null,
+                          false, false, false);
+    }
+
     void OnDisable()
     {
         // 按"进入前的原值"归还深度纹理需求，不误关别人（例如后处理）的深度
@@ -146,5 +202,6 @@ public class PlayerXRay : MonoBehaviour
     void OnDestroy()
     {
         if (_mat != null) Destroy(_mat);
+        if (_maskMat != null) Destroy(_maskMat);
     }
 }

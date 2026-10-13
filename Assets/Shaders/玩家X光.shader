@@ -40,6 +40,16 @@ Shader "Town/PlayerXRay"
         Cull Back
         Blend SrcAlpha OneMinusSrcAlpha
 
+        // 自遮挡豁免（2026-10-13）：玩家自己的装备（枪 / 手等，Body 以外）已由 玩家X光掩码.shader
+        // 在**可见**像素上写了模板标记 1 → 这些像素跳过幽灵（否则枪盖住身体的地方会浮出点阵，
+        // 无墙时也会）。装备被墙挡住时掩码 ZTest LEqual 失败、没盖章 → 墙后的身体照常幽灵，不受影响。
+        // 工程内无其他模板用户（视野遮罩已改 RT 方案），Ref 1 专用。
+        Stencil
+        {
+            Ref 1
+            Comp NotEqual
+        }
+
         Pass
         {
             CGPROGRAM
