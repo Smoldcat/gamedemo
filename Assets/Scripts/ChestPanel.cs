@@ -30,7 +30,7 @@ public class ChestPanel : MonoBehaviour
     const float Pad = 14f;          // 面板内边距
     const float TitleH = 26f;       // 标题行高
     const float Gap = 6f;           // 标题与格子、格子之间的间距
-    const float CellW = 68f, CellH = 68f, CellGap = 6f;
+    const float CellW = InvGridUI.CellW, CellH = InvGridUI.CellH, CellGap = InvGridUI.CellGap;   // 统一度量见 InvGridUI
     const float BtnW = 84f, BtnH = 24f;
     const int CellIconSize = 42;
 

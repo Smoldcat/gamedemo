@@ -48,8 +48,8 @@ public class BackpackPanel : MonoBehaviour
     const float PanelLeftMargin = 16f;       // 面板距屏幕左边
     const float Pad = 16f;                   // 面板内左右边距
     const float SlotW = 112f, SlotH = 96f, SlotGap = 10f;
-    const float GridW = 364f, GridH = 290f;  // 库存网格整块（5 列 × 4 行）
-    const float CellW = 68f, CellH = 68f, CellGap = 6f;
+    const float GridW = InvGridUI.GridW, GridH = 4 * InvGridUI.CellH + 3 * InvGridUI.CellGap;  // 库存网格整块（5 列 × 4 行可视区）
+    const float CellW = InvGridUI.CellW, CellH = InvGridUI.CellH, CellGap = InvGridUI.CellGap;   // 统一度量见 InvGridUI（别在这改数值）
     const float BarW = 300f, BarH = 14f;     // 底部占用条
     // Tooltip（悬停武器属性）尺寸：⚠️ **两条路径必须一致** —— 这里只是"代码生成"兜底路径用的值，
     // 而**实际生效的是 prefab 里 `Backpack/Tooltip`（+ 子节点 `/Txt`）的 sizeDelta**（背包走 prefab 双轨，见类注释；
@@ -70,6 +70,11 @@ public class BackpackPanel : MonoBehaviour
     // ---- 库存 ----
     GameObject _invGrid;
     readonly List<RectTransform> _invCells = new List<RectTransform>();
+
+    // ---- 库存滚动：机制在共享的 ScrollableGrid（InvGridUI.cs，背包 / 商店库存面板同一份实现）----
+    // ⚠️ 历史教训都沉淀在那边：绝不动 _invGrid 的 transform（prefab 坐标系）；空格子也必须 AddMover
+    //    （_invCells 的 null 是 tooltip 的"无物品"标记，不能拿来滚动 —— 2026-10-13 修过"只有带物品的格子动"）。
+    readonly ScrollableGrid _invScroll = new ScrollableGrid();
 
     /// <summary>库存格子模板（外部 UI Prefab 的 InvGrid 下第一个格子；null = 格子由代码生成）。
     /// Refresh 靠它实例化 → 于是"格子长什么样"（底图 / 大小 / 角标位置）也能在 prefab 里拖拽调。</summary>
@@ -181,6 +186,9 @@ public class BackpackPanel : MonoBehaviour
         if (_dropConfirmSlot >= 0 && Time.unscaledTime >= _dropConfirmUntil)
             ResetDropConfirm();
 
+        // 库存滚动：面板开着才读滚轮（机制在共享的 ScrollableGrid；内容没溢出时 Tick 自动 no-op）
+        if (_opened) _invScroll.Tick();
+
         // 背包打开时：悬停 tooltip（用自己的 `_opened` 判断，别被其它界面的暂停干扰）
         if (_opened)
             UpdateTooltip();
@@ -285,6 +293,8 @@ public class BackpackPanel : MonoBehaviour
             _cellTemplate.name = CellTemplateName;
             _cellTemplate.SetActive(false);
         }
+
+        _invScroll.Attach(_invGrid.GetComponent<RectTransform>());   // 挂裁剪掩码（prefab 路径同样支持滚动）
 
         // ---- 补齐 prefab 存不下的东西：代码生成的 Sprite + 共用字体（已配好的不覆盖）----
         FillEmptySprites(root);
@@ -432,6 +442,7 @@ public class BackpackPanel : MonoBehaviour
         var gridRt = _invGrid.AddComponent<RectTransform>();
         gridRt.sizeDelta = new Vector2(GridW, GridH);          // 5 列 × 4 行（20 格）
         gridRt.anchoredPosition = new Vector2(0f, gridY);
+        _invScroll.Attach(gridRt);                            // 挂裁剪掩码（不动 InvGrid 的 transform）
 
         // ---- 底部：占用条（已用格数 / 总格数）----
         float barY = gridY - GridH * 0.5f - 16f - BarH * 0.5f;
@@ -488,6 +499,7 @@ public class BackpackPanel : MonoBehaviour
         _root.SetActive(true);
         Sfx.OpenInventory();
         ResetDropConfirm();
+        _invScroll.ResetToTop();   // 每次打开都从顶开始
         Refresh();
     }
 
@@ -629,7 +641,17 @@ public class BackpackPanel : MonoBehaviour
             var trt = _cellTemplate.GetComponent<RectTransform>();
             if (trt != null && trt.sizeDelta.x > 1f) { cellW = trt.sizeDelta.x; cellH = trt.sizeDelta.y; }
         }
-        float startY = (rows * (cellH + CellGap) - CellGap) * 0.5f - cellH * 0.5f;   // 第一行中心 y（整体垂直居中）
+        // 顶部对齐：第 0 行贴 InvGrid 可视区顶（这是滚动基准 —— scroll=0 必须能看到第 0 行）。
+        // ⚠️ 不能用"整体垂直居中"：容量 30（6 行）装进 4 行高的可视区时，居中会把首行顶出
+        //    InvGrid 裁剪区、末行沉出底边，而滚动下限是 0 → 首行永远看不到
+        //    （2026-10-13 修的"少了一行东西"：8/30 时第一行 5 件物品整个不可见）。
+        //    顶部对齐下若 contentH == viewH（容量 20），首行 y 与旧居中公式的结果完全相同，布局不变。
+        float viewH = _invGrid.GetComponent<RectTransform>().rect.height;
+        float startY = viewH * 0.5f - cellH * 0.5f;   // 第一行中心 y（第 0 行贴可视区顶）
+
+        // ---- 滚动参数：内容高（真实行高）超过 InvGrid 可视高才需要滚；范围计算在 ScrollableGrid.Sync ----
+        float contentH = rows * (cellH + CellGap) - CellGap;
+        _invScroll.ClearMovers();   // 格子全量重建 → 上一轮登记作废
 
         for (int i = 0; i < cap; i++)
         {
@@ -664,9 +686,11 @@ public class BackpackPanel : MonoBehaviour
             var rt = cell.GetComponent<RectTransform>();
             if (rt == null) rt = cell.AddComponent<RectTransform>();
             rt.sizeDelta = new Vector2(cellW, cellH);
-            rt.anchoredPosition = new Vector2(
+            var basePos = new Vector2(
                 col * (cellW + CellGap) - gridW * 0.5f + cellW * 0.5f,
                 startY - row * (cellH + CellGap));
+            rt.anchoredPosition = basePos;      // 基准位置；滚动偏移由 ScrollableGrid 统一叠加
+            _invScroll.AddMover(rt, basePos);   // 全部格子都登记（含空格子 —— 都要一起滚）
             cellImg.raycastTarget = hasItem;   // 空格子不接点击
 
             // 右键丢弃：给**有物品**的格子挂一个点击分发器（左键仍归下面那个 Button 管）
@@ -689,7 +713,7 @@ public class BackpackPanel : MonoBehaviour
             if (icon == null)
             {
                 icon = AddImage(cell.transform, "Icon", new Vector2(42f, 42f), Color.white);
-                icon.rectTransform.anchoredPosition = new Vector2(0f, 5f);
+                icon.rectTransform.anchoredPosition = Vector2.zero;   // 居中（2026-10-13 起与商店格子对齐，原 (0,5)）
             }
             icon.gameObject.SetActive(true);
             icon.sprite = ItemVisuals.IconOf(item.def);
@@ -701,11 +725,7 @@ public class BackpackPanel : MonoBehaviour
             if (item.count > 1)
             {
                 if (cnt == null)
-                {
-                    cnt = AddText(cell.transform, "Count", new Vector2(cellW - 12f, 16f), "", 12, Color.white);
-                    cnt.alignment = TextAnchor.MiddleRight;
-                    cnt.rectTransform.anchoredPosition = new Vector2(-2f, -cellH * 0.5f + 10f);
-                }
+                    cnt = InvGridUI.CreateCountBadge(rt, cellW);   // 共享角标（与商店同一份实现，2026-10-13 收敛）
                 cnt.text = "×" + item.count;
                 cnt.gameObject.SetActive(true);
             }
@@ -740,6 +760,7 @@ public class BackpackPanel : MonoBehaviour
 
             _invCells.Add(rt);
         }
+        _invScroll.Sync(contentH);   // 重算滚动范围并套用偏移（平时为 0；滚动中 Refresh 完保持位置不跳回顶）
 
         // 血包汇总行（血包本体就在上面的库存格子里，这里只是汇总 + 操作提示）
         _medkitText.text = bp != null && bp.Medkits > 0

@@ -18,11 +18,13 @@ using UnityEngine.UI;
 internal static class ShopUI
 {
     // ---- 布局常量（参考分辨率 1280×720，运行时由 CanvasScaler 等比缩放）----
-    public const float CellW = 68f, CellH = 68f, CellGap = 6f;
-    public const float PriceH = 16f;     // 格子下方那一行「价格」
+    // 格子尺寸 / 间隙 / 列数已**收敛到 InvGridUI**（2026-10-13）：下面是编译期别名，
+    // 两个商店面板的既有 ShopUI.* 用法不用改；真要调格子大小去改 InvGridUI（背包 / 箱子一起变）。
+    public const float CellW = InvGridUI.CellW, CellH = InvGridUI.CellH, CellGap = InvGridUI.CellGap;
+    public const float PriceH = 16f;     // 格子下方那一行「价格」（商店专属，不在 InvGridUI）
     public const float PriceGap = 3f;    // 格子与价格之间
     public const float RowGap = 8f;      // 行与行之间
-    public const int Cols = 5;           // 每行 5 格（与背包的 5×4 一致）
+    public const int Cols = InvGridUI.Cols;           // 每行 5 格（与背包的 5×4 一致）
     public const float RowUnit = CellH + PriceGap + PriceH;   // 一行「格子 + 价格」的总高
     public const int IconSize = 42;
 
@@ -33,8 +35,8 @@ internal static class ShopUI
     /// <summary>金币色 = `BackpackPanel.GoldColor`（共享色，只留一份）。</summary>
     public static Color GoldColor => BackpackPanel.GoldColor;
 
-    /// <summary>5 列格子的总宽（两个面板的网格宽一致）。</summary>
-    public const float GridW = Cols * CellW + (Cols - 1) * CellGap;
+    /// <summary>5 列格子的总宽（两个面板的网格宽一致）= InvGridUI.GridW。</summary>
+    public const float GridW = InvGridUI.GridW;
 
     // tooltip 尺寸：**比背包那一份高一档**（多一行「价格」），其余一致
     public const float TipW = BackpackPanel.TipW;

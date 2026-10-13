@@ -30,6 +30,10 @@ public class ShopInventoryPanel : MonoBehaviour
     const float HeadGap = 10f;
     const float GridInset = (PanelW - Pad * 2f - ShopUI.GridW) * 0.5f;
     const float ToastRowH = 26f;      // 面板底部"提示行"占的高度（失败原因显示在那）
+    // 可视区行数上限（用户 2026-10-13 定）：**6 行** —— 容量 30（6 行）正好全见、无需滚动；
+    // 容量 36+ 才出现滚动。6 行面板总高 ≈ 660px（商店格子下带价格行，行距 95 比背包的 74 高），
+    // 720p 下上下各剩 ~30px —— 实测觉得挤就把这里改成 5。
+    const int MaxViewRows = 6;
 
     Canvas _canvas;
     RectTransform _root;
@@ -48,6 +52,10 @@ public class ShopInventoryPanel : MonoBehaviour
 
     Shop _shop;
     bool _opened;
+
+    /// <summary>库存网格滚动（与背包同一份共享实现，见 InvGridUI.ScrollableGrid）：
+    /// 超出 6 行可视区的内容被 RectMask2D 裁掉，滚轮平滑露出。</summary>
+    readonly ScrollableGrid _invScroll = new ScrollableGrid();
 
     /// <summary>面板当前是不是开着。</summary>
     public bool IsOpen => _opened;
@@ -77,6 +85,9 @@ public class ShopInventoryPanel : MonoBehaviour
 
         // 死亡时强制关闭（避免重开一局卡在暂停；与背包 / 箱子 / 商店面板同一约定）
         if (GameState.GameOver) { Close(); return; }
+
+        // 库存滚动（机制在共享的 ScrollableGrid；内容没超出 6 行可视区时 Tick 自动 no-op）
+        _invScroll.Tick();
 
         UpdateTooltip();
 
@@ -108,6 +119,7 @@ public class ShopInventoryPanel : MonoBehaviour
         _opened = true;
         UIState.Push();                              // 暂停 + 隐藏 HUD + 隐藏准星（与商店面板各记一次）
         _root.gameObject.SetActive(true);
+        _invScroll.ResetToTop();                     // 每次打开都从顶开始（与背包一致）
         Refresh();
     }
 
@@ -145,15 +157,17 @@ public class ShopInventoryPanel : MonoBehaviour
         _title.text = "背包   " + used + "/" + cap;
 
         int rows = ShopUI.RowsFor(cap);
-        float gridH = ShopUI.GridHeight(rows);
-        float h = Pad + TitleH + HeadGap + gridH + Pad + ToastRowH;
+        float contentH = ShopUI.GridHeight(rows);                       // 内容真实高（可超过可视区）
+        float viewH = ShopUI.GridHeight(Mathf.Min(rows, MaxViewRows));  // 可视区高：≤6 行全见，再多靠滚轮
+        float h = Pad + TitleH + HeadGap + viewH + Pad + ToastRowH;     // 面板高度只按**可视区**算（不再无限长高）
 
         _root.sizeDelta = new Vector2(PanelW, h);
         _bg.rectTransform.sizeDelta = new Vector2(PanelW, h);
-        _grid.sizeDelta = new Vector2(ShopUI.GridW, gridH);
+        _grid.sizeDelta = new Vector2(ShopUI.GridW, viewH);   // 网格 = 固定可视区（RectMask2D 裁掉溢出行）
 
         for (int i = _grid.childCount - 1; i >= 0; i--) Destroy(_grid.GetChild(i).gameObject);
         _cells.Clear();
+        _invScroll.ClearMovers();   // 格子全量重建 → 上一轮滚动登记作废
         _lastHoverIndex = -1;     // ⚠️ 必须清：格子重建后同一个格号可能换成**另一样东西**（卖掉一件后后面顶上来），不清就会显示旧 tooltip
 
         for (int i = 0; i < cap; i++)
@@ -164,6 +178,9 @@ public class ShopInventoryPanel : MonoBehaviour
 
             var cell = ShopUI.CreateCell(_grid, i, row, col);
             _cells.Add(cell);
+            // 滚动登记：格子 + 它下面的价格行都要一起滚（价格是网格的子节点，不是格子的 —— 漏了会"格动价不动"）
+            _invScroll.AddMover(cell.root, cell.root.anchoredPosition);
+            _invScroll.AddMover(cell.price.rectTransform, cell.price.rectTransform.anchoredPosition);
 
             if (!has)
             {
@@ -177,9 +194,7 @@ public class ShopInventoryPanel : MonoBehaviour
             // 等"可堆叠物品"上线即自动生效
             if (stack.count > 1)
             {
-                var cnt = ShopUI.NewText(cell.root, "Count", new Vector2(ShopUI.CellW - 8f, 14f), Vector2.zero,
-                                         11, Color.white, TextAnchor.LowerRight);
-                ShopUI.BottomRight(cnt.rectTransform, new Vector2(-3f, 2f));
+                var cnt = InvGridUI.CreateCountBadge(cell.root, ShopUI.CellW);   // 共享角标（与背包同一份实现）
                 cnt.text = "×" + stack.count;
             }
 
@@ -195,6 +210,8 @@ public class ShopInventoryPanel : MonoBehaviour
             int idx = i;
             btn.onClick.AddListener(() => OnCellClick(idx));
         }
+
+        _invScroll.Sync(contentH);   // 重算滚动范围并套用偏移（≤6 行时不可滚、偏移恒 0）
 
         UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
@@ -293,6 +310,7 @@ public class ShopInventoryPanel : MonoBehaviour
 
         _grid = ShopUI.NewRect(_root, "Grid", new Vector2(ShopUI.GridW, 100f),
                                new Vector2(Pad + GridInset, -(Pad + TitleH + HeadGap)));
+        _invScroll.Attach(_grid);   // 挂裁剪掩码（可视高 Refresh 时实时读，不在这里记）
 
         // 提示行（失败原因）建在 tooltip **之前** → tooltip 始终画在它上层（两者可能同时出现）
         _toast = ShopUI.CreateToast(_root, PanelW - Pad * 2f);
