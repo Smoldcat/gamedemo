@@ -314,12 +314,18 @@ internal static class DebugRead
         return false;
     }
 
-    /// <summary>传送到"准星所指的地面点"。</summary>
+    /// <summary>传送到"准星所指的地面点"。
+    ///
+    /// ⚠️ Y 必须落在**项目约定的实体高度平面**（`GameConst.EntityPlaneY = 0.55`；地面 y ≈ 0，见 `SmokeVolume.cs:64`），
+    ///    **不能**直接把地面命中点当玩家坐标 —— 玩家枢轴在胶囊中心，直接落地就是"**陷进地板**"
+    ///    （2026-10-14 用户实测：传送后 Y 变成 0.10，而正常站立是 0.55）。
+    ///    抬高量取"命中点 + EntityPlaneY"，所以平地和箱顶/平台都成立。</summary>
     public static bool TeleportToCrosshair()
     {
         var pc = Pc;
         if (pc == null || !GroundPoint(out Vector3 p)) return false;
-        pc.transform.position = p + Vector3.up * 0.1f;
+
+        pc.transform.position = new Vector3(p.x, p.y + GameConst.EntityPlaneY, p.z);
         var rb = pc.GetComponent<Rigidbody>();
         if (rb != null) rb.velocity = Vector3.zero;
         return true;
@@ -386,14 +392,16 @@ internal static class DebugRead
         return made > 0 ? string.Format("刷出血包 ×{0}", made) : "刷出失败（血包）";
     }
 
-    /// <summary>刷在**准星地面点**（取不到就用玩家脚下）。</summary>
+    /// <summary>刷在**准星地面点**（取不到就用玩家脚下）。
+    /// ⚠️ y 用项目约定的实体平面 `GameConst.EntityPlaneY`（与 `SpawnPosition.FindOpenSpot` 一致；
+    ///    拾取物的 `_baseY` 就是它）—— 直接用地面命中点会让物品/敌人**半埋进地里**。</summary>
     public static string SpawnPickupAtCrosshair(ItemData def, int count)
     {
         if (!GroundPoint(out Vector3 p)) return "准星与脚下都没打到地面（Blocker 层）";
-        return SpawnPickupAt(def, p + Vector3.up * 0.05f, count);
+        return SpawnPickupAt(def, new Vector3(p.x, GameConst.EntityPlaneY, p.z), count);
     }
 
-    /// <summary>在地图上**随机空位**刷出（落点由 `SpawnPosition.FindOpenSpot` 决定，不会进墙）。</summary>
+    /// <summary>在地图上**随机空位**刷出（落点由 `SpawnPosition.FindOpenSpot` 决定：不会进墙，且 y 已是实体平面）。</summary>
     public static string SpawnPickupRandom(ItemData def, int count)
     {
         Vector3 p = SpawnPosition.FindOpenSpot(4f, SpawnPosition.RangeMedkit);
@@ -430,7 +438,9 @@ internal static class DebugRead
         }
         if (cfg == null) cfg = EnemyConfig.Melee();   // 池为空时的兜底
 
-        wm.SpawnEnemyAt(cfg, p);
+        // ⚠️ y 用实体平面（与 `SpawnPosition.FindOpenSpot` 一致）：敌人刚体锁了 Y，
+        //    若按地面命中点生成会**卡在地板下方**（2026-10-14 同类问题一并修）。
+        wm.SpawnEnemyAt(cfg, new Vector3(p.x, GameConst.EntityPlaneY, p.z));
         return "已刷出敌人" + (string.IsNullOrEmpty(cfg.displayName) ? "" : "：" + cfg.displayName);
     }
 
