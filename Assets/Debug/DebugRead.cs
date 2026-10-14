@@ -444,6 +444,73 @@ internal static class DebugRead
         return "已刷出敌人" + (string.IsNullOrEmpty(cfg.displayName) ? "" : "：" + cfg.displayName);
     }
 
+    /// <summary>在地图随机空位刷出 count 个敌人（位置互不重叠）。返回实际刷出数。</summary>
+    public static int SpawnEnemiesAtRandomSpots(int count)
+    {
+        var wm = WaveManager.Instance;
+        if (wm == null) return 0;
+        int made = 0;
+        for (int i = 0; i < count; i++)
+        {
+            EnemyConfig cfg = null;
+            if (wm.enemyPool != null && wm.enemyPool.Length > 0)
+            {
+                var e = wm.enemyPool[UnityEngine.Random.Range(0, wm.enemyPool.Length)];
+                if (e != null) cfg = e.config;
+            }
+            if (cfg == null) cfg = EnemyConfig.Melee();
+            wm.SpawnEnemyAt(cfg, SpawnPosition.FindOpenSpot(4f, SpawnPosition.RangeEnemy));
+            made++;
+        }
+        return made;
+    }
+
+    /// <summary>存活敌人的 EnemyAI 快照（**遍历前必须快照**：死亡会立刻从注册表移除）。</summary>
+    public static List<EnemyAI> AliveEnemyAIs()
+    {
+        var outList = new List<EnemyAI>();
+        for (int i = 0; i < EnemyAI.All.Count; i++)
+        {
+            var ai = EnemyAI.All[i];
+            if (ai != null && ai.HealthRef != null && ai.HealthRef.alive) outList.Add(ai);
+        }
+        return outList;
+    }
+
+    /// <summary>冻结场上全部敌人的行动（**零核心改动**：关掉 AI 与行为组件的 `enabled`）。
+    /// 血量组件不受影响 → 照常可以打伤害、在敌人列表看掉血。返回冻结数。
+    /// ⚠️ 用法：由调试面板**每帧**调用（新刷出的敌人下一帧也会被冻住）；解除用 `UnfreezeEnemies`。</summary>
+    public static int FreezeAllEnemies()
+    {
+        int n = 0;
+        foreach (var ai in AliveEnemyAIs())
+        {
+            if (ai.enabled) ai.enabled = false;                                                // 停掉移动/索敌/攻击决策
+            if (ai.behaviour != null && ai.behaviour.enabled) ai.behaviour.enabled = false;    // 停掉行为组件（远程开火等）
+            var rb = ai.GetComponent<Rigidbody>();
+            if (rb != null && rb.velocity.sqrMagnitude > 0.0001f) rb.velocity = Vector3.zero;  // 清残余速度
+            n++;
+        }
+        return n;
+    }
+
+    /// <summary>解除冻结（只恢复**存活**敌人；死亡的本来就该保持 disabled）。返回恢复数。</summary>
+    public static int UnfreezeEnemies()
+    {
+        int n = 0;
+        for (int i = 0; i < EnemyAI.All.Count; i++)
+        {
+            var ai = EnemyAI.All[i];
+            if (ai == null) continue;
+            var h = ai.HealthRef;
+            if (h == null || !h.alive) continue;    // 死亡的敌人本来就该是 disabled，别误开
+            ai.enabled = true;
+            if (ai.behaviour != null) ai.behaviour.enabled = true;
+            n++;
+        }
+        return n;
+    }
+
     // ==================== 商店 / 清理 ====================
 
     /// <summary>让场上所有商店**立即补货**（`Shop.ForceRestock`，README 登记表里的 `[DEBUG-ONLY]` 方法）。</summary>

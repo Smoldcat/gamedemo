@@ -62,6 +62,12 @@ public class DebugPanel : MonoBehaviour
     // 杂项页：相机参数当前值
     Text _camFollowVal, _camLeadVal, _camLeadMaxVal, _camFovVal;
 
+    // 敌人页：测试辅助状态（实例字段，不引入静态）
+    bool _enemyFrozen;
+    Text _frozenLabel;
+    float _barsNext;                                                               // 冻结时血条代刷的节流
+    readonly Dictionary<Health, float> _origMaxHp = new Dictionary<Health, float>();   // 被增血的敌人的原 maxHp
+
     bool _open, _godMode, _logDirty;
     float _nextRefresh;
     float _desiredTimeScale = 1f;
@@ -98,6 +104,8 @@ public class DebugPanel : MonoBehaviour
     void OnSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m)
     {
         if (_open) Close();     // Close 内部会 Pop，恢复记账
+        // 提醒易遗忘的状态：冻结开关跨场景重开保持开启（这是有意的"开关保持"语义）
+        if (_enemyFrozen) SetNote("场景已重载；敌人冻结仍生效（新场景的敌人也会被自动冻住）");
         Debug.Log("[调试] 场景已重载，调试面板自动收起");
     }
 
@@ -122,6 +130,9 @@ public class DebugPanel : MonoBehaviour
 
         // 回血式止血：**面板关着也要生效**（它的用途正是"游戏在跑、我懒得管血"）
         if (_godMode) DebugRead.FullHeal();
+
+        // 敌人冻结：**每帧压制**（新刷出的敌人下一帧也会被冻住；面板关着也生效 —— 用户此时正在打输出测试）
+        if (_enemyFrozen) FreezeEnemyTick();
 
         if (!_open)
         {
@@ -383,6 +394,104 @@ public class DebugPanel : MonoBehaviour
     void OnShopRestock() => SetNote(DebugRead.ShopForceRestockAll());
     void OnClearPickups() => SetNote(DebugRead.ClearAllPickups());
 
+    // ---------- 敌人页（测武器数值与手感） ----------
+
+    /// <summary>冻结敌人：**每帧压制**（关 AI/行为 + 清速度）—— 新刷出的敌人下一帧也会被冻住。
+    /// ⚠️ 两个细节（2026-10-15 评审发现）：
+    ///   ① 狙击手必须先 `HideLaser()` —— 否则瞄准中的红线会**永久冻在屏幕上**（`LaserBeam.cs:20` 约定）；
+    ///   ② 冻结停了 `FixedUpdate` → 头顶血条不再更新/朝向相机 → 这里节流代刷（测武器掉血时血条要动）。</summary>
+    void FreezeEnemyTick()
+    {
+        var list = EnemyAI.All;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var ai = list[i];
+            if (ai == null) continue;
+            var h = ai.HealthRef;
+            if (h == null || !h.alive) continue;
+            if (ai.behaviour is EnemySniperBehaviour sniper) sniper.HideLaser();   // ⚠️ 红线不能冻在屏幕上
+            if (ai.enabled) ai.enabled = false;
+            if (ai.behaviour != null && ai.behaviour.enabled) ai.behaviour.enabled = false;
+            var rb = ai.GetComponent<Rigidbody>();
+            if (rb != null && rb.velocity.sqrMagnitude > 0.0001f) rb.velocity = Vector3.zero;
+        }
+
+        // 血条节流代刷（0.2s 一次）：测武器掉血时头顶血条要能看见变化
+        if (Time.unscaledTime >= _barsNext)
+        {
+            _barsNext = Time.unscaledTime + 0.2f;
+            for (int i = 0; i < list.Count; i++)
+            {
+                var ai = list[i];
+                if (ai == null) continue;
+                var h = ai.HealthRef;
+                if (h == null || !h.alive) continue;
+                var bar = ai.GetComponentInChildren<HealthBar>();
+                if (bar != null) bar.UpdateBar(h.hp / Mathf.Max(0.01f, h.maxHp));
+            }
+        }
+    }
+
+    void OnToggleEnemyFreeze()
+    {
+        _enemyFrozen = !_enemyFrozen;
+        string msg;
+        if (_enemyFrozen) { int n = DebugRead.FreezeAllEnemies(); msg = string.Format("已冻结 {0} 个敌人（木桩模式；解冻时引信中的自爆兵会立即爆炸、狙击手会立刻开火）", n); }
+        else { int n = DebugRead.UnfreezeEnemies(); msg = string.Format("已解冻 {0} 个敌人", n); }
+        if (_frozenLabel != null)
+        {
+            _frozenLabel.text = _enemyFrozen ? "冻结: 开" : "冻结: 关";
+            _frozenLabel.color = _enemyFrozen ? DebugUI.Warn : DebugUI.Fg;
+        }
+        SetNote(msg);
+    }
+
+    /// <summary>给所有存活敌人增加 maxHp 并回满（记录原值供"恢复默认"）。</summary>
+    void OnEnemyHpAdd(float add)
+    {
+        int n = 0;
+        foreach (var ai in DebugRead.AliveEnemyAIs())
+        {
+            var h = ai.HealthRef;
+            if (!_origMaxHp.ContainsKey(h)) _origMaxHp[h] = h.maxHp;
+            h.maxHp += add;
+            h.hp = h.maxHp;
+            n++;
+        }
+        SetNote(n > 0 ? string.Format("已给 {0} 个敌人 maxHp +{1} 并回满", n, add) : "场上没有活着的敌人");
+    }
+
+    void OnEnemyHpMult(float mult)
+    {
+        int n = 0;
+        foreach (var ai in DebugRead.AliveEnemyAIs())
+        {
+            var h = ai.HealthRef;
+            if (!_origMaxHp.ContainsKey(h)) _origMaxHp[h] = h.maxHp;
+            h.maxHp = Mathf.Max(1f, h.maxHp * mult);
+            h.hp = h.maxHp;
+            n++;
+        }
+        SetNote(n > 0 ? string.Format("已给 {0} 个敌人 maxHp ×{1} 并回满", n, mult) : "场上没有活着的敌人");
+    }
+
+    void OnEnemyHpRestore()
+    {
+        int n = 0;
+        var keys = new List<Health>(_origMaxHp.Keys);   // 快照（可能有已销毁/已死亡的条目）
+        foreach (var h in keys)
+        {
+            if (h == null) { _origMaxHp.Remove(h); continue; }
+            h.maxHp = _origMaxHp[h];
+            if (h.hp > h.maxHp) h.hp = h.maxHp;
+            _origMaxHp.Remove(h);
+            n++;
+        }
+        SetNote(n > 0 ? string.Format("已恢复 {0} 个敌人的默认血量", n) : "没有记录过被改过的敌人");
+    }
+
+    void OnSpawnEnemies() => SetNote(string.Format("已刷出 {0} 个敌人（随机空位）", DebugRead.SpawnEnemiesAtRandomSpots(5)));
+
     // ==================== 建 UI ====================
 
     void BuildUI()
@@ -501,9 +610,17 @@ public class DebugPanel : MonoBehaviour
         var page = DebugUI.NewRect(content, "Page" + index, new Vector2(W, ContentH), Vector2.zero);
         _page[index] = page.gameObject;
 
-        DebugUI.NewText(page, "Hdr", new Vector2(W - 16f, 16f), new Vector2(8f, 0f), 12, DebugUI.Dim, TextAnchor.MiddleLeft)
+        // ---- 敌人测试按钮行（测武器数值与手感用）----
+        _frozenLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnFreeze", "冻结行动: 关", new Vector2(116f, 24f), new Vector2(0f, 0f), 12, DebugUI.Fg, OnToggleEnemyFreeze));
+        DebugUI.NewButton(page, "BtnHpAdd", "血量+500", new Vector2(96f, 24f), new Vector2(120f, 0f), 12, DebugUI.Fg, () => OnEnemyHpAdd(500f));
+        DebugUI.NewButton(page, "BtnHpMul", "血量×5", new Vector2(88f, 24f), new Vector2(220f, 0f), 12, DebugUI.Fg, () => OnEnemyHpMult(5f));
+        DebugUI.NewButton(page, "BtnHpReset", "恢复默认", new Vector2(96f, 24f), new Vector2(312f, 0f), 12, DebugUI.Fg, OnEnemyHpRestore);
+        DebugUI.NewButton(page, "BtnSpawn5", "刷5个敌人", new Vector2(110f, 24f), new Vector2(412f, 0f), 12, DebugUI.Fg, OnSpawnEnemies);
+
+        // ---- 敌人列表 ----
+        DebugUI.NewText(page, "Hdr", new Vector2(W - 16f, 16f), new Vector2(8f, -30f), 12, DebugUI.Dim, TextAnchor.MiddleLeft)
                .text = "名字   行为   血量   状态   距离";
-        _enemyText = DebugUI.NewText(page, "List", new Vector2(W - 16f, 172f), new Vector2(8f, -18f), 12, DebugUI.Bright, TextAnchor.UpperLeft);
+        _enemyText = DebugUI.NewText(page, "List", new Vector2(W - 16f, 156f), new Vector2(8f, -48f), 12, DebugUI.Bright, TextAnchor.UpperLeft);
         _enemyText.text = "（场上无敌人）";
     }
 

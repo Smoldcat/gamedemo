@@ -464,8 +464,8 @@ public class WaveManager : MonoBehaviour
     }
 
     /// <summary>[DEBUG-ONLY] 调试面板用：在**指定位置**生成一个敌人（与波次生成走同一套装配，不新增任何分支）。
-    /// ⚠️ 不参与 `_pendingSpawns` 记账 —— 波次推进看的是"场上还有没有活敌人"（`GameState.AliveEnemies` 来自 EnemyAI 注册表），
-    ///    所以调试刷出来的敌人会被正常算进"未清场"，不会把状态机搞乱。
+    /// ⚠️ 不参与 `_pendingSpawns` 记账 —— **Fighting 阶段**它们会被正常算进"未清场"（波次不推进）；
+    ///    但 **Clearing 倒计时阶段**刷出的不会拦住倒计时（该分支不查存活数）→ 下一波照常开始。
     /// 中性语义：在这一点生成。发布前清理见 `Assets/Debug/README.md` 登记表。</summary>
     public void SpawnEnemyAt(EnemyConfig cfg, Vector3 pos)
     {
