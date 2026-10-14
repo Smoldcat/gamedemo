@@ -460,8 +460,17 @@ public class WaveManager : MonoBehaviour
     void SpawnEnemy(EnemyConfig cfg, List<Vector3> occupied = null)
     {
         if (cfg == null) cfg = EnemyConfig.Melee();   // 极端兜底：保证永远能生成
+        SpawnEnemyAt(cfg, SpawnPosition.FindOpenSpot(6f, SpawnPosition.RangeEnemy, occupied));
+    }
 
-        Vector3 pos = SpawnPosition.FindOpenSpot(6f, SpawnPosition.RangeEnemy, occupied);
+    /// <summary>[DEBUG-ONLY] 调试面板用：在**指定位置**生成一个敌人（与波次生成走同一套装配，不新增任何分支）。
+    /// ⚠️ 不参与 `_pendingSpawns` 记账 —— 波次推进看的是"场上还有没有活敌人"（`GameState.AliveEnemies` 来自 EnemyAI 注册表），
+    ///    所以调试刷出来的敌人会被正常算进"未清场"，不会把状态机搞乱。
+    /// 中性语义：在这一点生成。发布前清理见 `Assets/Debug/README.md` 登记表。</summary>
+    public void SpawnEnemyAt(EnemyConfig cfg, Vector3 pos)
+    {
+        if (cfg == null) cfg = EnemyConfig.Melee();   // 极端兜底（单独调用时也要保证能生成）
+
         var e = new GameObject("Enemy_" + cfg.displayName + "_W" + GameState.Wave);
         e.transform.position = pos;
         // 统一进「敌人」层：真正依赖它的是 `Layers.BulletMask`（子弹弹道要能命中敌人）

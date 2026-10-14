@@ -116,6 +116,17 @@ internal static class DebugRead
         _gcStarted = false;
     }
 
+    /// <summary>魔法行：当前魔法 + 冷却剩余（只读）。</summary>
+    public static string MagicValue()
+    {
+        var pm = PlayerMagic.Instance;
+        if (pm == null) return "--";
+        if (pm.Equipped == null) return "空槽";
+        string name = pm.Equipped.DisplayName;
+        float cd = pm.CooldownRemaining;
+        return cd > 0.01f ? string.Format("{0}   冷却 {1:0.0}s", name, cd) : name + "   就绪";
+    }
+
     // ==================== 多行文本（敌人页） ====================
 
     /// <summary>敌人列表（AI 状态）：名字 / 行为组件 / 血量 / 是否交战 / 与玩家距离。最多 max 个。</summary>
@@ -269,21 +280,207 @@ internal static class DebugRead
         }
     }
 
-    /// <summary>传送到"准星所指的地面点"（显式传 LayerMask + QueryTriggerInteraction，见 Layers.cs）。</summary>
-    public static bool TeleportToCrosshair()
+    /// <summary>准星所指的地面点，取不到则回退到"玩家脚下"。
+    ///
+    /// ⚠️⚠️ 掩码必须用 **`Layers.Blocker`**（= Obstacle + Ground 的**掩码**）！
+    ///    `Layers.Ground` / `Layers.Obstacle` 是**层索引**（11 / 12），直接当掩码传会被解释成
+    ///    "layer 0/1/3"→ **静默打不中任何东西**（项目里 `MagicProjectile.cs:110` 明文记过这个坑，
+    ///    我在 2026-10-14 又踩了一次，表现为"刷到准星/传送"全部无声失败）。
+    /// ⚠️ 打到**墙面**（法线不朝上）时不算地面 → 回退到脚下，避免把东西塞进墙里。</summary>
+    public static bool GroundPoint(out Vector3 point)
     {
+        point = Vector3.zero;
         var pc = Pc;
         var cam = CameraCache.Main;
         if (pc == null || cam == null) return false;
 
+        // 1) 准星方向（只认朝上的面）
         Ray ray = cam.ScreenPointToRay(pc.CrosshairScreenPos);
-        if (!Physics.Raycast(ray, out RaycastHit hit, 300f, Layers.Ground, QueryTriggerInteraction.Ignore))
-            return false;
+        if (Physics.Raycast(ray, out RaycastHit hit, 300f, Layers.Blocker, QueryTriggerInteraction.Ignore)
+            && Vector3.Dot(hit.normal, Vector3.up) > 0.5f)
+        {
+            point = hit.point;
+            return true;
+        }
 
-        pc.transform.position = hit.point + Vector3.up * 0.1f;
+        // 2) 回退：玩家正上方往下打（Blocker 不含玩家层，不会打到自己）
+        Vector3 above = pc.transform.position + Vector3.up * 30f;
+        if (Physics.Raycast(above, Vector3.down, out hit, 80f, Layers.Blocker, QueryTriggerInteraction.Ignore))
+        {
+            point = hit.point;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>传送到"准星所指的地面点"。</summary>
+    public static bool TeleportToCrosshair()
+    {
+        var pc = Pc;
+        if (pc == null || !GroundPoint(out Vector3 p)) return false;
+        pc.transform.position = p + Vector3.up * 0.1f;
         var rb = pc.GetComponent<Rigidbody>();
         if (rb != null) rb.velocity = Vector3.zero;
         return true;
+    }
+
+    public static CameraRig Cam => CameraRig.Instance;
+
+    /// <summary>一键杀死玩家（测死亡结算 / 重开清场是否干净）。</summary>
+    public static string KillPlayer()
+    {
+        var h = PlayerHealth();
+        if (h == null) return "找不到玩家血量组件";
+        h.TakeDamage(99999f, Vector3.zero);
+        return h.alive ? "玩家没死（是不是开着无敌？）" : "玩家已阵亡（可验证死亡结算与重开）";
+    }
+
+    // ==================== 刷东西（拾取物 / 敌人） ====================
+
+    /// <summary>可刷到地上的物品清单（武器/弹药/魔法/投掷物 + 血包）。**由面板缓存**，不要每帧调用。</summary>
+    public static List<ItemData> BuildSpawnableItems()
+    {
+        var list = new List<ItemData>();
+        var db = ItemDatabase.I;
+        if (db != null && db.all != null)
+        {
+            for (int i = 0; i < db.all.Count; i++)
+            {
+                var def = db.all[i];
+                if (def == null) continue;
+                if (def is WeaponData || def is AmmoData || def is MagicData || def is ThrowableData) list.Add(def);
+            }
+        }
+        var med = PlayerBackpack.MedkitDef();
+        if (med != null) list.Add(med);
+        return list;
+    }
+
+    /// <summary>在指定位置刷出一个拾取物（按物品类型分发到各自的公开 <c>Create</c>）。</summary>
+    public static string SpawnPickupAt(ItemData def, Vector3 pos, int count)
+    {
+        if (def == null) return "没有选中物品";
+
+        if (def is WeaponData w)
+            return WeaponPickup.Create(w, pos) != null ? "刷出武器 " + w.weaponName : "刷出失败（武器）";
+
+        if (def is AmmoData a)
+            return AmmoPickup.Create(a, pos, count) != null ? string.Format("刷出弹药 {0} ×{1}", a.DisplayName, count) : "刷出失败（弹药）";
+
+        if (def is MagicData m)
+            return MagicPickup.Create(m, pos) != null ? "刷出魔法 " + m.DisplayName : "刷出失败（魔法）";
+
+        if (def is ThrowableData t)
+            return ThrowablePickup.Create(t, pos, count) != null ? string.Format("刷出投掷物 {0} ×{1}", t.DisplayName, count) : "刷出失败（投掷物）";
+
+        // 剩下的是血包（MedkitDef）：一包一个，多个就绕着落点散开，避免完全重叠
+        int made = 0;
+        int want = Mathf.Max(1, count);
+        for (int i = 0; i < want; i++)
+        {
+            float ang = (i / (float)want) * Mathf.PI * 2f;
+            Vector3 p = pos + new Vector3(Mathf.Cos(ang) * 0.4f, 0f, Mathf.Sin(ang) * 0.4f);
+            if (HealthPack.Create(p) != null) made++;
+        }
+        return made > 0 ? string.Format("刷出血包 ×{0}", made) : "刷出失败（血包）";
+    }
+
+    /// <summary>刷在**准星地面点**（取不到就用玩家脚下）。</summary>
+    public static string SpawnPickupAtCrosshair(ItemData def, int count)
+    {
+        if (!GroundPoint(out Vector3 p)) return "准星与脚下都没打到地面（Blocker 层）";
+        return SpawnPickupAt(def, p + Vector3.up * 0.05f, count);
+    }
+
+    /// <summary>在地图上**随机空位**刷出（落点由 `SpawnPosition.FindOpenSpot` 决定，不会进墙）。</summary>
+    public static string SpawnPickupRandom(ItemData def, int count)
+    {
+        Vector3 p = SpawnPosition.FindOpenSpot(4f, SpawnPosition.RangeMedkit);
+        return SpawnPickupAt(def, p, count);
+    }
+
+    /// <summary>把选中的物品直接塞进背包（不经过拾取流程）。</summary>
+    public static string GiveToBackpack(ItemData def, int count)
+    {
+        var pc = Pc;
+        var bp = pc != null ? pc.backpack : null;
+        if (bp == null) return "背包不可用";
+        if (def == null) return "没有选中物品";
+
+        if (def is WeaponData w)
+            return bp.AddWeaponItem(w, -1, null) > 0 ? "背包 +武器 " + w.weaponName : "背包放不下武器";
+
+        int got = bp.AddItems(def, count);
+        return got > 0 ? string.Format("背包 +{0} ×{1}", def.DisplayName, got) : "背包放不下";
+    }
+
+    /// <summary>在准星地面点刷出**一个敌人**（从波次配置的敌人池里随机取一种）。</summary>
+    public static string SpawnEnemyAtCrosshair()
+    {
+        var wm = WaveManager.Instance;
+        if (wm == null) return "找不到 WaveManager";
+        if (!GroundPoint(out Vector3 p)) return "准星与脚下都没打到地面（Blocker 层）";
+
+        EnemyConfig cfg = null;
+        if (wm.enemyPool != null && wm.enemyPool.Length > 0)
+        {
+            var e = wm.enemyPool[UnityEngine.Random.Range(0, wm.enemyPool.Length)];
+            if (e != null) cfg = e.config;
+        }
+        if (cfg == null) cfg = EnemyConfig.Melee();   // 池为空时的兜底
+
+        wm.SpawnEnemyAt(cfg, p);
+        return "已刷出敌人" + (string.IsNullOrEmpty(cfg.displayName) ? "" : "：" + cfg.displayName);
+    }
+
+    // ==================== 商店 / 清理 ====================
+
+    /// <summary>让场上所有商店**立即补货**（`Shop.ForceRestock`，README 登记表里的 `[DEBUG-ONLY]` 方法）。</summary>
+    public static string ShopForceRestockAll()
+    {
+        var all = Shop.All;
+        if (all == null || all.Count == 0) return "场上没有商店";
+        int missBefore = 0, missAfter = 0, n = 0;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var s = all[i];
+            if (s == null) continue;
+            missBefore += s.MissingToFull();
+            s.ForceRestock();
+            missAfter += s.MissingToFull();
+            n++;
+        }
+        return string.Format("已让 {0} 家商店立即补货（缺货 {1} → {2} 件）", n, missBefore, missAfter);
+    }
+
+    /// <summary>清空地上全部拾取物（武器/弹药/魔法/投掷物/血包）。</summary>
+    public static string ClearAllPickups()
+    {
+        int n = 0;
+        n += DestroyAll(WeaponPickup.All);
+        n += DestroyAll(AmmoPickup.All);
+        n += DestroyAll(MagicPickup.All);
+        n += DestroyAll(ThrowablePickup.All);
+        n += DestroyAll(HealthPack.All);
+        return n > 0 ? ("已清空地上 " + n + " 个拾取物") : "地上没有拾取物";
+    }
+
+    /// <summary>销毁一整张注册表里的物体。
+    /// ⚠️ **必须先快照**：`Destroy` 会触发各对象的 `OnDestroy` 立刻把它们从注册表移除，
+    ///    直接遍历原表会在中途被改（与 `EnemyAI.All` 同一个坑，2026-10-14 已踩过一次）。</summary>
+    static int DestroyAll<T>(List<T> list) where T : Component
+    {
+        if (list == null) return 0;
+        var snapshot = new List<T>(list);
+        int n = 0;
+        for (int i = 0; i < snapshot.Count; i++)
+        {
+            if (snapshot[i] == null) continue;
+            UnityEngine.Object.Destroy(snapshot[i].gameObject);
+            n++;
+        }
+        return n;
     }
 }
 #endif

@@ -29,8 +29,9 @@ public class DebugPanel : MonoBehaviour
     const int LogShow = 11;              // 日志页显示行数
     const int EnemyShow = 10;            // 敌人页显示行数
 
-    const float W = 620f, H = 360f;      // 面板尺寸（高度按最大页固定 → 切 tab 不跳动）
+    const float W = 620f, H = 380f;      // 面板尺寸（高度按最大页固定 → 切 tab 不跳动）
     const float ContentH = 200f;         // 内容区高度
+    const int TabCount = 6;              // 战斗 / 波次 / 敌人 / 物品 / 日志 / 杂项
 
     [Tooltip("常驻条（由 DebugBootstrap 自动注入）。")]
     public DebugHud hud;
@@ -39,18 +40,27 @@ public class DebugPanel : MonoBehaviour
     RectTransform _root;
 
     // 常驻信息区（值）
-    Text _hpVal, _speedVal, _ammoVal, _runVal, _noteText;
+    Text _hpVal, _speedVal, _ammoVal, _magicVal, _runVal, _noteText;
 
     // tab 与页面
-    readonly Button[] _tabBtn = new Button[5];
-    readonly Text[] _tabLabel = new Text[5];
-    readonly GameObject[] _page = new GameObject[5];
+    readonly Button[] _tabBtn = new Button[TabCount];
+    readonly Text[] _tabLabel = new Text[TabCount];
+    readonly GameObject[] _page = new GameObject[TabCount];
     int _tab;
 
     // 页面内容引用
     Text _enemyText, _logText;
     Text _invulLabel, _hudLabel;
     Text _godLabel;
+
+    // 物品页状态（可刷物品清单：打开时构建一次，之后只在换 tab 时读）
+    List<ItemData> _items;
+    int _itemIdx;
+    int _itemCount = 5;
+    Text _itemNameText, _itemCountText;
+
+    // 杂项页：相机参数当前值
+    Text _camFollowVal, _camLeadVal, _camLeadMaxVal, _camFovVal;
 
     bool _open, _godMode, _logDirty;
     float _nextRefresh;
@@ -167,6 +177,7 @@ public class DebugPanel : MonoBehaviour
         if (_hpVal != null) _hpVal.text = DebugRead.HpValue();
         if (_speedVal != null) _speedVal.text = DebugRead.SpeedValue();
         if (_ammoVal != null) _ammoVal.text = DebugRead.AmmoValue();
+        if (_magicVal != null) _magicVal.text = DebugRead.MagicValue();
         if (_runVal != null) _runVal.text = DebugRead.RunValue();
         if (_noteText != null) _noteText.text = _note;
         if (_invulLabel != null)
@@ -180,7 +191,38 @@ public class DebugPanel : MonoBehaviour
 
         // 当前页才刷新（省开销）
         if (_tab == 2 && _enemyText != null) _enemyText.text = DebugRead.EnemyLines(EnemyShow);
-        if (_tab == 3 && _logDirty && _logText != null) { _logDirty = false; _logText.text = BuildLogText(); }
+        if (_tab == 3) RefreshItemPage();
+        if (_tab == 4 && _logDirty && _logText != null) { _logDirty = false; _logText.text = BuildLogText(); }
+        if (_tab == 5) RefreshCameraValues();
+    }
+
+    /// <summary>物品页刷新：清单只构建一次；之后只更新"当前选中名 + 数量"。</summary>
+    void RefreshItemPage()
+    {
+        if (_items == null || _items.Count == 0) _items = DebugRead.BuildSpawnableItems();
+        if (_itemNameText != null)
+        {
+            if (_items == null || _items.Count == 0) _itemNameText.text = "（物品清单为空：跑一次 Tools/游戏/重建物品清单）";
+            else
+            {
+                _itemIdx = Mathf.Clamp(_itemIdx, 0, _items.Count - 1);
+                var def = _items[_itemIdx];
+                _itemNameText.text = string.Format("[{0}/{1}]  {2}", _itemIdx + 1, _items.Count,
+                                                   def != null ? def.DisplayName : "?");
+            }
+        }
+        if (_itemCountText != null) _itemCountText.text = "×" + _itemCount;
+    }
+
+    /// <summary>杂项页：相机参数当前值。</summary>
+    void RefreshCameraValues()
+    {
+        var cam = DebugRead.Cam;
+        if (cam == null) return;
+        if (_camFollowVal != null) _camFollowVal.text = cam.followLerp.ToString("0.0");
+        if (_camLeadVal != null) _camLeadVal.text = cam.aimLeadRatio.ToString("0.00");
+        if (_camLeadMaxVal != null) _camLeadMaxVal.text = cam.maxAimLead.ToString("0.0");
+        if (_camFovVal != null) _camFovVal.text = cam.aimFovNarrow.ToString("0.0");
     }
 
     string BuildLogText()
@@ -305,6 +347,42 @@ public class DebugPanel : MonoBehaviour
 
     void OnScreenshot() => SetNote(DebugRead.CaptureScreenshot());
 
+    void OnKillPlayer() => SetNote(DebugRead.KillPlayer());
+
+    void OnClearMagicCd()
+    {
+        var pm = PlayerMagic.Instance;
+        if (pm == null) { SetNote("找不到 PlayerMagic"); return; }
+        pm.ClearCooldown();
+        SetNote("魔法冷却已清零");
+    }
+
+    // ---------- 物品页 ----------
+
+    void StepItem(int dir)
+    {
+        if (_items == null || _items.Count == 0) _items = DebugRead.BuildSpawnableItems();
+        if (_items == null || _items.Count == 0) { SetNote("物品清单为空（跑一次 Tools/游戏/重建物品清单）"); return; }
+        _itemIdx = (_itemIdx + dir + _items.Count) % _items.Count;
+        RefreshItemPage();
+    }
+
+    void StepItemCount(int d)
+    {
+        _itemCount = Mathf.Clamp(_itemCount + d, 1, 99);
+        RefreshItemPage();
+    }
+
+    ItemData CurrentItem()
+        => (_items != null && _items.Count > 0) ? _items[Mathf.Clamp(_itemIdx, 0, _items.Count - 1)] : null;
+
+    void OnSpawnPickupAtCrosshair() => SetNote(DebugRead.SpawnPickupAtCrosshair(CurrentItem(), _itemCount));
+    void OnSpawnPickupRandom() => SetNote(DebugRead.SpawnPickupRandom(CurrentItem(), _itemCount));
+    void OnGiveItemToBackpack() => SetNote(DebugRead.GiveToBackpack(CurrentItem(), _itemCount));
+    void OnSpawnEnemy() => SetNote(DebugRead.SpawnEnemyAtCrosshair());
+    void OnShopRestock() => SetNote(DebugRead.ShopForceRestockAll());
+    void OnClearPickups() => SetNote(DebugRead.ClearAllPickups());
+
     // ==================== 建 UI ====================
 
     void BuildUI()
@@ -335,17 +413,18 @@ public class DebugPanel : MonoBehaviour
         InfoRow("LblHp", "HP", y, out _hpVal); y -= 17f;
         InfoRow("LblSpd", "移速", y, out _speedVal); y -= 17f;
         InfoRow("LblAmmo", "武器", y, out _ammoVal); y -= 17f;
+        InfoRow("LblMagic", "魔法", y, out _magicVal); y -= 17f;
         InfoRow("LblRun", "进度", y, out _runVal); y -= 17f;
 
         DebugUI.NewHSep(_root, "Sep1", W, new Vector2(0f, y)); y -= 8f;
 
-        // ---- 5 个 tab ----
-        string[] titles = { "战斗", "波次", "敌人", "日志", "杂项" };
+        // ---- 6 个 tab（索引：0战斗 1波次 2敌人 3物品 4日志 5杂项）----
+        string[] titles = { "战斗", "波次", "敌人", "物品", "日志", "杂项" };
         for (int i = 0; i < titles.Length; i++)
         {
             int idx = i;
-            var b = DebugUI.NewButton(_root, "Tab" + i, titles[i], new Vector2(110f, 24f),
-                                      new Vector2(12f + i * 114f, y), 13, DebugUI.Dim, () => SetTab(idx));
+            var b = DebugUI.NewButton(_root, "Tab" + i, titles[i], new Vector2(96f, 24f),
+                                      new Vector2(12f + i * 100f, y), 13, DebugUI.Dim, () => SetTab(idx));
             _tabBtn[i] = b;
             _tabLabel[i] = DebugUI.LabelOf(b);
         }
@@ -358,8 +437,9 @@ public class DebugPanel : MonoBehaviour
         BuildPageBattle(content, 0);
         BuildPageWave(content, 1);
         BuildPageEnemy(content, 2);
-        BuildPageLog(content, 3);
-        BuildPageMisc(content, 4);
+        BuildPageItems(content, 3);
+        BuildPageLog(content, 4);
+        BuildPageMisc(content, 5);
         y -= ContentH + 4f;
 
         // ---- 底部提示行 ----
@@ -401,6 +481,9 @@ public class DebugPanel : MonoBehaviour
         DebugUI.NewText(page, "LblAim", new Vector2(40f, 22f), new Vector2(240f, -68f), 12, DebugUI.Dim, TextAnchor.MiddleLeft).text = "瞄";
         DebugUI.NewButton(page, "AimD", "−", new Vector2(30f, 22f), new Vector2(280f, -68f), 13, DebugUI.Fg, () => OnSpeedStep(2, -SpeedStep));
         DebugUI.NewButton(page, "AimU", "+", new Vector2(30f, 22f), new Vector2(314f, -68f), 13, DebugUI.Fg, () => OnSpeedStep(2, SpeedStep));
+
+        // 一键杀死玩家（测死亡结算 / 重开清场是否干净）
+        DebugUI.NewButton(page, "BtnKillPlayer", "杀死玩家", _btn, new Vector2(392f, -68f), 13, DebugUI.Error, OnKillPlayer);
     }
 
     void BuildPageWave(RectTransform content, int index)
@@ -422,6 +505,36 @@ public class DebugPanel : MonoBehaviour
                .text = "名字   行为   血量   状态   距离";
         _enemyText = DebugUI.NewText(page, "List", new Vector2(W - 16f, 172f), new Vector2(8f, -18f), 12, DebugUI.Bright, TextAnchor.UpperLeft);
         _enemyText.text = "（场上无敌人）";
+    }
+
+    /// <summary>物品页：选一个物品（武器/弹药/魔法/投掷物/血包）→ 刷到准星 / 随机刷出 / 直接给背包；外加刷敌人、商店补货、清场。</summary>
+    void BuildPageItems(RectTransform content, int index)
+    {
+        var page = DebugUI.NewRect(content, "Page" + index, new Vector2(W, ContentH), Vector2.zero);
+        _page[index] = page.gameObject;
+
+        DebugUI.NewText(page, "LblItem", new Vector2(36f, 24f), new Vector2(0f, 0f), 12, DebugUI.Dim, TextAnchor.MiddleLeft).text = "物品";
+        DebugUI.NewButton(page, "Prev", "◀", new Vector2(36f, 24f), new Vector2(40f, 0f), 13, DebugUI.Fg, () => StepItem(-1));
+        _itemNameText = DebugUI.NewText(page, "ItemName", new Vector2(276f, 24f), new Vector2(82f, 0f), 12, DebugUI.Bright, TextAnchor.MiddleLeft);
+        DebugUI.NewButton(page, "Next", "▶", new Vector2(36f, 24f), new Vector2(362f, 0f), 13, DebugUI.Fg, () => StepItem(+1));
+
+        DebugUI.NewText(page, "LblCnt", new Vector2(36f, 24f), new Vector2(408f, 0f), 12, DebugUI.Dim, TextAnchor.MiddleLeft).text = "数量";
+        DebugUI.NewButton(page, "CntD", "−", new Vector2(28f, 24f), new Vector2(448f, 0f), 13, DebugUI.Fg, () => StepItemCount(-5));
+        _itemCountText = DebugUI.NewText(page, "CntV", new Vector2(48f, 24f), new Vector2(480f, 0f), 12, DebugUI.Bright, TextAnchor.MiddleCenter);
+        DebugUI.NewButton(page, "CntU", "+", new Vector2(28f, 24f), new Vector2(532f, 0f), 13, DebugUI.Fg, () => StepItemCount(+5));
+
+        // 第二行：刷出方式
+        DebugUI.NewButton(page, "AtCross", "刷到准星", new Vector2(104f, 26f), new Vector2(0f, -32f), 13, DebugUI.Fg, OnSpawnPickupAtCrosshair);
+        DebugUI.NewButton(page, "Random", "随机刷出", new Vector2(104f, 26f), new Vector2(110f, -32f), 13, DebugUI.Fg, OnSpawnPickupRandom);
+        DebugUI.NewButton(page, "ToBag", "给到背包", new Vector2(104f, 26f), new Vector2(220f, -32f), 13, DebugUI.Fg, OnGiveItemToBackpack);
+        DebugUI.NewButton(page, "SpawnEnemy", "刷个敌人", new Vector2(104f, 26f), new Vector2(330f, -32f), 13, DebugUI.Warn, OnSpawnEnemy);
+
+        // 第三行：商店 / 清理
+        DebugUI.NewButton(page, "ShopRestock", "商店立即补货", new Vector2(126f, 26f), new Vector2(0f, -64f), 13, DebugUI.Fg, OnShopRestock);
+        DebugUI.NewButton(page, "ClearPickups", "清空地上拾取物", new Vector2(140f, 26f), new Vector2(132f, -64f), 13, DebugUI.Fg, OnClearPickups);
+
+        DebugUI.NewText(page, "Hint", new Vector2(W - 16f, 18f), new Vector2(0f, -98f), 12, DebugUI.Dim, TextAnchor.MiddleLeft)
+               .text = "「刷到准星」= 准星指到的地面点；「随机刷出」= 地图空位；敌人从波次配置的敌人池随机取。";
     }
 
     void BuildPageLog(RectTransform content, int index)
@@ -447,6 +560,38 @@ public class DebugPanel : MonoBehaviour
 
         DebugUI.NewButton(page, "BtnShot", "一键截图", _small, new Vector2(0f, -34f), 12, DebugUI.Fg, OnScreenshot);
         _hudLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnHud", "常驻条: 开", new Vector2(110f, 26f), new Vector2(100f, -34f), 12, DebugUI.Fg, OnToggleHud));
+
+        DebugUI.NewButton(page, "BtnClearCd", "清魔法冷却", new Vector2(104f, 26f), new Vector2(220f, -34f), 12, DebugUI.Fg, OnClearMagicCd);
+
+        // ---- 相机手感微调（全是 CameraRig 的 public 字段；调"跟手/前探/瞄准收窄"用）----
+        _camFollowVal = CamRow(page, "跟随平滑", -68f, 1f, 0.5f, 40f, d => { var c = DebugRead.Cam; if (c != null) c.followLerp += d; });
+        _camLeadVal = CamRow(page, "前瞄比例", -96f, 0.02f, 0f, 0.5f, d => { var c = DebugRead.Cam; if (c != null) c.aimLeadRatio += d; });
+        _camLeadMaxVal = CamRow(page, "前瞄上限", -124f, 0.5f, 0f, 10f, d => { var c = DebugRead.Cam; if (c != null) c.maxAimLead += d; });
+        _camFovVal = CamRow(page, "瞄准收窄", -152f, 1f, 0f, 30f, d => { var c = DebugRead.Cam; if (c != null) c.aimFovNarrow += d; });
+    }
+
+    /// <summary>杂项页的一行相机参数：标签 + [−] + 当前值 + [+]。step = 每点一次的增量。</summary>
+    Text CamRow(RectTransform page, string label, float y, float step, float min, float max, System.Action<float> apply)
+    {
+        DebugUI.NewText(page, "Lbl" + label, new Vector2(96f, 24f), new Vector2(0f, y), 12, DebugUI.Dim, TextAnchor.MiddleLeft).text = label;
+        DebugUI.NewButton(page, "D" + label, "−", new Vector2(28f, 24f), new Vector2(100f, y), 13, DebugUI.Fg,
+                          () => { apply(-step); ClampCam(min, max); RefreshCameraValues(); });
+        var v = DebugUI.NewText(page, "V" + label, new Vector2(60f, 24f), new Vector2(132f, y), 12, DebugUI.Bright, TextAnchor.MiddleCenter);
+        DebugUI.NewButton(page, "U" + label, "+", new Vector2(28f, 24f), new Vector2(196f, y), 13, DebugUI.Fg,
+                          () => { apply(+step); ClampCam(min, max); RefreshCameraValues(); });
+        return v;
+    }
+
+    /// <summary>相机四个字段统一夹到合法区间（避免调到负值 / 离谱值）。</summary>
+    void ClampCam(float min, float max)
+    {
+        var c = DebugRead.Cam;
+        if (c == null) return;
+        c.followLerp = Mathf.Clamp(c.followLerp, 0.5f, 40f);
+        c.aimLeadRatio = Mathf.Clamp(c.aimLeadRatio, 0f, 0.5f);
+        c.maxAimLead = Mathf.Clamp(c.maxAimLead, 0f, 10f);
+        c.aimFovNarrow = Mathf.Clamp(c.aimFovNarrow, 0f, 30f);
+        c.aimLeadExtra = Mathf.Clamp(c.aimLeadExtra, 0f, 3f);
     }
 
     // 按钮尺寸（实例只读字段：不引入任何静态状态）

@@ -162,6 +162,32 @@ public class Shop : MonoBehaviour, IInteractable
         }
     }
 
+    /// <summary>[DEBUG-ONLY] 调试面板用：**立刻整店补货**（等价于把 `_restockTimer` 一次走完），
+    /// 并把补货计时归零（下次自然补货从整段间隔重新计）。
+    /// 中性语义：跳过等待。发布前清理见 `Assets/Debug/README.md` 登记表。</summary>
+    public void ForceRestock()
+    {
+        if (config == null) return;
+        EnsureStock();
+        Restock();
+        _restockTimer = 0f;
+    }
+
+    /// <summary>本店还差多少件才满货（调试面板显示用；无限库存的格不计入）。</summary>
+    public int MissingToFull()
+    {
+        if (config == null) return 0;
+        EnsureStock();
+        int n = config.EntryCount, miss = 0;
+        for (int i = 0; i < n && i < _stock.Length; i++)
+        {
+            var e = config.EntryAt(i);
+            if (e == null || e.maxStock <= 0) continue;
+            miss += Mathf.Max(0, e.maxStock - _stock[i]);
+        }
+        return miss;
+    }
+
     // ==================== 买卖（规则唯一实现） ====================
 
     /// <summary>能不能买这一格（**不改任何状态**，只返回原因 —— 供 UI 预判 / 以后做按钮灰化）。</summary>

@@ -92,6 +92,17 @@ public class PlayerMagic : MonoBehaviour
     ///    只有放在这里（全场一份）才能保证"斩一次 → 其他敌人身上的印记也得等"。</summary>
     public bool PassiveReady => _cdRemaining <= 0f;
 
+    /// <summary>[DEBUG-ONLY] 调试面板用：**清空当前魔法的冷却**（并广播 `OnCooldownEnd` 让 HUD 撤遮罩）。
+    /// ⚠️ 必须**同时清每卡冷却表**（`_cdByCard`）：否则"切走再切回来"会把旧冷却读回来（见 `_cdByCard` 的注释）。
+    /// 中性语义：把冷却视为已走完。发布前清理见 `Assets/Debug/README.md` 登记表。</summary>
+    public void ClearCooldown()
+    {
+        if (_equipped != null) _cdByCard[_equipped] = 0f;   // 每卡账本也要清
+        if (_cdRemaining <= 0f) { _cdRemaining = 0f; return; }
+        _cdRemaining = 0f;
+        OnCooldownEnd?.Invoke(_equipped);                   // HUD 撤遮罩（与 Tick 里自然走完的分支一致）
+    }
+
     // ==================== 生命周期 ====================
 
     void Awake()
