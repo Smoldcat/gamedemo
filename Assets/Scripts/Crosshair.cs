@@ -18,6 +18,7 @@ public class Crosshair : MonoBehaviour
 
     // 静态：供 Bullet 命中时调用（不需要拿到实例）
     static float _hitMarkUntil;
+    static bool _hitMarkHead;      // 本次命中是否爆头（hitmarker 换色用）
     static PlayerController.AimState _aimState = PlayerController.AimState.None;   // 缓存的瞄准状态（10Hz 刷新）
 
     /// 供背包面板等隐藏/恢复准星（打开背包时要临时隐藏准星并显示光标）
@@ -27,11 +28,12 @@ public class Crosshair : MonoBehaviour
     internal static void ResetStatics()
     {
         _hitMarkUntil = 0f;
+        _hitMarkHead = false;
         _aimState = PlayerController.AimState.None;
     }
 
     [Header("外观")]
-    [Tooltip("十字每条线段的长度（像素）。换用自定义图片时，它同时是那张图片的显示尺寸")]
+    [Tooltip("十字每条线段的长度（像素）")]
     public float size = 14f;
     [Tooltip("十字中心留空半径（像素）。有散布圈十字会自动扩张，始终保持在圈外")]
     public float gap = 5f;
@@ -39,8 +41,19 @@ public class Crosshair : MonoBehaviour
     public float thickness = 2f;
     [Tooltip("换弹进度环直径（像素，与准星同一套缩放）")]
     public float reloadRingSize = 40f;
-    [Tooltip("自定义准星图片（Sprite）。留空时依次回落：「资源总表 GameAssets.crosshairSprite」→「代码生成的默认十字」")]
-    public Sprite crosshairSprite;
+    [Header("命中标记（hitmarker：打中敌人瞬间短暂出现的米字）")]
+    [Tooltip("命中标记的半径（像素）：米字线段中心到准星中心的距离。默认 18 ≈ 比主十字略大，出现时像\"在主十字外炸开一圈\"")]
+    public float hitMarkerRadius = 18f;
+    [Tooltip("命中标记每条线段的长度（像素）")]
+    public float hitMarkerLength = 8f;
+    [Tooltip("命中标记线段粗细（像素）")]
+    public float hitMarkerThickness = 2f;
+    [Tooltip("命中标记显示时长（秒）")]
+    public float hitMarkerDuration = 0.15f;
+    [Tooltip("【普通命中】标记颜色（默认白）")]
+    public Color hitMarkerColor = new Color(0.95f, 0.95f, 0.95f, 0.95f);
+    [Tooltip("【爆头命中】标记颜色（默认红，与爆头音效呼应）")]
+    public Color hitMarkerHeadColor = new Color(1f, 0.45f, 0.4f, 0.95f);
 
     [Header("准星颜色（按瞄准状态自动切换）")]
     [Tooltip("【未瞄准】准星没指着任何敌人时的颜色（默认白）。\n" +
@@ -55,7 +68,8 @@ public class Crosshair : MonoBehaviour
              "（headshotGateScale = 1，所见即所判）—— 想让绿圈比看到的头更小/更大，调 PlayerController.headshotGateScale。\n" +
              "绿色 = 此刻开枪必定爆头（2 倍伤害），所以这个颜色就是「爆头可用」的提示。")]
     public Color colorHead = new Color(0.35f, 1f, 0.45f);
-    [Tooltip("【命中闪白】打中敌人瞬间的反馈色（默认纯白，约 0.08 秒）。\n" +
+    [Tooltip("【命中闪白】打中敌人瞬间的反馈色（默认纯白）。\n" +
+             "时长由 hitMarkerDuration 控制（与命中标记共用同一计时）；\n" +
              "⚠️ 它和「未瞄准=白」会撞色，所以单独做成一个字段：嫌看不清就换成别的（比如淡蓝 0.6,0.85,1）。")]
     public Color colorHitFlash = Color.white;
 
@@ -75,6 +89,7 @@ public class Crosshair : MonoBehaviour
     Canvas _canvas;
     RectTransform _root;
     Image[] _bars;                 // 0-3 四根线 + 4 中心点
+    Image[] _hitBars;              // 命中标记：4 根斜 45° 线段，打中敌人瞬间短暂显示（与主十字组成米字）
     Image _reloadRing;             // 换弹圆环（Image.Type.Filled / Radial360）
     Image _spreadRing;             // 散布圈（散布楔形的内切圆投影）
     Texture2D _spreadTex, _reloadTex;   // 运行时生成的圆环贴图（OnDestroy 必须释放，否则每局累积一组）
@@ -93,9 +108,6 @@ public class Crosshair : MonoBehaviour
             return;
         }
         InstanceUI = this;
-        // 准星图片优先级：组件上拖的（本地覆盖）> GameAssets 资源表（全局默认）> 代码生成的十字
-        if (crosshairSprite == null && GameAssets.I != null)
-            crosshairSprite = GameAssets.I.crosshairSprite;
         ApplyCursorModeNow(true);  // 游玩：锁定 + 隐藏系统光标（_cursorGameplay 初值即 true，这里直接设一次）
                                    // 顺带 `VirtualCursor.Deactivate()` —— 覆盖"重开场景后静态状态还留着"的情况
         BuildUI();
@@ -257,23 +269,27 @@ public class Crosshair : MonoBehaviour
         spreadRt.sizeDelta = Vector2.zero;
         spreadGo.SetActive(false);
 
-        _bars = crosshairSprite != null
-            ? new Image[1] { MakeBar("CrosshairImg", new Vector2(size, size), Vector2.zero) }
-            : new Image[5];
+        _bars = new Image[5];
+        _bars[0] = MakeBar("Up",     new Vector2(thickness, size), new Vector2(0f, gap + size * 0.5f));
+        _bars[1] = MakeBar("Down",   new Vector2(thickness, size), new Vector2(0f, -(gap + size * 0.5f)));
+        _bars[2] = MakeBar("Left",   new Vector2(size, thickness), new Vector2(-(gap + size * 0.5f), 0f));
+        _bars[3] = MakeBar("Right",  new Vector2(size, thickness), new Vector2(gap + size * 0.5f, 0f));
+        _bars[4] = MakeBar("Center", new Vector2(2f, 2f), Vector2.zero);
 
-        if (crosshairSprite != null)
+        // ---- 命中标记（hitmarker）：4 根斜 45° 的线段，打中敌人瞬间短暂出现 ----
+        // 与主十字（0/90/180/270）组合成一个完整的"米字"：常态是十字，命中瞬间斜十字叠加出现再消失。
+        // 每根线段沿**径向**摆放；平时隐藏，命中时由 LateUpdate 激活。
+        // ⚠️ 旋转角取 **-ang**：让线段长轴与"径向方向"对齐（+ang 会差 90°，垂直于径向——4 根版会明显看错）。
+        _hitBars = new Image[4];
+        for (int i = 0; i < 4; i++)
         {
-            // 自定义准星：单张图片替换代码生成的十字，尺寸用 size 调整
-            _bars[0].sprite = crosshairSprite;
-            _bars[0].preserveAspect = true;
-        }
-        else
-        {
-            _bars[0] = MakeBar("Up",     new Vector2(thickness, size), new Vector2(0f, gap + size * 0.5f));
-            _bars[1] = MakeBar("Down",   new Vector2(thickness, size), new Vector2(0f, -(gap + size * 0.5f)));
-            _bars[2] = MakeBar("Left",   new Vector2(size, thickness), new Vector2(-(gap + size * 0.5f), 0f));
-            _bars[3] = MakeBar("Right",  new Vector2(size, thickness), new Vector2(gap + size * 0.5f, 0f));
-            _bars[4] = MakeBar("Center", new Vector2(2f, 2f), Vector2.zero);
+            float ang = 45f + i * 90f;
+            var dir = new Vector2(Mathf.Sin(ang * Mathf.Deg2Rad), Mathf.Cos(ang * Mathf.Deg2Rad));
+            _hitBars[i] = MakeBar("HitMark" + i,
+                new Vector2(hitMarkerThickness, hitMarkerLength),
+                dir * (hitMarkerRadius + hitMarkerLength * 0.5f));
+            _hitBars[i].rectTransform.localRotation = Quaternion.Euler(0f, 0f, -ang);
+            _hitBars[i].gameObject.SetActive(false);   // 命中时才显示
         }
 
         // 换弹圆环：与准星同一个中心点，换弹时显示它、隐藏十字
@@ -370,6 +386,20 @@ public class Crosshair : MonoBehaviour
         if (reloading && _spreadRing != null && _spreadRing.gameObject.activeSelf)
             _spreadRing.gameObject.SetActive(false);
 
+        // 命中标记：命中后短暂显示 —— ⚠️ 必须放在 `if (reloading) return;` **之前**：
+        //    "打完弹夹最后一发命中 → 自动换弹"时，标记的 0.15s 寿命会横跨整个换弹期；
+        //    若放在早退之后，LateUpdate 换弹期间不再更新 → 标记会**卡在屏幕上直到换弹结束**
+        //    （2026-10-15 用户实测）。放这里则换弹中它也按时消失。
+        bool hmShow = Time.time < _hitMarkUntil;
+        var hmCol = _hitMarkHead ? hitMarkerHeadColor : hitMarkerColor;
+        if (_hitBars != null)
+            foreach (var b in _hitBars)
+                if (b != null)
+                {
+                    if (b.gameObject.activeSelf != hmShow) b.gameObject.SetActive(hmShow);
+                    if (hmShow) b.color = hmCol;
+                }
+
         if (reloading) return;   // 换弹时准星已隐藏，不必再索敌/变色
 
         // 准星变色不需要每帧精确：每 0.1 秒刷新一次瞄准状态，省大量遍历和投影。
@@ -451,7 +481,7 @@ public class Crosshair : MonoBehaviour
         if (Mathf.Abs(gapPx - _lastArmGap) > 0.01f)
         {
             _lastArmGap = gapPx;
-            if (_bars != null && _bars.Length == 5)   // 默认十字模式才有四根可扩张的线（自定义图片模式跳过）
+            if (_bars != null)                        // 四根可扩张的线（自定义图片模式已删除，恒为 5 根）
             {
                 float off = gapPx + size * 0.5f;
                 _bars[0].rectTransform.anchoredPosition = new Vector2(0f, off);
@@ -462,11 +492,15 @@ public class Crosshair : MonoBehaviour
         }
     }
 
-    /// <summary>命中反馈：准星闪白一下并播放命中音（由 Combat 调用）。
-    /// headshot=true 时播放「爆头命中反馈音」而不是普通命中音（命中头部即播，不必击杀）。</summary>
+    /// <summary>命中反馈：打中敌人瞬间 ——
+    ///   ① 命中标记（旋转 45° 的米字）短暂出现，时长/颜色/尺寸全部 Inspector 可调（`hitMarker*` 字段）；
+    ///   ② 准星闪白一下 + 播放命中音。两条路径都会调：子弹直击（Combat.cs:113）与爆炸波及（:162）。
+    /// headshot=true 时：标记变红 + 播「爆头命中反馈音」（命中头部即播，不必击杀）。</summary>
     public static void HitMark(bool headshot = false)
     {
-        _hitMarkUntil = Time.time + 0.08f;
+        var c = InstanceUI;
+        _hitMarkUntil = Time.time + (c != null ? c.hitMarkerDuration : 0.15f);
+        _hitMarkHead = headshot;
         if (headshot) Sfx.HeadshotHit();
         else Sfx.Hit();
     }

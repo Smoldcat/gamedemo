@@ -22,7 +22,6 @@ public class GameAssetsEditor : Editor
         ("decalPrefab",      "弹孔/血迹",    "地面弹孔/血迹 Prefab", null),
 
         ("damageTextPrefab", "伤害飘字 Prefab", "伤害数字的预制体（UI 物体，含 Text 即可，可自定义字体/样式/动画）。留空用代码生成默认样式", "UI 特效（留空 = 代码生成默认样式）"),
-        ("crosshairSprite",  "准星图片",         "全局默认准星外观（Crosshair 组件上单独拖了则优先用组件的）。留空用代码生成的十字", null),
 
         ("killIcon",             "普通击杀图标",       "普通击杀时屏幕下方中央显示的图标。留空用代码生成的占位（四角星）", "击杀反馈（留空 = 代码生成占位）"),
         ("killHeadshotIcon",     "爆头击杀图标",       "最后致命一击是爆头时替换普通图标。留空用代码生成的占位（靶心）", null),

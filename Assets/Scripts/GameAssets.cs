@@ -32,8 +32,6 @@ public class GameAssets : ScriptableObject
 
     [Tooltip("伤害飘字 Prefab：含 Text 组件的 UI 物体（可自定义字体/样式/动画）。留空则用代码生成默认文字")]
     public GameObject damageTextPrefab;
-    [Tooltip("准星图片（Sprite）。全局默认准星外观；Crosshair 组件上单独拖了则优先用组件的。留空用代码生成的十字")]
-    public Sprite crosshairSprite;
 
     public AudioClip shot;          // 普通枪声（手枪/冲锋枪）
     public AudioClip shotgun;       // 霰弹枪声
