@@ -88,13 +88,10 @@ public class EnemyConfigEditor : Editor
         }
     }
 
-    /// <summary>行为在编辑器里显示的中文名：优先取 [BehaviourName] 特性，否则清掉类名里的敌/行为字样</summary>
+    /// <summary>行为在编辑器里显示的中文名：优先取 [BehaviourName] 特性，否则清掉类名里的敌/行为字样。
+    /// （实现已收敛到 `EditorFieldUtil.DisplayNameOfType`，与 `MagicDataEditor` 共用一份 —— 2026-10-15）</summary>
     static string BehaviourDisplayName(System.Type t)
-    {
-        var a = t.GetCustomAttributes(typeof(BehaviourName), false);
-        if (a.Length > 0 && a[0] is BehaviourName bn && !string.IsNullOrEmpty(bn.Name)) return bn.Name;
-        return t.Name.Replace("Enemy", "").Replace("Behaviour", "");
-    }
+        => EditorFieldUtil.DisplayNameOfType(t, typeof(BehaviourName), "Enemy", "Behaviour");
 
     void OnEnable()
     {

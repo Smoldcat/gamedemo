@@ -45,8 +45,9 @@ public static class Layers
     /// <summary>纯表现特效层索引（-1 = 工程里未定义该层）</summary>
     public static readonly int FX = LayerMask.NameToLayer(FxName);
     /// <summary>烟云层索引（-1 = 工程里未定义该层）。
-    /// ⚠️ 从 FX 里**独立出来**的唯一理由：烟是"要按半分辨率单独渲染 / 特殊排序"的那一类，
-    ///    混在 FX 层里会连爆炸 / 枪口火光 / 激光 / 弹孔一起被处理。它**同样不在任何射线掩码里**。</summary>
+    /// ⚠️ 从 FX 里**独立出来**的唯一理由：烟是"将来若需单独渲染 / 特殊排序"的那一类
+    ///    （半分辨率烟实验件已于 2026-10-14 删除），混在 FX 层里会连爆炸 / 枪口火光 / 激光 / 弹孔一起被处理。
+    ///    它**同样不在任何射线掩码里**。</summary>
     public static readonly int Smoke = LayerMask.NameToLayer(SmokeName);
 
     /// <summary>射线遮挡物：地面 + 阻挡物（视线与弹道应该被它们打断）</summary>

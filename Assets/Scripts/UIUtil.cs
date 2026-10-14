@@ -269,7 +269,7 @@ public static class UIUtil
     /// （`ScreenSpaceOverlay` 下层不影响渲染，纯粹是将来想按层统一管理 / 统计 UI 时更整齐。）</summary>
     internal static void SetLayerRecursively(GameObject go, int layer)
     {
-        if (go == null) return;
+        if (go == null || layer < 0) return;   // 负值 = 工程里没定义该层（`Layers.*` 的 -1 约定）→ 原样不动
         go.layer = layer;
         for (int i = 0; i < go.transform.childCount; i++)
             SetLayerRecursively(go.transform.GetChild(i).gameObject, layer);

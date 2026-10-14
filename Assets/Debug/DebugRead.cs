@@ -81,8 +81,8 @@ internal static class DebugRead
 
     public static string HpLine() => "HP " + HpValue();
     public static string SpeedLine() => "移速 " + SpeedValue();
-    public static string AmmoLine() => "武器 " + AmmoValue();
     public static string RunLine() => RunValue();
+    // 注：此前还有个 AmmoLine()（"武器 " + AmmoValue()），常驻条没用到它（信息区直接读 AmmoValue）→ 2026-10-15 删除
 
     /// <summary>内存 / GC 行（常驻条第 5 行）。</summary>
     public static string MemLine()

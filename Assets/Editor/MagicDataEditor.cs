@@ -51,13 +51,10 @@ public class MagicDataEditor : Editor
     }
 
     /// <summary>行为在编辑器里显示的中文名：优先取 <see cref="MagicName"/> 特性，
-    /// 否则用类名去掉 `Magic` 后缀（与 `EnemyBehaviour` 的 `[BehaviourName]` 是同一套约定）。</summary>
+    /// 否则用类名去掉 `Magic` 后缀（与 `EnemyBehaviour` 的 `[BehaviourName]` 是同一套约定）。
+    /// （实现已收敛到 `EditorFieldUtil.DisplayNameOfType`，与 `EnemyConfigEditor` 共用一份 —— 2026-10-15）</summary>
     static string BehaviourDisplayName(System.Type t)
-    {
-        var a = t.GetCustomAttributes(typeof(MagicName), false);
-        if (a.Length > 0 && a[0] is MagicName mn && !string.IsNullOrEmpty(mn.Name)) return mn.Name;
-        return t.Name.Replace("Magic", "");
-    }
+        => EditorFieldUtil.DisplayNameOfType(t, typeof(MagicName), "Magic");
 
     // ==================== 绘制 ====================
 

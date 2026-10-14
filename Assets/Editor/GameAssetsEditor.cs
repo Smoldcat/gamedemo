@@ -42,11 +42,11 @@ public class GameAssetsEditor : Editor
         ("backpackInventorySlots",  "库存格数",        "同类武器在同一格里叠加，所以等于「最多能装几种武器」。默认 20", "背包（留空 = 代码生成占位）"),
         ("backpackPanelSprite",     "面板底图",        "背包面板底图（Sprite，九宫格）。留空用代码生成的圆角面板。建议白色/浅色 + 透明", null),
         ("backpackFrameSprite",     "描边/格子边框",   "库存格子与丢弃按钮的边框（Sprite，九宫格）。留空用代码生成", null),
-        ("backpackSlotFrameSprite", "快捷槽边框",      "快捷武器槽边框（Sprite，九宫格）。留空用代码生成。建议白色描边 + 透明", null),
+        ("backpackSlotFrameSprite", "快捷槽边框",      "快捷武器槽边框（Sprite，九宫格）。⚠️ 名字里带 backpack，但**HUD 底部快捷栏也在用这一张**（两处共用）。留空用代码生成。建议白色描边 + 透明", null),
         ("backpackMedkitIconSprite","血包图标",        "血包十字图标（Sprite）。留空用代码生成", null),
         ("backpackPanelColor",      "面板底色",        "背包面板底色（与底图相乘）", null),
         ("backpackSlotColor",       "槽边框色",        "快捷槽普通边框色（当前槽用「当前槽高亮色」）", null),
-        ("backpackSlotActiveColor", "当前槽高亮色",    "当前选中的快捷槽的高亮色", null),
+        ("backpackSlotActiveColor", "当前槽高亮色",    "当前选中的快捷槽的高亮色。⚠️ 背包与 HUD 底部快捷栏共用同一个颜色", null),
         ("backpackCellColor",       "库存格底色",      "库存格子的底色", null),
         ("backpackUIPrefab",        "背包界面 Prefab", "整套背包 UI 的 Prefab（Canvas + 面板结构）：拖入后背包完全用该 Prefab，可在编辑器里拖拽改布局；留空用代码生成的界面。⚠️ 节点名有约定（见 BackpackPanel 类注释）", null),
 
@@ -93,7 +93,7 @@ public class GameAssetsEditor : Editor
         ("throwableListWidth",       "列表宽度(px)",     "选择器列表宽度（参考分辨率下）。默认 230", null),
         ("throwableListBgColor",     "普通行底色",       "选择器列表 · 普通行的底色（含透明度）", null),
         ("throwableListHiColor",     "选中行高亮色",     "选择器列表 · **当前选中行**的高亮底色", null),
-        ("throwableRangeRingColor",  "范围圈·环色",      "投掷物「范围指示圈」的环颜色（含透明度）；改完立刻生效（下次进 Play 看）", "投掷物范围指示圈（2026-10-12 新增）"),
+        ("throwableRangeRingColor",  "范围圈·环色",      "投掷物「范围指示圈」的环颜色（含透明度）；运行中实时生效", "投掷物范围指示圈（2026-10-12 新增）"),
         ("throwableRangeFillColor",  "范围圈·填充色",    "投掷物「范围指示圈」的填充颜色（含透明度）；默认 10% 橙 = 提亮变暖、一眼看出危险区", null),
 
         ("switchWindup", "切枪动作时长(秒)", "从按下切枪键到「新枪可以开火」之间的时间（收枪段 + 出枪段都算）：期间不能开火、不能起手换弹 / 按 T 换级。\n以后做了切枪动画 → 把这个数填成动画的实际长度即可。⚠️ 填 0 = 关闭（切完枪立刻能开火）。默认 0.3", "切枪动作（2026-10-12 新增）"),

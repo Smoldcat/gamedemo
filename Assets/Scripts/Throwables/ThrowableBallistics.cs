@@ -40,7 +40,6 @@ public static class ThrowableBallistics
     {
         public Vector3 v0;        // 出手速度（世界向量，含方向与大小）
         public float gravity;     // 等效重力（正数，向下）
-        public float flightTime;  // 到落点的理论飞行时间（秒）
     }
 
     /// <summary>
@@ -73,7 +72,6 @@ public static class ThrowableBallistics
         Solve s;
         s.v0 = dirH * vx + Vector3.up * vy0;
         s.gravity = g;
-        s.flightTime = d / vx;
         return s;
     }
 

@@ -9,10 +9,11 @@ using UnityEngine.UI;
 ///   本类**不引用** `BackpackPanel.FrameSprite/PanelSprite/CellColor` 等游戏视觉资源 ——
 ///   调试工具只依赖游戏的 **public 逻辑入口**，不依赖它的**视觉**资源（发布前删除更干净）。
 ///
-/// 边框怎么来的：用 Unity **内置** 的九宫格白盒 `UI/Skin/Background.psd`（引擎共享资源）
-///   + `Image.Type.Sliced` → 一个节点就画出 1px 描边，**零运行时纹理生成**
-///   （若拿不到该内置图则退化为纯色块，不影响功能）。
-///   ⚠️ 内置图是**共享资源**，绝不能 `Destroy`（交接文档 §4 #25 的教训）。
+/// 边框怎么来的：用 `UIUtil.RoundedRectSprite` 运行时生成的**带 1px 描边**白盒 + `Image.Type.Sliced`
+///   → 一个节点就画出边框（生成一次并缓存，不会重复生成）。
+///   ⚠️ 为什么不试着用 Unity 内置的 `UI/Skin/Background.psd`：**团结引擎没有这张图**，
+///      而 `Resources.GetBuiltinResource` 失败时**一定会往 Console 打两条错误**（无法静默试探）
+///      → 本项目只跑团结引擎，直接走运行时生成，Console 保持干净（2026-10-15 实测）。
 ///
 /// ⚠️ 本文件属于 `Assets/Debug/`：发布前整个文件夹删除，详见 README.md。
 /// </summary>
@@ -29,17 +30,13 @@ internal static class DebugUI
     public static readonly Color Error = new Color(1f, 0.45f, 0.40f);        // 错误 / 危险
     public static readonly Color TabOnBg = new Color(0.12f, 0.34f, 0.18f, 1f);
 
-    static Sprite _box;   // 内置九宫格白盒（共享资源，不销毁）
+    static Sprite _box;   // 运行时生成的白盒（缓存在 `UIUtil` 内部，这里只是取回引用）
 
-    /// <summary>内置 1px 描边白盒；取不到就返回 null（控件退化为纯色块）。</summary>
-    public static Sprite Box
-    {
-        get
-        {
-            if (_box == null) _box = Resources.GetBuiltinResource<Sprite>("UI/Skin/Background.psd");
-            return _box;
-        }
-    }
+    /// <summary>按钮/信息框的底图：`UIUtil.RoundedRectSprite` 的**带 1px 描边**白盒
+    /// （第一次取时生成、之后走 UIUtil 缓存）。
+    /// ⚠️ 别改成 `Resources.GetBuiltinResource("UI/Skin/Background.psd")`：团结引擎没有该内置图，
+    ///    失败时会**固定刷 2 条 Console 错误**且没有静默试探的办法（2026-10-15 实测）。</summary>
+    public static Sprite Box => UIUtil.RoundedRectSprite(64, 6f, 1f);
 
     // ==================== 基础节点（锚点/轴心统一：父节点左上角） ====================
 

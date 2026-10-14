@@ -38,6 +38,11 @@ public static class InspectorLabelTable
         { "PlayerController.headshotGateScale",        "爆头判定圈倍率" },
         { "PlayerController.headshotRadiusRatio",       "爆头判定半径（旧口径）" },
         { "PlayerController.bodyAimRadius",             "身体瞄准半径" },
+        { "PlayerController.aimDeadZoneRadius",         "瞄准死区半径" },
+        { "PlayerController.magAmmoId",                 "当前弹匣等级（运行时镜像）" },
+        { "PlayerController.magic",                     "魔法组件（PlayerMagic）" },
+        { "PlayerController.throwables",                "投掷物组件（PlayerThrowable）" },
+        { "PlayerController.ammoSel",                   "弹种选择器（AmmoSelector）" },
 
         // -------------------------------- Crosshair --------------------------------
         { "Crosshair.size",              "十字线长度" },
@@ -72,6 +77,8 @@ public static class InspectorLabelTable
         { "CameraRig.maxAimLead",      "镜头前探上限（米）" },
         { "CameraRig.aimFovNarrow",    "瞄准收窄视角（度）" },
         { "CameraRig.aimLeadExtra",    "瞄准前探增量（米）" },
+        { "CameraRig.offset",          "相机构图偏移（米）" },
+        { "CameraRig.snapOnStart",     "进场直接落位（不滑行）" },
 
         // ------------------- ItemData（物品定义基类：所有物品共有）-------------------
         // ⚠️ 登记在**基类**上就够了：`LocalizedInspectorEditor` 查不到本类型时会**逐层往上找基类**，

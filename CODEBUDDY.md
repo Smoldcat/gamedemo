@@ -57,7 +57,7 @@ Unity / 团结引擎 俯视角「搜打撤」单机项目。以下规则对我�
 - **改脚本字段默认值，已有 `.asset` 不会生效** → 必须显式写回资源文件（#10/#14）。改 `WeaponData`/`EnemyConfig`/`GameAssets` 默认值时尤其注意；
 - **`Layers.Obstacle | Layers.Ground` 不是掩码**（#36）：它们是**层索引**（Ground=11 / Obstacle=12），正确写法是用 `Layers.Blocker` / `Layers.BulletMask`，或 `1 << index`（已核对 `Layers.cs`：`ToMask` 内部做 `1 << index`）；
   ⚠️ **2026-10-14 又踩一次**：向 `Physics.Raycast(..., mask, ...)` **直接传 `Layers.Ground`**（索引 11）→ 被当成 "layer 0/1/3" 的掩码 → **静默打不中任何东西**（表现为"传送/刷到准星"无声失败）。**铁律：传给 Physics.* 的位置一律只用 `Layers.Blocker` / `Layers.BulletMask` 这类"已经是掩码"的常量**；
-- **非游玩态光标用 `Confined`，不要用 `Locked`**（#31/#22-a）：`Locked` 下 UGUI 会跳过悬停与拖拽、`inputOverride` 也救不了（已核对 `Crosshair.cs:167/175/181` 与注释）；
+- **非游玩态光标用 `Confined`，不要用 `Locked`**（#31/#22-a）：`Locked` 下 UGUI 会跳过悬停与拖拽、`inputOverride` 也救不了（已核对 `Crosshair.ApplyCursorModeNow` 及其注释；不要记死行号，文件常改）；
 - **读写 shader 属性前先 `HasProperty` 探测**（#2）：团结引擎部分 shader（如 `Unlit/Transparent`）没有 `_Color`，直接 get 会抛错；
 - **布尔参数的语义必须 grep 真实调用点确认**（#22-a）：`SetVisible(bool)` 这类名字会骗人，只测底层状态函数等于没测，要跑真实调用路径；
 - **大段重构用整段替换**（#6）：多次小 Edit 容易把括号配平改坏；替换后读一遍确认结构，再用编译兜底；

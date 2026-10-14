@@ -34,27 +34,27 @@ public abstract class EnemyBehaviour : MonoBehaviour
     /// <summary>
     /// 构建枪模型（远程兵/狙击手共用）：优先敌人配置的 Prefab → 资源总表 → 代码生成的方块枪。
     /// localPos/localScale 可传参自定义代码生成枪的尺寸（如狙击手的长管）。
+    /// ⚠️ 返回类型是 **void**：两个调用点（`EnemyShooterBehaviour` / `EnemySniperBehaviour`）都不需要拿到实例，
+    ///    枪一律挂在 `transform` 下（谁要用再自己查 "Gun" 子节点）—— 原来的返回值在两边都被丢弃（2026-10-15 清理）。
     /// </summary>
-    protected GameObject BuildGunModel(Vector3? localPos = null, Vector3? localScale = null)
+    protected void BuildGunModel(Vector3? localPos = null, Vector3? localScale = null)
     {
         var assets = GameAssets.I;
-        GameObject gun;
         GameObject gunPrefab = (ai.cfg != null && ai.cfg.gunPrefab != null)
             ? ai.cfg.gunPrefab
             : (assets != null ? assets.enemyGunPrefab : null);
 
         if (gunPrefab != null)
         {
-            gun = Instantiate(gunPrefab, transform);
-            gun.name = "Gun";
-            return gun;
+            var fromPrefab = Instantiate(gunPrefab, transform);
+            fromPrefab.name = "Gun";
+            return;
         }
 
-        gun = Effects.CreateMeshObject(PrimitiveType.Cube, "Gun", transform,
-                                       Effects.Shared(new Color(0.15f, 0.15f, 0.17f)));
-        gun.transform.localPosition = localPos ?? new Vector3(0.22f, -0.12f, 0.45f);
-        gun.transform.localScale = localScale ?? new Vector3(0.12f, 0.12f, 0.55f);
-        return gun;
+        var box = Effects.CreateMeshObject(PrimitiveType.Cube, "Gun", transform,
+                                          Effects.Shared(new Color(0.15f, 0.15f, 0.17f)));
+        box.transform.localPosition = localPos ?? new Vector3(0.22f, -0.12f, 0.45f);
+        box.transform.localScale = localScale ?? new Vector3(0.12f, 0.12f, 0.55f);
     }
 
     /// <summary>

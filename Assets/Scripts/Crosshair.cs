@@ -18,7 +18,7 @@ public class Crosshair : MonoBehaviour
 
     // 静态：供 Bullet 命中时调用（不需要拿到实例）
     static float _hitMarkUntil;
-    static float _hitMarkStart;    // 本次标记的出现时刻（算弹入/淡出进度用）
+    static float _hitMarkStart;    // 本次标记的出现时刻（算收缩 / 淡入 / 淡出的进度用）
     static float _hitMarkDur;      // 本次标记的时长（同上；与实例参数同步记录，避免中途改参数导致进度跳变）
     static bool _hitMarkHead;      // 本次命中是否爆头（hitmarker 换色用）
     static bool _hitMarkKill;      // 本次命中是否**致死**（击杀变体：双线）
@@ -177,7 +177,8 @@ public class Crosshair : MonoBehaviour
     Canvas _canvas;
     RectTransform _root;
     Image[] _bars;                 // 0-3 四根线 + 4 中心点
-    Image[] _hitBars;              // 命中标记：4 根斜 45° 线段，打中敌人瞬间短暂显示（与主十字组成米字）
+    Image[] _hitBars;              // 命中标记：8 根（两组各 4 根）斜 45° 线段。普通命中只显示 A 组(0-3)；
+                                   // 击杀时 A/B 两组对称出现 = 每个方向两条平行线（双线）。与主十字组成米字
     Image _reloadRing;             // 换弹圆环（Image.Type.Filled / Radial360）
     Image _spreadRing;             // 散布圈（散布楔形的内切圆投影）
     Texture2D _spreadTex, _reloadTex;   // 运行时生成的圆环贴图（OnDestroy 必须释放，否则每局累积一组）
@@ -477,7 +478,7 @@ public class Crosshair : MonoBehaviour
         if (reloading && _spreadRing != null && _spreadRing.gameObject.activeSelf)
             _spreadRing.gameObject.SetActive(false);
 
-        // 命中标记：每帧定位/配色/动画（普通=4 根单线，击杀=8 根双线，含弹入与淡出）
+        // 命中标记：每帧定位/配色/动画（普通=4 根单线，击杀=8 根双线；含收缩 / 淡入 / 淡出三段）
         // ⚠️ 必须放在 `if (reloading) return;` **之前**：
         //    "打完弹夹最后一发命中 → 自动换弹"时，标记的寿命会横跨整个换弹期；
         //    若放在早退之后，LateUpdate 换弹期间不再更新 → 标记会**卡在屏幕上直到换弹结束**
@@ -583,7 +584,7 @@ public class Crosshair : MonoBehaviour
     public static void HitMark(bool headshot = false, bool killed = false)
     {
         var c = InstanceUI;
-        _hitMarkDur = c != null ? c.hitMarkerDuration : 0.15f;
+        _hitMarkDur = c != null ? c.hitMarkerDuration : 0.18f;   // 兜底值与字段默认（0.18s）保持一致
         _hitMarkStart = Time.time;
         _hitMarkUntil = Time.time + _hitMarkDur;
         _hitMarkHead = headshot;
