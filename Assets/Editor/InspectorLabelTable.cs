@@ -54,6 +54,13 @@ public static class InspectorLabelTable
         { "Crosshair.hitMarkerDuration", "命中标记时长" },
         { "Crosshair.hitMarkerColor",    "命中标记颜色（普通）" },
         { "Crosshair.hitMarkerHeadColor", "命中标记颜色（爆头）" },
+        { "Crosshair.hitMarkerPunchScale", "命中标记起始半径倍数" },
+        { "Crosshair.hitMarkerFadeIn",   "命中标记淡入强度" },
+        { "Crosshair.hitMarkerTimeUp",   "命中标记出现段占比" },
+        { "Crosshair.hitMarkerTimeHold", "命中标记停留段占比" },
+        { "Crosshair.hitMarkerFade",     "命中标记淡出强度" },
+        { "Crosshair.hitMarkerKillThickness", "击杀双线粗细" },
+        { "Crosshair.hitMarkerKillLineGap",   "击杀双线间隙" },
         { "Crosshair.spreadRingAlpha",   "散布圈透明度" },
         { "Crosshair.useVirtualCursor",  "虚拟光标（非游玩态）" },
 

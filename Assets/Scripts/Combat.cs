@@ -110,7 +110,8 @@ public static class Combat
         // 有效射程衰减作用在"这一发的最终伤害"上（爆头再在这个基数上乘倍率 —— 乘法可交换，关键是别只在非爆头那支上算）
         float dmg = DamageAtDistance(shot, traveledDistance);
         h.TakeDamage(headshot ? dmg * shot.headshotMultiplier : dmg, dir, headshot);
-        if (h.team == Health.Team.Enemy) Crosshair.HitMark(headshot);   // 爆头命中 → 播爆头反馈音
+        // 命中反馈：爆头换色/换音；**这一发打死敌人**（!h.alive，TakeDamage 之后取）→ 标记升级为"双线击杀"变体
+        if (h.team == Health.Team.Enemy) Crosshair.HitMark(headshot, !h.alive);
         Effects.Impact(hit.point, shot.color, 0.9f);
 
         // 魔法系统的**被动钩子**（2026-09-28）：玩家打中敌人时，通知玩家身上的被动魔法（例：印记斩杀）。
@@ -140,6 +141,7 @@ public static class Combat
         if (shot.team == Health.Team.Player)
         {
             bool hitAny = false;   // 一个敌人都没炸到（打空）时不该播命中反馈，否则"叮"一声会让人以为打中了
+            bool killedAny = false; // 爆炸打死了至少一个敌人 → 命中标记用"双线击杀"变体
             // 先快照再遍历：伤害可能致死 → EnemyAI.OnDead → All.Remove，直接枚举会抛异常
             _aoeSnapshot.Clear();
             _aoeSnapshot.AddRange(EnemyAI.All);
@@ -154,12 +156,13 @@ public static class Combat
                 {
                     h.TakeDamage(shot.explosionDamage, (e.transform.position - point).normalized);
                     hitAny = true;
+                    if (!h.alive) killedAny = true;   // 这一炸把它打死了（TakeDamage 之后取）
                     // 魔法系统的被动钩子：爆炸 AOE 也算【玩家命中】（例：RPG 炸到也能挂印记）。
                     // 本分支已经在 `shot.team == Player` 里，所以不必再判阵营；`h.alive` 同上。
                     if (h.alive) { var pm2 = PlayerMagic.Instance; if (pm2 != null) pm2.NotifyHitEnemy(h, false); }
                 }
             }
-            if (hitAny) Crosshair.HitMark();
+            if (hitAny) Crosshair.HitMark(false, killedAny);   // 炸死敌人 → 同一套"双线击杀"标记
 
             // **自伤**（2026-10-12 新增，默认关）：手雷等"会炸到自己"的爆炸走这里。
             // ⚠️ 与"敌人阵营炸玩家"共用同一套判据（距离 + 隔墙）—— 规则只有一份实现（见 DamagePlayer）。
