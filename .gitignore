@@ -7,6 +7,8 @@
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
 /[Mm]emoryCaptures/
+# 调试截图输出目录（MCP 截图默认落这里；别入库）
+/[Cc]aptures/
 /[Rr]ecordings/
 /[Aa]rtifacts/
 

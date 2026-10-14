@@ -143,9 +143,8 @@ public class AmmoSelector : MonoBehaviour
         if (!_selectorOpen) return false;
         _selectorCloseAt = Time.time + SelectorTimeout();   // 有操作就续命
         _scrollAccum += dy;
-        bool moved = false;
-        while (_scrollAccum >= 1f) { _scrollAccum -= 1f; StepSelection(+1); moved = true; }
-        while (_scrollAccum <= -1f) { _scrollAccum += 1f; StepSelection(-1); moved = true; }
+        while (_scrollAccum >= 1f) { _scrollAccum -= 1f; StepSelection(+1); }
+        while (_scrollAccum <= -1f) { _scrollAccum += 1f; StepSelection(-1); }
         return true;
     }
 

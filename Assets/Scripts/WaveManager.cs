@@ -114,6 +114,19 @@ public class WaveManager : MonoBehaviour
     /// <summary>距离下一波的秒数（仅清场阶段有效，其余阶段返回 0）</summary>
     public float ClearingCountdown => _phase == WavePhase.Clearing ? Mathf.Max(_phaseTimer, 0f) : 0f;
 
+    /// <summary>[DEBUG-ONLY] 调试面板用：把"清场倒计时"直接归零 → 下一次 `Update` 即进入下一波。
+    /// **只在 Clearing 阶段有效**（Fighting 阶段必须先把场上敌人清掉，否则会打乱状态机）→ 返回是否成功。
+    /// 中性语义：等价于"立刻结束等待"，不新增状态机分支。发布前清理见 `Assets/Debug/README.md` 登记表。</summary>
+    public bool ForceNextWave()
+    {
+        if (_phase != WavePhase.Clearing) return false;
+        _phaseTimer = 0f;
+        return true;
+    }
+
+    /// <summary>当前是否处于"清场倒计时"阶段（调试面板据此决定按钮可不可用）。</summary>
+    public bool CanForceNextWave => _phase == WavePhase.Clearing;
+
     void Awake()
     {
         if (_instance != null && _instance != this)

@@ -27,6 +27,7 @@ public class Health : MonoBehaviour
     Color[] _baseColors;
     MaterialPropertyBlock _mpb;
     float _flashUntil;
+    bool _invulnerable;   // 免疫（见 SetInvulnerable / [DEBUG-ONLY] 登记表）
 
     void Awake()
     {
@@ -83,9 +84,20 @@ public class Health : MonoBehaviour
     /// creditKill=false 表示"这次死亡不算被击杀"（自爆兵自爆），击杀反馈不显示它。
     /// 参数带默认值 → 现有调用点（爆炸 AOE / 近战 / 自爆 / 玩家受击）都不用改。
     /// </summary>
+    // ==================== 免疫（中性能力，当前由调试面板使用） ====================
+
+    /// <summary>当前是否处于免疫（掉血被完全忽略）。</summary>
+    public bool Invulnerable => _invulnerable;
+
+    /// <summary>[DEBUG-ONLY] 调试面板用：开启后 `TakeDamage` 直接返回 —— **完全免疫**，
+    /// 能挡住"单次伤害 ≥ 满血"的一击必杀（"每帧把 hp 拉满"那种外部近似方案挡不住）。
+    /// 中性命名与语义：将来若要做"出生保护 / 无敌帧"，可直接复用本方法并删掉本行标记。
+    /// 发布前清理见 `Assets/Debug/README.md` 的登记表。</summary>
+    public void SetInvulnerable(bool on) => _invulnerable = on;
+
     public void TakeDamage(float dmg, Vector3 fromDir, bool headshot = false, bool creditKill = true)
     {
-        if (!alive) return;
+        if (!alive || _invulnerable) return;
 
         // 记录本次伤害的属性（每次受伤都更新 → "最后致命一击"的属性就是它）：
         // 击杀反馈靠这两个字段决定用哪套图标、以及要不要显示（自杀 = 不显示）。
