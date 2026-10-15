@@ -534,15 +534,20 @@ public class HUD : MonoBehaviour
             // 没跑过工具 / 把开关关掉时 `_hpFillFilled=false` → 自动退回旧的"改宽度"写法（逐位等于老样子）。
             if (_hpFillFilled) hpFill.fillAmount = _hpShown;
             else hpFill.rectTransform.sizeDelta = new Vector2(_hpFullSize.x * _hpShown, _hpFullSize.y);
-            hpFill.color = Color.Lerp(new Color(0.9f, 0.2f, 0.15f), new Color(0.2f, 0.85f, 0.3f), _hpShown);
+            // ⚠️ 颜色**变了才写**：`fillAmount` 每帧必须写（是动画），但颜色在血量稳定后是常量，
+            //    每帧无条件写会让整块 HUD 画布标脏重建（2026-10-15 审计）。
+            var hpCol = Color.Lerp(new Color(0.9f, 0.2f, 0.15f), new Color(0.2f, 0.85f, 0.3f), _hpShown);
+            if (hpFill.color != hpCol) hpFill.color = hpCol;
         }
         // 低血量：血条描边脉动到警示色（与受伤红晕同一条时间线；读的是"真实血量比例"而不是平滑值）
         if (_hpBarFrame != null)
         {
             float low = Mathf.Clamp01((0.35f - ratio) / 0.35f);
-            _hpBarFrame.color = low > 0f
+            var frameCol = low > 0f
                 ? Color.Lerp(_styleFrame, _styleLowHp, low * (0.6f + 0.4f * Mathf.Sin(Time.time * 5f)))
                 : _styleFrame;
+            // 常态（血量 > 35%）颜色恒定 → 只写一次，不再每帧标脏
+            if (_hpBarFrame.color != frameCol) _hpBarFrame.color = frameCol;
         }
         int hpInt = health != null ? Mathf.RoundToInt(health.hp) : 0;
         int maxHpInt = health != null ? Mathf.RoundToInt(health.maxHp) : 0;
@@ -595,7 +600,9 @@ public class HUD : MonoBehaviour
                                       + (tierMark.Length > 0 ? "  " + tierMark : ""));
             }
             // 空手色走「次要文字色」（新风格下与卡片配色同族；未启用风格时 = 原来的灰 (0.7,0.7,0.7)）
-            weaponText.color = hasWeapon ? pc.weapon.pickupColor : _styleDim;
+            // ⚠️ 颜色只在换武器时变 → 变了才写（否则每帧标脏整块 HUD 画布；2026-10-15 审计）
+            var wCol = hasWeapon ? pc.weapon.pickupColor : _styleDim;
+            if (weaponText.color != wCol) weaponText.color = wCol;
         }
 
         // 模式（只在切换时改文本）

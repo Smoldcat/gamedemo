@@ -8297,8 +8297,60 @@ PrefabInstance:
       value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: size
+      value: 18
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerFade
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerPunch
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
       propertyPath: crosshairSprite
       value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerLength
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerRadius
+      value: 18
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: spreadRingAlpha
+      value: 0.15
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerDuration
+      value: 0.45
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerThickness
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerPunchScale
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerHeadColor.b
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerHeadColor.g
+      value: 0.084967315
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerHeadColor.r
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4297724518267972774, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: hitMarkerKillLineGap
+      value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: 7576719374155413115, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
       propertyPath: m_Layer

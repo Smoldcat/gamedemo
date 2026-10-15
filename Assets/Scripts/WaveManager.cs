@@ -76,6 +76,7 @@ public class WaveManager : MonoBehaviour
     int _pendingSpawns;
     float _nextSpawnAt;
     float _idleTimer;    // 敌人长时间不交战计时（找敌僵局兜底）
+    readonly List<EnemyAI> _idleAlive = new List<EnemyAI>(32);   // 僵局兜底用的"活敌人"缓存（每帧复用，零分配）
 
     /// <summary>血包被拾取后待重生的时间点队列（拾取后 20 秒在地图随机位置再生成一个）</summary>
     readonly List<float> _medkitRespawnAt = new List<float>();
@@ -293,9 +294,20 @@ public class WaveManager : MonoBehaviour
                 // 找敌僵局兜底：有敌人存活但 18 秒无人交战（看不见玩家也没挨打）
                 if (GameState.AliveEnemies > 0)
                 {
+                    // ⚠️ **只遍历一次** `EnemyAI.All`：同一趟同时求"有没有人在交战"和"活敌人清单"。
+                    //    原来兜底触发时又遍历一遍 All、而且逐个 `GetComponent<Health>()`（2026-10-15 审计）。
+                    //    行为不变：清单里的对象与原来的"h != null && h.alive"判定一致（用缓存的 HealthRef，不再查组件）。
                     bool anyCombat = false;
-                    foreach (var ai in EnemyAI.All)
-                        if (ai != null && ai.InCombat) { anyCombat = true; break; }   // 判空与本文件其它遍历保持一致
+                    _idleAlive.Clear();
+                    var all = EnemyAI.All;
+                    for (int i = 0; i < all.Count; i++)
+                    {
+                        var ai = all[i];
+                        if (ai == null) continue;              // 列表里可能残留"假 null"（2026-10-10 补）
+                        if (ai.InCombat) anyCombat = true;
+                        var hp = ai.HealthRef;
+                        if (hp != null && hp.alive) _idleAlive.Add(ai);
+                    }
 
                     if (!anyCombat)
                     {
@@ -304,16 +316,12 @@ public class WaveManager : MonoBehaviour
                         {
                             _idleTimer = 0f;
                             int moved = 0;
-                            foreach (var ai in EnemyAI.All)
+                            for (int i = 0; i < _idleAlive.Count; i++)
                             {
-                                if (ai == null) continue;              // 列表里可能残留"假 null"（2026-10-10 补）
-                                var h = ai.GetComponent<Health>();
-                                if (h != null && h.alive)
-                                {
-                                    ai.transform.position = SpawnPosition.NearPlayer(playerTransform);
-                                    ai.Alert();
-                                    moved++;
-                                }
+                                var ai = _idleAlive[i];
+                                ai.transform.position = SpawnPosition.NearPlayer(playerTransform);
+                                ai.Alert();
+                                moved++;
                             }
                             if (moved > 0)
                             {

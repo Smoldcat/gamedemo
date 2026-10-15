@@ -94,16 +94,23 @@ public static class InteractFocus
             //    必须先转成 UnityEngine.Object，才能用它的重载比较。
             if (it as UnityEngine.Object == null) { _items.RemoveAt(i); i--; continue; }
 
-            string label = it.InteractLabel;
-            if (string.IsNullOrEmpty(label)) continue;        // 空箱子勾了"不提示"→ 本次不参与
-
             var anchor = it.InteractAnchor;
             if (anchor == null) continue;
 
+            // ⚠️ 顺序：**先算距离、再看是否更近，最后才取标签/范围**。
+            //    `InteractLabel` 在拾取物里是**字符串拼接**（每帧 × 地上物数量 = 一大堆 GC 垃圾），
+            //    原来在距离剔除之前就取 → 地上东西一多每帧都在分配（2026-10-15 审计）。
+            //    行为不变：标签为空的候选仍然不参与，只是不再为"明显更远的候选"白白拼字符串。
             float dSq = (anchor.position - p).sqrMagnitude;
+            if (dSq >= bestSq) continue;                      // 不是更近的候选 → 连标签和范围都不用取
+
             float range = Mathf.Max(0.1f, it.InteractRange);
             if (dSq > range * range) continue;
-            if (dSq < bestSq) { bestSq = dSq; best = it; }
+
+            string label = it.InteractLabel;
+            if (string.IsNullOrEmpty(label)) continue;        // 空箱子勾了"不提示"→ 本次不参与
+
+            bestSq = dSq; best = it;
         }
 
         Current = best;

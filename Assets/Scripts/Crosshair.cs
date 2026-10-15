@@ -466,8 +466,10 @@ public class Crosshair : MonoBehaviour
             if (reloading)
             {
                 _reloadRing.fillAmount = pc.ReloadProgress01;
+                // 颜色只跟武器走 → 变了才写（否则换弹期间每帧给这块画布标脏；2026-10-15 审计）
                 var c = pc.weapon.pickupColor;
-                _reloadRing.color = new Color(c.r, c.g, c.b, 0.95f);
+                var ringCol = new Color(c.r, c.g, c.b, 0.95f);
+                if (_reloadRing.color != ringCol) _reloadRing.color = ringCol;
             }
         }
         if (_bars != null)
@@ -508,9 +510,11 @@ public class Crosshair : MonoBehaviour
         else if (_aimState == PlayerController.AimState.Body) col = colorBody;
         else col = colorIdle;
 
+        // ⚠️ 主十字的配色约 0.1s 才可能变一次（上面已节流判定）→ **变了才写**，
+        //    否则每帧给 5 个 Image 写色 = 每帧标脏准星画布（2026-10-15 审计）
         if (_bars != null)
             foreach (var b in _bars)
-                if (b != null) b.color = col;
+                if (b != null && b.color != col) b.color = col;
 
         UpdateSpreadRing(pc, col);   // 散布圈 + 十字扩张（随武器散布角与瞄准距离）
     }

@@ -51,6 +51,7 @@ public class MagicProjectile : MonoBehaviour
     /// <summary>锁定的目标被打死了（不是本球命中的）。
     /// true → 不再重新索敌（免得球飞到一半掉头去追别人），朝 `_lastTargetPos` 飞完就消散。</summary>
     bool _targetDied;
+    Health _targetHealth;     // 缓存追踪目标的血量组件（避免 homing 期间每帧 GetComponent；目标换了/销毁了会自动重取）
 
     /// <summary>已判定消散。⚠️ 用显式标志而不是 `this == null`：Unity 的 `Destroy` 是**延迟**到帧末的，
     /// 同一帧里 `this == null` 还不会成立 —— 那种写法看起来像守卫，其实什么都没挡。</summary>
@@ -190,7 +191,11 @@ public class MagicProjectile : MonoBehaviour
         // ④ 目标还活着吗（活着 → 一直更新它的位置；死了 → 记住死亡瞬间的位置）
         if (_d.homing && _target != null)
         {
-            var th = _target.GetComponent<Health>();
+            // ⚠️ 缓存目标的 Health：homing 期间**每帧** GetComponent 是白白开销（2026-10-15 审计）。
+            //    目标换人 / 组件被销毁（Unity 假 null 会命中 `== null`）时自动重取 → 行为不变。
+            if (_targetHealth == null || _targetHealth.transform != _target)
+                _targetHealth = _target.GetComponent<Health>();
+            var th = _targetHealth;
             if (th != null && th.alive)
             {
                 _lastTargetPos = _target.transform.position;

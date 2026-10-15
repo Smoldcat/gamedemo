@@ -46,6 +46,7 @@ public class EnemyAI : MonoBehaviour
 
     Rigidbody _rb;
     Health _hp;
+    Health _playerHealth;   // 玩家血量组件缓存（近战每次攻击都要用；原来每次 GetComponent）
     Transform _player;
     int _wpIndex;
     float _lastSeenTime = -999f;   // -999：开局不进入追击状态，必须先看见玩家
@@ -254,7 +255,9 @@ public class EnemyAI : MonoBehaviour
     /// <summary>直接攻击玩家（近战行为用；远程行为走子弹）</summary>
     public void AttackPlayer(float dmg)
     {
-        var hp = _player.GetComponent<Health>();
+        // ⚠️ 玩家血量组件缓存一次（原来每次攻击都 GetComponent；玩家换人/销毁时自动重取，行为不变）—— 2026-10-15 审计
+        if (_playerHealth == null) _playerHealth = _player.GetComponent<Health>();
+        var hp = _playerHealth;
         if (hp != null && hp.alive)
         {
             hp.TakeDamage(dmg, (_player.position - transform.position).normalized);
