@@ -15,8 +15,10 @@ using UnityEngine;
 ///   · 血包 → 本类 `MedkitSprite`（红十字）
 ///   · 其它 → 程序生成的**菱形占位图**（以后有正式美术，就在定义卡上拖 `icon` 即可，不用改代码）
 ///
-/// ⚠️ 占位图是本类**自己创建的运行时 Sprite**，必须由 `StaticReset` → `ResetStatics` 成对销毁（§4 #25）。
-/// ⚠️ 武器 / 血包那两张图的**生命周期归 `BackpackPanel.ResetStatics`** —— 本类**不要**去销毁它们。
+/// ⚠️ **本类自己创建的所有运行时 Sprite**（占位图 / 弹药剪影 / 弹药合成图 / 投影图 / 血包十字 /
+///    武器形状图标）一律由本类 `ResetStatics` 成对销毁（§4 #25）；调用方**不要**去 Destroy 它们。
+///    （2026-10-15：血包十字与武器形状图标从 `BackpackPanel` 搬进来，**生命周期也一起搬来了** ——
+///     类头早先那句"这两张图归 BackpackPanel 销毁、本类不要碰"已作废，照它做会漏销纹理。）
 /// </summary>
 public static class ItemVisuals
 {

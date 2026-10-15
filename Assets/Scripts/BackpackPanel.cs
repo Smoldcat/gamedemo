@@ -33,7 +33,6 @@ using UnityEngine.UI;
 /// </summary>
 public class BackpackPanel : MonoBehaviour
 {
-    // ---- 武器图标类型（程序生成形状；后期可换成真实 PNG）----
     static BackpackPanel _inst;
     Canvas _canvas;
     PlayerController _pc;
@@ -49,12 +48,13 @@ public class BackpackPanel : MonoBehaviour
     const float GridW = InvGridUI.GridW, GridH = 4 * InvGridUI.CellH + 3 * InvGridUI.CellGap;  // 库存网格整块（5 列 × 4 行可视区）
     const float CellW = InvGridUI.CellW, CellH = InvGridUI.CellH, CellGap = InvGridUI.CellGap;   // 统一度量见 InvGridUI（别在这改数值）
     const float BarW = 300f, BarH = 14f;     // 底部占用条
-    // Tooltip（悬停武器属性）尺寸：⚠️ **两条路径必须一致** —— 这里只是"代码生成"兜底路径用的值，
-    // 而**实际生效的是 prefab 里 `Backpack/Tooltip`（+ 子节点 `/Txt`）的 sizeDelta**（背包走 prefab 双轨，见类注释；
-    // `TryBuildFromPrefab` 刻意不改预置节点的布局）。**加/删信息行时两处都要改**（每行约 20px）。
-    // 📌 **public**（2026-09-25 起）：**箱子面板**是纯代码 UI、没有 prefab 双轨，它直接取这两个值建自己的 tooltip
-    //    → 箱子与背包的 tooltip 尺寸永远一致（改这里两处一起变；同理改上面的行数注释）。
-    // `TipW / TipH`（tooltip 基准尺寸）已于 2026-10-15 搬到 `UIUtil`（→ `UIUtil.TipW / UIUtil.TipH`）。
+    // Tooltip（悬停武器属性）尺寸：**定义已搬到 `UIUtil.TipW / TipH`**（2026-10-15，与 tooltip 摆位同处）。
+    // ⚠️ 三条约束搬走后依然成立（改 `UIUtil` 那两个常量时照看）：
+    //  ① **两条路径必须一致**：代码生成兜底用 `UIUtil.TipW/TipH`，而**实际生效的是 prefab 里
+    //     `Backpack/Tooltip`（+ 子节点 `/Txt`）的 sizeDelta**（`TryBuildFromPrefab` 刻意不改预置节点布局）
+    //     → **加/删信息行时两处都要改**（每行约 20px）；
+    //  ② **箱子面板**是纯代码 UI、没有 prefab 双轨，它直接取这两个值建自己的 tooltip → 箱子与背包永远一致；
+    //  ③ 商店那份比它高一档（多一行「价格」）：`ShopUI.TipH = UIUtil.TipH + 24f`。
 
     // ---- 快捷槽元素 ----
     RectTransform[] _slotCell = new RectTransform[SlotCount];

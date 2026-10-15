@@ -743,8 +743,9 @@ public class HUD : MonoBehaviour
     //    键位与数量 = 拾取气泡那对「按键圆标」配色 —— 全部读**同一份来源**，
     //    所以快捷栏和背包 / 拾取气泡**永远一致**。→ 想改颜色请改 `GameAssets`（Inspector 中文「背包」组），
     //    **别在快捷栏节点上调色**（会被覆盖）。
-    // ⚠️ 图标与槽框 Sprite 复用 `BackpackPanel` 那一套（同一份实现，见那边的 internal 注释）；
-    //    它们的生命周期归 `BackpackPanel.ResetStatics` → **HUD 不要 Destroy 它们**（§4 #25）。
+    // ⚠️ 槽框 / 底色 Sprite 来自 `UIUtil`（`FrameSprite` / `SlotFrameSprite` / `CellColor` …），
+    //    图标来自 `ItemVisuals`（`WeaponIconSprite` / `MedkitSprite`）—— 都是全项目**共用一份实现**；
+    //    生命周期归它们各自的 `ResetStatics`（`UIUtil` / `ItemVisuals`）→ **HUD 不要 Destroy 它们**（§4 #25）。
     // ⚠️ 槽位顺序固定：前 3 格 ↔ `PlayerBackpack.slots[0..2]`（键盘 1/2/3），最后 1 格 = 血包（键盘 Q）。
 
     // 下面这些像素值**只给「代码生成」兜底路径**用（场景预置时以节点为准）。
