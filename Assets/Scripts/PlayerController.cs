@@ -233,6 +233,13 @@ public class PlayerController : MonoBehaviour
     /// 当前准星指向的世界坐标（供相机前探使用）
     public Vector3 AimPoint => _aimPoint;
 
+    /// <summary>枪口的世界坐标（**唯一实现**）：有 `gunTip` 就用它，否则退化成"玩家位置 + 前方 0.6m"。
+    /// ⚠️ 原先 `Fire()` 与 `GetAimState()` **各抄了一份完全相同的表达式**（2026-10-15 收敛到这里）——
+    ///    以后要改枪口口径（例如多枪管 / 挂点改名）只改这一处。
+    /// ⚠️ 需要"子弹飞行平面"高度时**仍要自己压平**：`Fire()` 里有 `muzzle.y = GameConst.EntityPlaneY`，
+    ///    本属性**不做**压平（它同时被用于取 XZ 的场合，压平会让 y 失去意义）。</summary>
+    public Vector3 MuzzlePos => gunTip != null ? gunTip.position : transform.position + transform.forward * 0.6f;
+
     /// <summary>本帧的**弹道方向**（已压平 y、已归一化）—— **唯一实现**：
     /// 朝向、开火（`Fire`）、命中判定（`GetAimState`）、激光（`LaserBeam`）全部读这里，禁止各自复刻。
     ///
@@ -1040,7 +1047,7 @@ public class PlayerController : MonoBehaviour
         }
         _recovering = false;       // 射击期间不回正（松手且鼠标未动时才开始）
 
-        Vector3 muzzle = gunTip != null ? gunTip.position : transform.position + transform.forward * 0.6f;
+        Vector3 muzzle = MuzzlePos;   // 唯一实现（2026-10-15 收敛；原来 Fire 与 GetAimState 各抄一份）
         muzzle.y = GameConst.EntityPlaneY;   // 压平到子弹飞行平面
 
         // 爆头判定：**开火那一瞬间**做一次，整发有效（霰弹的多颗弹丸共享这一个结果）。
@@ -1129,7 +1136,7 @@ public class PlayerController : MonoBehaviour
         if (cam == null) return AimState.None;
 
         // 弹道基准：唯一实现在 `BulletDir`（与 Fire() 同一份 —— 以前这里复刻了一遍、靠注释提醒"必须保持一致"）。
-        Vector3 muzzle = gunTip != null ? gunTip.position : transform.position + transform.forward * 0.6f;
+        Vector3 muzzle = MuzzlePos;   // 唯一实现（2026-10-15 收敛；原来 Fire 与 GetAimState 各抄一份）
         Vector3 bulletDir = BulletDir;
         bulletDir.y = 0f;
         if (bulletDir.sqrMagnitude < 0.0001f) bulletDir = Vector3.forward; else bulletDir.Normalize();

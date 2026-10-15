@@ -189,7 +189,7 @@ public static class VirtualCursor
         // 否则本帧的射线会用上一帧的位置（1 帧延迟，快速拖拽时能感觉出来）
         _canvas.gameObject.AddComponent<VirtualCursorDriver>();
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     /// <summary>把当前虚拟位置交给 EventSystem（UGUI 的射线才会跟着光标走）。

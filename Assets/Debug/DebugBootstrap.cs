@@ -28,6 +28,10 @@ public static class DebugBootstrap
         var panel = go.AddComponent<DebugPanel>();
         panel.hud = hud;        // 详情面板里的"常驻条开关"要用它（显式注入，避免静态单例）
 
+        // 可视化层（视野扇形 / 已发现高亮 / 判定圈）：挂在同一个常驻对象下，开关由面板的「视觉」页写
+        var overlay = go.AddComponent<DebugOverlay>();
+        panel.overlay = overlay;
+
         // 就绪日志：既是给用户的提示，也是"按键没反应"时最快的诊断锚点
         //（没看到这条 = 调试工具没建起来；看到了但按键没日志 = 输入没到游戏窗口/被输入法吞了）
         Debug.Log("[调试工具] 已就绪：按 ~ 或 F1 开关调试面板（左上角是常驻实时条）");

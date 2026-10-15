@@ -244,7 +244,7 @@ public class ShopPanel : MonoBehaviour
             btn.onClick.AddListener(() => OnCellClick(idx));
         }
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     void OnCellClick(int i)
@@ -352,6 +352,6 @@ public class ShopPanel : MonoBehaviour
 
         ShopUI.CreateTooltip(_root, out _tipGo, out _tipRect, out _tipText);
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 }

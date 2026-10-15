@@ -143,7 +143,7 @@ public static class Effects
         {
             go = CreateMeshObject(PrimitiveType.Quad, "BlastRing", null, RingMaterial());
             go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // 躺平在地面上
-            SetFxLayer(go);
+            Layers.SetRecursively(go, Layers.FX);
             var fx0 = go.AddComponent<TimedEffect>();
             fx0.poolKey = BlastRingPoolKey;
             fx0.fadeOut = true;
@@ -165,14 +165,9 @@ public static class Effects
         if (r != null) r.SetPropertyBlock(null);
     }
 
-    /// <summary>把特效物体（含子物体）归入 FX 层。
-    /// ⚠️ 特效的碰撞体都会在创建时移除，所以分层**不影响物理**；分层的意义是"语义明确"——
-    /// 将来若给特效加碰撞体/触发器，子弹（BulletMask）和视线（SightMask）都不会误伤它。</summary>
-    static void SetFxLayer(GameObject go)
-    {
-        if (go == null || Layers.FX < 0) return;
-        foreach (var t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = Layers.FX;
-    }
+    // 特效归层已收敛到 `Layers.SetRecursively`（2026-10-15）：本类原来那份 `SetFxLayer` 已删。
+    // ⚠️ 特效的碰撞体都会在创建时移除，所以分层**不影响物理**；分层的意义是"语义明确"——
+    // 将来若给特效加碰撞体/触发器，子弹（BulletMask）和视线（SightMask）都不会误伤它。
 
     /// <summary>特效池键前缀：与「资源表留空」时程序化兜底用的 "Impact"/"MuzzleFlash" 池键区分开</summary>
     const string FxPoolPrefix = "FX/";
@@ -260,7 +255,7 @@ public static class Effects
         {
             var once = Object.Instantiate(prefab, pos, rot);
             once.name = "FX_" + prefab.name;
-            SetFxLayer(once);
+            Layers.SetRecursively(once, Layers.FX);
             Object.Destroy(once, lifetime + 0.5f);
             return;
         }
@@ -272,7 +267,7 @@ public static class Effects
             // 模板只建这一次，之后全靠池复用
             go = Object.Instantiate(prefab);
             go.name = "FX_" + prefab.name;
-            SetFxLayer(go);
+            Layers.SetRecursively(go, Layers.FX);
             // 防御：若预制体在磁盘上被保存成"未激活"，实例化后特效会看不见，
             // 而且 ObjectPool.Release 的"已失活即视为已归还"守卫会把它永久留在池外 → 这里显式激活。
             go.SetActive(true);
@@ -327,7 +322,7 @@ public static class Effects
         if (go == null)
         {
             go = CreateMeshObject(PrimitiveType.Sphere, "Impact", null, null);
-            SetFxLayer(go);
+            Layers.SetRecursively(go, Layers.FX);
             var fx = go.AddComponent<TimedEffect>();
             fx.poolKey = "Impact";
         }
@@ -361,7 +356,7 @@ public static class Effects
         if (go == null)
         {
             go = CreateMeshObject(PrimitiveType.Sphere, "MuzzleFlash", null, null);
-            SetFxLayer(go);
+            Layers.SetRecursively(go, Layers.FX);
             var fx0 = go.AddComponent<TimedEffect>();
             fx0.poolKey = "MuzzleFlash";
         }
@@ -378,7 +373,7 @@ public static class Effects
 
         var lightGo = new GameObject("MuzzleLight");
         lightGo.transform.position = pos;
-        SetFxLayer(lightGo);
+        Layers.SetRecursively(lightGo, Layers.FX);
         var li = lightGo.AddComponent<Light>();
         li.type = LightType.Point;
         li.color = new Color(1f, 0.85f, 0.4f);
@@ -407,7 +402,7 @@ public static class Effects
         }
 
         var go = CreateMeshObject(PrimitiveType.Quad, "Decal", null, null);
-        SetFxLayer(go);
+        Layers.SetRecursively(go, Layers.FX);
         go.transform.position = groundPos;
         go.transform.rotation = Quaternion.Euler(90f, yaw, 0f);
         float s = Random.Range(0.12f, 0.22f);

@@ -37,13 +37,8 @@ public class HealthPack : MonoBehaviour, IInteractable
 
     float _baseY, _t;
 
-    /// <summary>归入 Pickup 层。⚠️ 血包当前**没有碰撞体**，所以分层不影响物理；
-    /// 分层的意义是"语义明确"——将来若给它加碰撞体/触发器，子弹和视线不会误伤它。</summary>
-    static void SetPickupLayer(GameObject root)
-    {
-        if (root == null || Layers.Pickup < 0) return;
-        foreach (var t in root.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = Layers.Pickup;
-    }
+    // 归入 Pickup 层（走统一的 `Layers.SetRecursively`，2026-10-15 收敛）：⚠️ 血包当前**没有碰撞体**，
+    // 所以分层不影响物理；分层的意义是"语义明确"——将来若给它加碰撞体/触发器，子弹和视线不会误伤它。
 
     void Awake()
     {
@@ -92,7 +87,7 @@ public class HealthPack : MonoBehaviour, IInteractable
         var p = root.AddComponent<HealthPack>();
         p._baseY = pos.y;
         p._t = Random.Range(0f, 6f);
-        SetPickupLayer(root);
+        Layers.SetRecursively(root, Layers.Pickup);
         return p;
     }
 

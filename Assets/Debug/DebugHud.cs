@@ -141,7 +141,7 @@ public class DebugHud : MonoBehaviour
         trt.anchoredPosition = new Vector2(16f, -14f);
         _text.lineSpacing = 1.1f;
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 }
 #endif

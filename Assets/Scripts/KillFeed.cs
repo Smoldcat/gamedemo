@@ -206,7 +206,7 @@ public static class KillFeed
         _root.anchoredPosition = new Vector2(0f, Asset != null ? Mathf.Max(Asset.killFeedBottomOffset, 0f) : BottomOffset);
         _root.sizeDelta = Vector2.zero;
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     static KillFeedItem CreateItem()
@@ -245,7 +245,7 @@ public static class KillFeed
         var item = go.AddComponent<KillFeedItem>();
         item.Bind(icon, name, cg, iconRt, nameRt, rt);
 
-        UIUtil.SetLayerRecursively(go, UIUtil.UILayer);
+        Layers.SetRecursively(go, UIUtil.UILayer);
         return item;
     }
 

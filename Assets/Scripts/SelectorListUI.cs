@@ -106,7 +106,7 @@ public abstract class SelectorListUI<T> where T : ItemData
         _root.anchorMax = new Vector2(0.5f, 0f);
         _root.pivot = new Vector2(0.5f, 0f);
         _root.anchoredPosition = new Vector2(0f, 96f);
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     void EnsureRows(int n)

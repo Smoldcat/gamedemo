@@ -71,72 +71,34 @@ public class ThrowablePickup : MonoBehaviour, IInteractable
             var model = Instantiate(data.pickupModelPrefab, transform);
             model.name = "Model";
             model.transform.localPosition = Vector3.zero;
-            SetLayers(Layers.Pickup);
+            Layers.SetRecursively(gameObject, Layers.Pickup);
             return;
         }
 
-        // ---- 路径 ②：没模型 → 图标 billboard + 脚下半影 ----
-        var iconGo = new GameObject("Icon");
-        iconGo.transform.SetParent(transform, false);
-        _sr = iconGo.AddComponent<SpriteRenderer>();
-        _sr.sprite = ItemVisuals.IconOf(data);
-        _sr.color = ItemVisuals.ColorOf(data);
-        _sr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        _sr.receiveShadows = false;
-        ApplyIconScale();
-
-        var shadowGo = new GameObject("Shadow");
-        shadowGo.transform.SetParent(transform, false);
-        _shadowSr = shadowGo.AddComponent<SpriteRenderer>();
-        _shadowSr.sprite = ItemVisuals.ShadowSprite();
-        _shadowSr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        _shadowSr.receiveShadows = false;
-        _shadowSr.sortingOrder = -1;
-        shadowGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        shadowGo.transform.localPosition = new Vector3(0f, 0.008f, 0f);
-        ApplyShadowScale();
+        // ---- 路径 ②：没模型 → 图标 billboard + 脚下半影（**共用实现**见 `PickupVisual`）----
+        _sr = PickupVisual.CreateIcon(transform, data, IconSize);
+        _shadowSr = PickupVisual.CreateShadow(transform, ShadowSize, ShadowAlpha);
 
         PlaceIcon(0f);
-        SetLayers(Layers.Pickup);
+        Layers.SetRecursively(gameObject, Layers.Pickup);
     }
 
-    void ApplyIconScale()
-    {
-        if (_sr == null) return;
-        float baseSize = _sr.sprite != null ? Mathf.Max(0.0001f, _sr.sprite.bounds.size.x) : 1f;
-        float k = IconSize / baseSize;
-        _sr.transform.localScale = new Vector3(k, k, 1f);
-    }
+    void ApplyIconScale() => PickupVisual.FitScale(_sr, IconSize);
 
-    void ApplyShadowScale()
-    {
-        if (_shadowSr == null) return;
-        float baseSize = _shadowSr.sprite != null ? Mathf.Max(0.0001f, _shadowSr.sprite.bounds.size.x) : 1f;
-        float k = ShadowSize / baseSize;
-        _shadowSr.transform.localScale = new Vector3(k, k, 1f);
-        _shadowSr.color = new Color(0f, 0f, 0f, Mathf.Clamp01(ShadowAlpha));
-    }
+    void ApplyShadowScale() => PickupVisual.ApplyShadow(_shadowSr, ShadowSize, ShadowAlpha);
 
     void LateUpdate()
     {
-        var cam = CameraCache.Main;
-        if (cam != null && _sr != null)
-            _sr.transform.rotation = cam.transform.rotation;
+        PickupVisual.Billboard(_sr);   // 朝相机（billboard）—— 共用实现
 
         _t += Time.deltaTime;
         PlaceIcon(Mathf.Sin(_t * 2.2f) * BobAmplitude);
     }
 
-    void PlaceIcon(float bob)
-    {
-        if (_sr != null) _sr.transform.localPosition = new Vector3(0f, HoverHeight + bob, 0f);
-    }
+    /// <summary>把图标放到"离地高 + 浮动量"的位置（共用实现；浮动节奏由本类给）。</summary>
+    void PlaceIcon(float bob) => PickupVisual.PlaceIcon(_sr, HoverHeight, bob);
 
-    void SetLayers(int layer)
-    {
-        if (layer < 0) return;
-        foreach (var t in GetComponentsInChildren<Transform>(true)) t.gameObject.layer = layer;
-    }
+    // 设层已收敛到 `Layers.SetRecursively`（2026-10-15）：本类原来那份 `SetLayers` 已删。
 
     // ==================== IInteractable ====================
 

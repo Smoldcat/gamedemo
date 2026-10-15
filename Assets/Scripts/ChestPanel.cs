@@ -205,7 +205,7 @@ public class ChestPanel : MonoBehaviour
         if (_title != null)
             _title.text = _chest != null ? (_chest.promptLabel + "   " + used + "/" + slots) : "";
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     void OnCellClick(int i)
@@ -389,7 +389,7 @@ public class ChestPanel : MonoBehaviour
         _tipText = tipTxt;
         _tipGo.SetActive(false);
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     /// <summary>建一个格子：边框（与背包库存格同一个 sprite / 颜色）+ 点击区域。内容由 Refresh 填。</summary>

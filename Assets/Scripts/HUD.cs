@@ -287,7 +287,7 @@ public class HUD : MonoBehaviour
 
         // 统一 UI 层：HUD 里运行时 new 出来的红晕 / 受伤箭头默认落在 Default 层，
         // 这里把整块 HUD 子树设回 UI 层，保证"所有 UI 都在 UI 层"（与另外三个 Canvas 一致）。
-        if (_canvas != null) UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        if (_canvas != null) Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
 
         // 绑定重启按钮
         if (restartBtn != null) restartBtn.onClick.AddListener(Restart);

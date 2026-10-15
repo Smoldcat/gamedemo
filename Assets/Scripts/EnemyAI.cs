@@ -61,6 +61,12 @@ public class EnemyAI : MonoBehaviour
     /// <summary>是否处于交战状态（看见玩家，或近期挨过打）。WaveManager 的僵局兜底用它判断。</summary>
     public bool InCombat => (Time.time - _lastSeenTime < loseSightTime) || (Time.time - _hitTime < 4f);
 
+    /// <summary>[DEBUG-ONLY] 调试可视化用：**当前是否看得见玩家**（就是 `CanSeePlayer` 每 0.12s 写进
+    /// `_cachedSees` 的那个结果）。只读、无副作用 —— 让调试面板画的视野扇形能按"真值"变色，
+    /// 而不是用 `InCombat` 那种近似（后者把"4 秒内挨过打"也算进来，会误报）。
+    /// 中性语义："当前是否看见目标"。发布前清理见 `Assets/Debug/README.md` 的登记表。</summary>
+    public bool SeesPlayerNow => _cachedSees;
+
     /// <summary>本敌人的生命组件（Awake 已缓存）。准星索敌等高频外部逻辑用它，避免反复 GetComponent。</summary>
     public Health HealthRef => _hp;
 

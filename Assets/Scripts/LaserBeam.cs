@@ -122,7 +122,7 @@ public class LaserBeam : MonoBehaviour
         // 光束（两个点的直线）
         var lineGo = new GameObject("~LaserBeam");
         lineGo.transform.SetParent(transform, false);
-        SetFxLayer(lineGo);
+        Layers.SetRecursively(lineGo, Layers.FX);
         _line = lineGo.AddComponent<LineRenderer>();
         _line.positionCount = 2;
         _line.useWorldSpace = true;      // 传的是世界坐标（宽度因此不受挂载链缩放影响）
@@ -136,7 +136,7 @@ public class LaserBeam : MonoBehaviour
         if (dotSize > 0f)
         {
             var dotGo = Effects.CreateMeshObject(PrimitiveType.Sphere, "~LaserDot", transform, mat);
-            SetFxLayer(dotGo);
+            Layers.SetRecursively(dotGo, Layers.FX);
             _dot = dotGo.transform;
             SetDotScale(dotSize);
             dotGo.SetActive(false);
@@ -172,11 +172,9 @@ public class LaserBeam : MonoBehaviour
         if (_dot != null && _dot.gameObject.activeSelf) _dot.gameObject.SetActive(false);
     }
 
-    /// <summary>出光线与光点统一放特效层（纯显示、无碰撞体，不参与任何射线）。</summary>
-    static void SetFxLayer(GameObject go)
-    {
-        if (go != null && Layers.FX >= 0) go.layer = Layers.FX;
-    }
+    // 出光线与光点统一放特效层（走统一的 `Layers.SetRecursively`，2026-10-15 收敛：
+    // 原来本类自己复制了一份"单物体设层"，`Effects` 那边还有一份"递归设层"，现在是同一份实现）。
+    // ⚠️ 这两个对象都没有子物体 → 递归与单物体结果逐位相同。
 
     // ==================== 找出头点 ====================
 

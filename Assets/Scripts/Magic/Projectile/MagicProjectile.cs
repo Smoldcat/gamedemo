@@ -121,7 +121,7 @@ public class MagicProjectile : MonoBehaviour
         if (!_flying) transform.position = from;
 
         BuildVisual();
-        SetLayer();
+        Layers.SetRecursively(gameObject, Layers.FX);   // 统一实现（2026-10-15 收敛）
     }
 
     /// <summary>外观：优先卡上的 prefab，留空则用代码生成的球体占位。
@@ -150,11 +150,7 @@ public class MagicProjectile : MonoBehaviour
         }
     }
 
-    void SetLayer()
-    {
-        if (Layers.FX >= 0)
-            foreach (var t in GetComponentsInChildren<Transform>(true)) t.gameObject.layer = Layers.FX;
-    }
+    // 设层已收敛到 `Layers.SetRecursively`（2026-10-15）：本类原来那份 `SetLayer` 已删。
 
     // ==================== 每帧 ====================
 

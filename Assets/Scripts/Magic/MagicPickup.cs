@@ -73,71 +73,32 @@ public class MagicPickup : MonoBehaviour, IInteractable
             var model = Instantiate(data.pickupModelPrefab, transform);
             model.name = "Model";
             model.transform.localPosition = Vector3.zero;
-            SetLayers(Layers.Pickup);
+            Layers.SetRecursively(gameObject, Layers.Pickup);
             return;
         }
 
-        // ---- 路径 ②：没模型 → 图标 billboard + 脚下半影阴影（与弹药包同一套）----
-        var iconGo = new GameObject("Icon");
-        iconGo.transform.SetParent(transform, false);
-        _sr = iconGo.AddComponent<SpriteRenderer>();
-        _sr.sprite = ItemVisuals.IconOf(data);
-        _sr.color = ItemVisuals.ColorOf(data);
-        _sr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        _sr.receiveShadows = false;
-
-        // 图标尺寸：Sprite 的默认世界尺寸由导入 PPU 决定（64px 图 = 0.64m）→ 缩放到想要的大小
-        ApplyIconScale();
-
-        // 阴影：平躺的径向渐变圆片（边缘平滑 = 半影）。
-        // ⚠️ 必须是**图标的兄弟节点**而不是子节点 —— 否则它会跟着 billboard 一起立起来。
-        var shadowGo = new GameObject("Shadow");
-        shadowGo.transform.SetParent(transform, false);
-        _shadowSr = shadowGo.AddComponent<SpriteRenderer>();
-        _shadowSr.sprite = ItemVisuals.ShadowSprite();
-        _shadowSr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        _shadowSr.receiveShadows = false;
-        _shadowSr.sortingOrder = -1;                                        // 永远画在图标之下
-        shadowGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // 平躺
-        shadowGo.transform.localPosition = new Vector3(0f, 0.008f, 0f);     // 贴地（略抬，避免 z-fighting）
-        ApplyShadowScale();
+        // ---- 路径 ②：没模型 → 图标 billboard + 脚下半影（**共用实现**见 `PickupVisual`）----
+        _sr = PickupVisual.CreateIcon(transform, data, IconSize);
+        _shadowSr = PickupVisual.CreateShadow(transform, ShadowSize, ShadowAlpha);
 
         PlaceIcon(0f);
-        SetLayers(Layers.Pickup);   // 与其它拾取物同一层（子弹与视线掩码都不含它）
+        Layers.SetRecursively(gameObject, Layers.Pickup);   // 与其它拾取物同一层（子弹与视线掩码都不含它）
     }
 
-    void ApplyIconScale()
-    {
-        if (_sr == null) return;
-        float baseSize = _sr.sprite != null ? Mathf.Max(0.0001f, _sr.sprite.bounds.size.x) : 1f;
-        float k = IconSize / baseSize;
-        _sr.transform.localScale = new Vector3(k, k, 1f);
-    }
+    void ApplyIconScale() => PickupVisual.FitScale(_sr, IconSize);
 
-    void ApplyShadowScale()
-    {
-        if (_shadowSr == null) return;
-        float baseSize = _shadowSr.sprite != null ? Mathf.Max(0.0001f, _shadowSr.sprite.bounds.size.x) : 1f;
-        float k = ShadowSize / baseSize;
-        _shadowSr.transform.localScale = new Vector3(k, k, 1f);
-        _shadowSr.color = new Color(0f, 0f, 0f, Mathf.Clamp01(ShadowAlpha));
-    }
+    void ApplyShadowScale() => PickupVisual.ApplyShadow(_shadowSr, ShadowSize, ShadowAlpha);
 
     void LateUpdate()
     {
-        // 朝相机（billboard）：与相机旋转一致 = 永远正对屏幕
-        var cam = CameraCache.Main;
-        if (cam != null && _sr != null)
-            _sr.transform.rotation = cam.transform.rotation;
+        PickupVisual.Billboard(_sr);   // 朝相机（billboard）—— 共用实现
 
         _t += Time.deltaTime;
         PlaceIcon(Mathf.Sin(_t * 2.2f) * BobAmplitude);
     }
 
-    void PlaceIcon(float bob)
-    {
-        if (_sr != null) _sr.transform.localPosition = new Vector3(0f, HoverHeight + bob, 0f);
-    }
+    /// <summary>把图标放到"离地高 + 浮动量"的位置（共用实现；浮动节奏由本类给）。</summary>
+    void PlaceIcon(float bob) => PickupVisual.PlaceIcon(_sr, HoverHeight, bob);
 
     /// <summary>把卡上的外观参数应用到本实例（只改尺寸 / 位置 / 颜色，**不重建物体** →
     /// 编辑模式下也能安全调用）。没走 billboard 路径（配了模型）时什么都不做。</summary>
@@ -165,11 +126,7 @@ public class MagicPickup : MonoBehaviour, IInteractable
         }
     }
 
-    void SetLayers(int layer)
-    {
-        if (layer < 0) return;
-        foreach (var t in GetComponentsInChildren<Transform>(true)) t.gameObject.layer = layer;
-    }
+    // 设层已收敛到 `Layers.SetRecursively`（2026-10-15）：本类原来那份 `SetLayers` 已删。
 
     // ==================== IInteractable ====================
 

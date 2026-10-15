@@ -60,7 +60,7 @@ public class ThrownGrenade : MonoBehaviour
             var model = Instantiate(_def.pickupModelPrefab, transform);
             model.name = "Model";
             model.transform.localPosition = Vector3.zero;
-            UIUtil.SetLayerRecursively(gameObject, Layers.Pickup);
+            Layers.SetRecursively(gameObject, Layers.Pickup);
             return;
         }
 
@@ -72,7 +72,7 @@ public class ThrownGrenade : MonoBehaviour
         if (col != null) Destroy(col);                 // 飞行不靠物理：自己身上的碰撞体一律去掉
         var r = ball.GetComponent<Renderer>();
         if (r != null && _def != null) r.sharedMaterial = Effects.Shared(_def.pickupColor);
-        UIUtil.SetLayerRecursively(gameObject, Layers.Pickup);   // 静态工具（含负值守卫）—— 本类不再自带一份
+        Layers.SetRecursively(gameObject, Layers.Pickup);   // 静态工具（含负值守卫）—— 本类不再自带一份
     }
 
     void Update()

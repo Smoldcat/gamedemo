@@ -213,7 +213,7 @@ public class ShopInventoryPanel : MonoBehaviour
 
         _invScroll.Sync(contentH);   // 重算滚动范围并套用偏移（≤6 行时不可滚、偏移恒 0）
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     void OnCellClick(int i)
@@ -317,6 +317,6 @@ public class ShopInventoryPanel : MonoBehaviour
 
         ShopUI.CreateTooltip(_root, out _tipGo, out _tipRect, out _tipText);
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 }

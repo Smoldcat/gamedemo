@@ -87,8 +87,7 @@ public class WeaponPickup : MonoBehaviour, IInteractable
         foreach (var col in root.GetComponentsInChildren<Collider>()) DestroyImmediate(col);
 
         // 归入 Pickup 层：**语义明确**（子弹/视线掩码里都不含它），将来若加碰撞体也不会被误伤
-        if (Layers.Pickup >= 0)
-            foreach (var t in root.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = Layers.Pickup;
+        Layers.SetRecursively(root, Layers.Pickup);   // 统一实现（2026-10-15 收敛；含未激活子物体）
         return p;
     }
 

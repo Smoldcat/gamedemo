@@ -400,13 +400,7 @@ public static class UIUtil
         get { int l = LayerMask.NameToLayer("UI"); return l >= 0 ? l : 5; }
     }
 
-    /// <summary>把整棵子树设到 UI 层，保持"所有 UI 都在 UI 层"的一致性。
-    /// （`ScreenSpaceOverlay` 下层不影响渲染，纯粹是将来想按层统一管理 / 统计 UI 时更整齐。）</summary>
-    internal static void SetLayerRecursively(GameObject go, int layer)
-    {
-        if (go == null || layer < 0) return;   // 负值 = 工程里没定义该层（`Layers.*` 的 -1 约定）→ 原样不动
-        go.layer = layer;
-        for (int i = 0; i < go.transform.childCount; i++)
-            SetLayerRecursively(go.transform.GetChild(i).gameObject, layer);
-    }
+    // 说明：`SetLayerRecursively` 已于 2026-10-15 **收敛到 `Layers.SetRecursively(go, layer)`** ——
+    // 原先"UI 侧一份 + 游戏侧 9 份"，且"是否含未激活子物体 / 层没定义怎么办"各有各的答案。
+    // UI 调用点现在写 `Layers.SetRecursively(go, UIUtil.UILayer)`；`UILayer` 仍在本类保留。
 }

@@ -275,10 +275,8 @@ public class Shop : MonoBehaviour, IInteractable
         var cols = GetComponentsInChildren<Collider>(true);
         for (int i = 0; i < cols.Length; i++) cols[i].enabled = solid;
 
-        int layer = solid ? Layers.Obstacle : Layers.Pickup;
-        if (layer < 0) return;   // 工程里没定义该层 → 保持原样（不要静默改成"射线打不到"）
-        var ts = GetComponentsInChildren<Transform>(true);
-        for (int i = 0; i < ts.Length; i++) ts[i].gameObject.layer = layer;
+        // 统一实现（含"层没定义就原样不动"的守卫；2026-10-15 收敛）
+        Layers.SetRecursively(gameObject, solid ? Layers.Obstacle : Layers.Pickup);
     }
 
 #if UNITY_EDITOR

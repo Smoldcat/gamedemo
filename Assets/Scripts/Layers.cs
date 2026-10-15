@@ -62,6 +62,24 @@ public static class Layers
     /// <summary>前方绕障：墙/箱子/地面 + 其它单位（**刻意保留"躲开同伴"的旧行为**，所以不是纯阻挡物）</summary>
     public static readonly LayerMask AvoidMask = ToMask(Obstacle, Ground, Player, Enemy);
 
+    /// <summary>
+    /// 把**整棵子树**设到某一层（含未激活的子物体）。`layer &lt; 0`（工程里没定义该层）→ **原样不动**、
+    /// 返回 0。返回实际设置的对象数（调试 / 自检用）。
+    ///
+    /// ⚠️ 设层一律走这一个实现，**别再各写一份** `GetComponentsInChildren&lt;Transform&gt;(true)` 循环：
+    ///    2026-10-15 收敛 —— 拾取物 5 类 / 箱子 / 商店 / 特效 / 魔法弹各自抄过一份，而"是否含未激活子物体"、
+    ///    "层没定义时怎么办"这类分歧只该有一处答案（原先有的带负值守卫、有的没有）。
+    /// ⚠️ 原先 UI 侧还有一份 `UIUtil.SetLayerRecursively`，2026-10-15 一并收敛到本方法 ——
+    ///    现在全项目只有这一份实现（UI 调用点写 `Layers.SetRecursively(go, UIUtil.UILayer)`）。
+    /// </summary>
+    public static int SetRecursively(GameObject go, int layer)
+    {
+        if (go == null || layer < 0) return 0;   // 负值 = 没定义该层 → 保持原样（不静默改成"射线打不到"）
+        var ts = go.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < ts.Length; i++) ts[i].gameObject.layer = layer;
+        return ts.Length;
+    }
+
     /// <summary>把多个层索引合成一个 LayerMask（自动忽略未定义的层）</summary>
     static int ToMask(params int[] layerIndices)
     {

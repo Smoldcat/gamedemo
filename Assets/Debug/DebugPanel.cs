@@ -31,7 +31,7 @@ public class DebugPanel : MonoBehaviour
 
     const float W = 620f, H = 380f;      // 面板尺寸（高度按最大页固定 → 切 tab 不跳动）
     const float ContentH = 200f;         // 内容区高度
-    const int TabCount = 6;              // 战斗 / 波次 / 敌人 / 物品 / 日志 / 杂项
+    const int TabCount = 7;              // 战斗 / 波次 / 敌人 / 物品 / 日志 / 杂项 / 视觉（2026-10-16 加「视觉」）
 
     [Tooltip("常驻条（由 DebugBootstrap 自动注入）。")]
     public DebugHud hud;
@@ -61,6 +61,11 @@ public class DebugPanel : MonoBehaviour
 
     // 杂项页：相机参数当前值
     Text _camFollowVal, _camLeadVal, _camLeadMaxVal, _camFovVal;
+
+    // 视觉页（2026-10-16）：可视化开关（纯显示）+ 注入的可视化组件
+    [Tooltip("可视化组件（由 DebugBootstrap 自动注入）。")]
+    public DebugOverlay overlay;
+    Text _coneLabel, _seenLabel, _rangeLabel;
 
     // 敌人页：测试辅助状态（实例字段，不引入静态）
     bool _enemyFrozen;
@@ -205,6 +210,7 @@ public class DebugPanel : MonoBehaviour
         if (_tab == 3) RefreshItemPage();
         if (_tab == 4 && _logDirty && _logText != null) { _logDirty = false; _logText.text = BuildLogText(); }
         if (_tab == 5) RefreshCameraValues();
+        if (_tab == 6) SyncVisLabels();
     }
 
     /// <summary>物品页刷新：清单只构建一次；之后只更新"当前选中名 + 数量"。</summary>
@@ -528,12 +534,13 @@ public class DebugPanel : MonoBehaviour
         DebugUI.NewHSep(_root, "Sep1", W, new Vector2(0f, y)); y -= 8f;
 
         // ---- 6 个 tab（索引：0战斗 1波次 2敌人 3物品 4日志 5杂项）----
-        string[] titles = { "战斗", "波次", "敌人", "物品", "日志", "杂项" };
+        // 7 个 tab：宽度收到 80 / 步距 84（12 + 6×84 + 80 = 596 < 面板宽 620，放得下）
+        string[] titles = { "战斗", "波次", "敌人", "物品", "日志", "杂项", "视觉" };
         for (int i = 0; i < titles.Length; i++)
         {
             int idx = i;
-            var b = DebugUI.NewButton(_root, "Tab" + i, titles[i], new Vector2(96f, 24f),
-                                      new Vector2(12f + i * 100f, y), 13, DebugUI.Dim, () => SetTab(idx));
+            var b = DebugUI.NewButton(_root, "Tab" + i, titles[i], new Vector2(80f, 24f),
+                                      new Vector2(12f + i * 84f, y), 13, DebugUI.Dim, () => SetTab(idx));
             _tabBtn[i] = b;
             _tabLabel[i] = DebugUI.LabelOf(b);
         }
@@ -549,12 +556,13 @@ public class DebugPanel : MonoBehaviour
         BuildPageItems(content, 3);
         BuildPageLog(content, 4);
         BuildPageMisc(content, 5);
+        BuildPageVisual(content, 6);
         y -= ContentH + 4f;
 
         // ---- 底部提示行 ----
         _noteText = DebugUI.NewText(_root, "Note", new Vector2(W - 24f, 16f), new Vector2(12f, y), 12, DebugUI.Warn, TextAnchor.MiddleLeft);
 
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
         SetTab(0);
     }
 
@@ -622,6 +630,53 @@ public class DebugPanel : MonoBehaviour
                .text = "名字   行为   血量   状态   距离";
         _enemyText = DebugUI.NewText(page, "List", new Vector2(W - 16f, 156f), new Vector2(8f, -48f), 12, DebugUI.Bright, TextAnchor.UpperLeft);
         _enemyText.text = "（场上无敌人）";
+    }
+
+    /// <summary>视觉页（2026-10-16 新增）：**纯显示**的可视化开关 —— 全部只改 `DebugOverlay` 的开关，
+    /// 不碰任何玩法状态与数值。详细的"每一项画的是什么"写在页内提示里。</summary>
+    void BuildPageVisual(RectTransform content, int index)
+    {
+        var page = DebugUI.NewRect(content, "Page" + index, new Vector2(W, ContentH), Vector2.zero);
+        _page[index] = page.gameObject;
+
+        // ⚠️ 初始文字与 `DebugOverlay` 的默认值一致（两者都是"默认关"）；切到本页时会再 SyncVisLabels() 对齐一次
+        //    （注意：初始化这一刻 `overlay` 还没被注入 —— Bootstrap 是 AddComponent 之后才赋值的 —— 所以这里必须写死"关"）
+        _coneLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnCone", "视野扇形: 关", new Vector2(148f, 26f), new Vector2(0f, 0f), 13, DebugUI.Dim, OnToggleCone));
+        _seenLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnSeen", "已发现高亮: 开", new Vector2(168f, 26f), new Vector2(158f, 0f), 13, DebugUI.Fg, OnToggleSeen));
+        _rangeLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnRange", "判定圈: 关", new Vector2(148f, 26f), new Vector2(336f, 0f), 13, DebugUI.Dim, OnToggleRanges));
+
+        DebugUI.NewButton(page, "BtnVisAll", "全部开", new Vector2(96f, 26f), new Vector2(0f, -34f), 13, DebugUI.Fg, () => SetAllVisual(true));
+        DebugUI.NewButton(page, "BtnVisNone", "全部关", new Vector2(96f, 26f), new Vector2(102f, -34f), 13, DebugUI.Fg, () => SetAllVisual(false));
+
+        // ⚠️ 每行都要**短到不换行**（换行后行距会挤在一起 —— 2026-10-16 实测第一版每行都绕行、看着像重叠）
+        DebugUI.NewText(page, "VisTip", new Vector2(W - 16f, 96f), new Vector2(8f, -68f), 12, DebugUI.Dim, TextAnchor.UpperLeft).text =
+            "视野扇形：按敌人的视距×视野角绘制；被墙挡住的部分会被削短。\n" +
+            "已发现高亮：看得见玩家的敌人扇形变红（读游戏判定的真值）。\n" +
+            "判定圈：敌人脚下的身体判定半径；屏幕空间的爆头判定圈。\n" +
+            "⚠️ 纯显示、不改玩法；默认全关，需要手动开。";
+    }
+
+    void OnToggleCone() { if (overlay == null) return; overlay.showCones = !overlay.showCones; SyncVisLabels(); }
+    void OnToggleSeen() { if (overlay == null) return; overlay.highlightSeen = !overlay.highlightSeen; SyncVisLabels(); }
+    void OnToggleRanges() { if (overlay == null) return; overlay.showRanges = !overlay.showRanges; SyncVisLabels(); }
+
+    void SetAllVisual(bool on)
+    {
+        if (overlay == null) return;
+        overlay.showCones = on;
+        overlay.highlightSeen = on;
+        overlay.showRanges = on;
+        SyncVisLabels();
+        SetNote(on ? "可视化：全部打开" : "可视化：全部关闭");
+    }
+
+    /// <summary>三个开关按钮的文字/颜色与组件状态同步（颜色：开=正常、关=暗）。</summary>
+    void SyncVisLabels()
+    {
+        if (overlay == null) return;
+        if (_coneLabel != null) { _coneLabel.text = overlay.showCones ? "视野扇形: 开" : "视野扇形: 关"; _coneLabel.color = overlay.showCones ? DebugUI.Fg : DebugUI.Dim; }
+        if (_seenLabel != null) { _seenLabel.text = overlay.highlightSeen ? "已发现高亮: 开" : "已发现高亮: 关"; _seenLabel.color = overlay.highlightSeen ? DebugUI.Fg : DebugUI.Dim; }
+        if (_rangeLabel != null) { _rangeLabel.text = overlay.showRanges ? "判定圈: 开" : "判定圈: 关"; _rangeLabel.color = overlay.showRanges ? DebugUI.Fg : DebugUI.Dim; }
     }
 
     /// <summary>物品页：选一个物品（武器/弹药/魔法/投掷物/血包）→ 刷到准星 / 随机刷出 / 直接给背包；外加刷敌人、商店补货、清场。</summary>

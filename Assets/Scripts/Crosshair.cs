@@ -402,7 +402,7 @@ public class Crosshair : MonoBehaviour
         ringGo.SetActive(false);
 
         // 统一放到 UI 层（与 HUD 一致；Overlay 下不影响渲染）
-        UIUtil.SetLayerRecursively(_canvas.gameObject, UIUtil.UILayer);
+        Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
     }
 
     Image MakeBar(string name, Vector2 sizeDelta, Vector2 anchorPos)

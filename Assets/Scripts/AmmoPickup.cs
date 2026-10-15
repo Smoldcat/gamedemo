@@ -66,68 +66,32 @@ public class AmmoPickup : MonoBehaviour, IInteractable
         if (_built) return;
         _built = true;
 
-        // ---- 图标（billboard 在 LateUpdate 里做）----
-        var iconGo = new GameObject("Icon");
-        iconGo.transform.SetParent(transform, false);
-        _sr = iconGo.AddComponent<SpriteRenderer>();
-        _sr.sprite = ItemVisuals.IconOf(data);
-        _sr.color = ItemVisuals.ColorOf(data);
-        _sr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        _sr.receiveShadows = false;
-
-        // 图标尺寸：Sprite 的默认世界尺寸由导入 PPU 决定（程序生成的 64px 图 = 0.64m）→ 缩放到想要的大小
-        float baseSize = _sr.sprite != null ? Mathf.Max(0.0001f, _sr.sprite.bounds.size.x) : 1f;
-        float k = IconSize / baseSize;
-        iconGo.transform.localScale = new Vector3(k, k, 1f);
-
-        // ---- 阴影：平躺的"径向渐变圆片"（边缘平滑 → **半影**效果）----
-        // ⚠️ 演进史：Quad（方块）→ 压扁 Sphere（硬边圆）→ 现在 **SpriteRenderer + 径向渐变贴图**：
-        //    只有贴图能做到"中心实、边缘渐隐"的半影，实心几何体（球/圆盘）永远只能是硬边（用户 2026-09-27 提出）。
-        //    好处：SpriteRenderer 自带 `Sprites/Default`（不必新建材质），贴图是程序生成 + 全局共享。
-        var shadowGo = new GameObject("Shadow");
-        shadowGo.transform.SetParent(transform, false);
-        _shadowSr = shadowGo.AddComponent<SpriteRenderer>();
-        _shadowSr.sprite = ItemVisuals.ShadowSprite();
-        _shadowSr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        _shadowSr.receiveShadows = false;
-        _shadowSr.sortingOrder = -1;                                        // 永远画在图标之下
-        shadowGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // 平躺
-        shadowGo.transform.localPosition = new Vector3(0f, 0.008f, 0f);     // 贴地（略抬，避免与地面 z-fighting）
-        SetShadowLook();                                                    // 尺寸 + 颜色（含透明度）
+        // ---- 图标（billboard 在 LateUpdate 里做）+ 脚下半影：**共用实现**见 `PickupVisual` ----
+        // （2026-10-15 收敛：原来弹药包/投掷物/魔法卡三类里这段逐段同构；数值仍由各类传 —— 三类的图标尺寸本来就不同）
+        _sr = PickupVisual.CreateIcon(transform, data, IconSize);
+        _shadowSr = PickupVisual.CreateShadow(transform, ShadowSize, data != null ? data.worldShadowAlpha : 0.30f);
 
         PlaceIcon(0f);
-        SetLayers(Layers.Pickup);   // 与 WeaponPickup / HealthPack 同一层（子弹与视线掩码都不含它）
+        Layers.SetRecursively(gameObject, Layers.Pickup);   // 与 WeaponPickup / HealthPack 同一层（子弹与视线掩码都不含它）
     }
 
     void LateUpdate()
     {
-        // 朝相机（billboard）：与相机旋转一致 = 永远正对屏幕
-        var cam = CameraCache.Main;
-        if (cam != null && _sr != null)
-            _sr.transform.rotation = cam.transform.rotation;
+        PickupVisual.Billboard(_sr);   // 朝相机（billboard）—— 共用实现
 
         _t += Time.deltaTime;
         PlaceIcon(Mathf.Sin(_t * 2.2f) * BobAmplitude);
     }
 
-    void PlaceIcon(float bob)
-    {
-        if (_sr != null) _sr.transform.localPosition = new Vector3(0f, HoverHeight + bob, 0f);
-    }
+    /// <summary>把图标放到"离地高 + 浮动量"的位置（共用实现；浮动节奏由本类给）。</summary>
+    void PlaceIcon(float bob) => PickupVisual.PlaceIcon(_sr, HoverHeight, bob);
 
     /// <summary>阴影的**尺寸**与**颜色**（透明度来自弹药卡的 `worldShadowAlpha`）。
     /// Sprite 的默认世界尺寸由 PPU 决定（程序生成的 64px 图 = 0.64m）→ 缩放到想要的大小；
     /// 平躺（绕 X 转 90°）之后，localScale 的 x/y 仍然对应"平面内的两个方向"。
     /// **唯一实现**：`BuildVisual` 与 `ApplyLook` 共用一份。</summary>
     void SetShadowLook()
-    {
-        if (_shadowSr == null) return;
-        float baseSize = _shadowSr.sprite != null ? Mathf.Max(0.0001f, _shadowSr.sprite.bounds.size.x) : 1f;
-        float k = ShadowSize / baseSize;
-        _shadowSr.transform.localScale = new Vector3(k, k, 1f);
-        float a = data != null ? Mathf.Clamp01(data.worldShadowAlpha) : 0.30f;
-        _shadowSr.color = new Color(0f, 0f, 0f, a);
-    }
+        => PickupVisual.ApplyShadow(_shadowSr, ShadowSize, data != null ? data.worldShadowAlpha : 0.30f);
 
     /// <summary>把弹药卡上的外观参数应用到本实例（只改尺寸 / 位置 / 颜色，**不重建物体** → 编辑模式下也能安全调用）。</summary>
     public void ApplyLook()
@@ -137,9 +101,7 @@ public class AmmoPickup : MonoBehaviour, IInteractable
         //    `ItemVisuals.IconOf` 会返回新的合成图 —— 不重取的话场上的包还挂着旧图，改色看不见效果。
         _sr.sprite = ItemVisuals.IconOf(data);
         _sr.color = ItemVisuals.ColorOf(data);
-        float baseSize = _sr.sprite != null ? Mathf.Max(0.0001f, _sr.sprite.bounds.size.x) : 1f;
-        float k = IconSize / baseSize;
-        _sr.transform.localScale = new Vector3(k, k, 1f);
+        PickupVisual.FitScale(_sr, IconSize);
         SetShadowLook();
         PlaceIcon(0f);
     }
@@ -156,11 +118,7 @@ public class AmmoPickup : MonoBehaviour, IInteractable
         }
     }
 
-    void SetLayers(int layer)
-    {
-        if (layer < 0) return;
-        foreach (var t in GetComponentsInChildren<Transform>(true)) t.gameObject.layer = layer;
-    }
+    // 设层已收敛到 `Layers.SetRecursively`（2026-10-15）：本类原来那份 `SetLayers` 已删。
 
     // ==================== IInteractable ====================
 

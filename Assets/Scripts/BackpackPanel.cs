@@ -285,7 +285,7 @@ public class BackpackPanel : MonoBehaviour
             if (t.font == null) t.font = UIUtil.Font;
 
         Refresh();
-        UIUtil.SetLayerRecursively(go, UIUtil.UILayer);   // 与代码生成一致：整棵树归 UI 层
+        Layers.SetRecursively(go, UIUtil.UILayer);   // 与代码生成一致：整棵树归 UI 层
         return true;
     }
 
@@ -469,7 +469,7 @@ public class BackpackPanel : MonoBehaviour
         Refresh();
 
         // 统一放到 UI 层（与 HUD 一致；Overlay 下不影响渲染）
-        UIUtil.SetLayerRecursively(canvasGo, UIUtil.UILayer);
+        Layers.SetRecursively(canvasGo, UIUtil.UILayer);
     }
 
     // ==================== 开 / 关 ====================
@@ -749,7 +749,7 @@ public class BackpackPanel : MonoBehaviour
             : "血包 ×0   （地图上的药箱按 F 拾取，每个占 1 格）";
 
         // 库存格子是每次 Refresh 新建的（会重新落到 Default 层）→ 每次刷完统一设回 UI 层
-        UIUtil.SetLayerRecursively(_invGrid, UIUtil.UILayer);
+        Layers.SetRecursively(_invGrid, UIUtil.UILayer);
     }
 
     /// <summary>「整理」按钮（面板右上角）：把库存按武器名排序</summary>
