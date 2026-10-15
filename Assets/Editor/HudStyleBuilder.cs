@@ -76,7 +76,7 @@ public static class HudStyleBuilder
         Color textC  = ga != null ? ga.hudTextColor       : new Color(0.90f, 0.93f, 0.98f, 1f);
         Color dimC   = ga != null ? ga.hudDimTextColor    : new Color(0.62f, 0.68f, 0.80f, 1f);
         Color btnTxt = ga != null ? ga.hudButtonTextColor : new Color(0.95f, 0.97f, 1f, 1f);
-        Color hlC    = BackpackPanel.SlotActiveColor();   // 与背包/快捷栏同一份「高亮色」
+        Color hlC    = UIUtil.SlotActiveColor();   // 与背包/快捷栏同一份「高亮色」
 
         // ---------- 2) 左下角状态卡片 ----------
         var status = EnsureCard(canvas.transform, "StatusCard", cardBg, cardFrame, cardC, frameC);

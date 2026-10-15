@@ -58,6 +58,141 @@ public static class UIUtil
         if (_created && _font != null) Object.Destroy(_font);
         _font = null;
         _created = false;
+
+        // 界面皮肤里那几张运行时生成的图（2026-10-15 从 BackpackPanel 搬来 → 生命周期一并归本类）
+        DestroySprite(_sprPanel);     _sprPanel = null;
+        DestroySprite(_sprFrame);     _sprFrame = null;
+        DestroySprite(_sprSlotFrame); _sprSlotFrame = null;
+        DestroySprite(_sprRect);      _sprRect = null;
+    }
+
+    // ==================== 界面皮肤：贴图 / 颜色 / tooltip 摆位（2026-10-15 从 `BackpackPanel` 搬来） ====================
+    // 为什么搬：这些是**全项目共用的格子/面板外观**（背包、HUD 快捷栏、箱子、商店、编辑器工具用的是同一套）——
+    // 原来住在 `BackpackPanel` 里，等于"想要一张格子边框图，得先认识整个背包面板"（9 个文件、46 处这么引用）。
+    // 现在归 `UIUtil`（UI 公共基座，本来就负责 UI 贴图生成），依赖方向变成"各处 → UIUtil"✅。
+    // ⚠️ 约定：图请用**白色/浅色 + 透明背景**，颜色由代码控制（因为要表达"当前槽高亮"等状态色）。
+    // ⚠️ 这些必须是 public：编辑器程序集（`HotbarBuilder` / `HudStyleBuilder`）也要用（internal 跨程序集不可见）。
+    // ⚠️ 生命周期归**本类** `ResetStatics`（成对销毁 Sprite 与 texture）；调用方**不要**去 Destroy（§4 #25）。
+
+    /// <summary>tooltip 的基准尺寸（背包 / 箱子共用；商店那份比它高一档，见 `ShopUI.TipH`）。
+    /// ⚠️ 行数要和 tooltip 高度配套：改这里时 prefab 侧 `Backpack/Tooltip` 的 sizeDelta 一起改。</summary>
+    public const float TipW = 260f, TipH = 216f;
+
+    static Sprite _sprPanel, _sprFrame, _sprSlotFrame, _sprRect;
+
+    /// <summary>面板底图：优先资源总表（`GameAssets.backpackPanelSprite`），留空 → 圆角填充图。</summary>
+    public static Sprite PanelSprite()
+    {
+        var a = GameAssets.I;
+        if (a != null && a.backpackPanelSprite != null) return a.backpackPanelSprite;
+        if (_sprPanel == null) _sprPanel = RoundedRectSprite(128, 18f, 0f);      // 圆角填充
+        return _sprPanel;
+    }
+
+    /// <summary>格子 / 按钮边框：优先资源总表（`GameAssets.backpackFrameSprite`），留空 → 圆角描边图。
+    /// ⚠️ 它同时被"丢弃 / 整理按钮"和箱子格子复用（故意的统一描边风格）。</summary>
+    public static Sprite FrameSprite()
+    {
+        var a = GameAssets.I;
+        if (a != null && a.backpackFrameSprite != null) return a.backpackFrameSprite;
+        if (_sprFrame == null) _sprFrame = RoundedRectSprite(128, 14f, 4f);     // 圆角描边
+        return _sprFrame;
+    }
+
+    /// <summary>快捷槽边框：优先资源总表（`GameAssets.backpackSlotFrameSprite`），留空 → 圆角描边图。</summary>
+    public static Sprite SlotFrameSprite()
+    {
+        var a = GameAssets.I;
+        if (a != null && a.backpackSlotFrameSprite != null) return a.backpackSlotFrameSprite;
+        if (_sprSlotFrame == null) _sprSlotFrame = RoundedRectSprite(128, 16f, 5f);
+        return _sprSlotFrame;
+    }
+
+    /// <summary>纯色小方块 sprite（占用条用）：圆角图拉到细条上会把圆角压变形，所以条改用这个。</summary>
+    public static Sprite RectSprite()
+    {
+        if (_sprRect == null)
+        {
+            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            var px = new Color[16];
+            for (int i = 0; i < px.Length; i++) px[i] = Color.white;
+            tex.SetPixels(px); tex.Apply();
+            _sprRect = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f));
+        }
+        return _sprRect;
+    }
+
+    /// <summary>面板底色（背包 / 箱子 / 商店面板共用）：优先资源总表，缺省 → 深蓝黑。</summary>
+    public static Color PanelColor()      { var a = GameAssets.I; return a != null ? a.backpackPanelColor      : new Color(0.04f, 0.05f, 0.09f, 0.92f); }
+    /// <summary>槽位边框色（普通态）。</summary>
+    public static Color SlotColor()       { var a = GameAssets.I; return a != null ? a.backpackSlotColor       : new Color(0.32f, 0.36f, 0.44f, 0.9f); }
+    /// <summary>槽位**当前选中**的高亮色（背包与 HUD 快捷栏共用）。
+    /// ⚠️ 兜底色必须与 `GameAssets.backpackSlotActiveColor` 的**默认值**一致（两处是"同一份默认"的两个副本；
+    ///    2026-09-22 审计发现过一次不一致：资源表那边已改亮蓝、这里还是旧绿色 → 资源缺失时高亮莫名变绿）。</summary>
+    public static Color SlotActiveColor() { var a = GameAssets.I; return a != null ? a.backpackSlotActiveColor : new Color(0.30f, 0.65f, 1f, 1f); }
+    /// <summary>库存格子底色。</summary>
+    public static Color CellColor()       { var a = GameAssets.I; return a != null ? a.backpackCellColor       : new Color(0.16f, 0.18f, 0.26f, 0.92f); }
+
+    /// <summary>金币显示色（背包标题行、商店面板 / 库存面板的金币都用它 —— 只留一份，改这里三处一起变）。</summary>
+    public static readonly Color GoldColor = new Color(1f, 0.84f, 0.45f);
+
+    /// <summary>
+    /// **子节点"锚点参考点"在父节点局部坐标系里的位置**（⚠️ 2026-09-25 修 tooltip 偏移时加的，别删）。
+    ///
+    /// 为什么需要：`ScreenPointToLocalPointInRectangle(rootRect, …)` 给的是**相对父节点 pivot** 的局部坐标，
+    /// 而 `anchoredPosition` 的语义是「子节点 pivot 相对**子节点自己的锚点参考点**的位置」——
+    /// 两者只在「父节点 pivot 恰好落在子节点锚点上」时才相等：
+    ///   `实际位置 = 锚点参考点 + anchoredPosition`  →  `anchoredPosition = 目标local - 锚点参考点`
+    /// 所以调用处是 **减** 本函数的结果（当初我写成加，实测立刻偏出整整 2×面板宽，探针一眼就看出来了）。
+    ///
+    /// 为什么以前一直没暴露：背包面板根节点的 pivot 是 **(0, 0.5) 左中**，与 tooltip 的锚点 `(0,0.5)` 重合
+    /// （见 `BackpackPanel` 里 `rootRt.anchorMin = … pivot = new Vector2(0f, 0.5f)`）→ 本函数恒返回 `(0,0)`。
+    /// 而**箱子面板的根节点 pivot 是 (1,1) 右上角**（它贴屏幕右上角）→ 少了它，tooltip 整体偏 `(父宽, 父高/2)`：
+    /// 实测 5 格箱子（面板 392×114、画布 scaleFactor=1）时**左边缘偏 -392px、垂直中心偏 -57px**。
+    ///
+    /// 📌 结论：**别假设调用方的父节点 pivot 是什么** —— 一律减掉这一项，谁都不吃亏。
+    /// </summary>
+    static Vector2 AnchorPointInParent(RectTransform tipRect)
+    {
+        var parent = tipRect.parent as RectTransform;
+        if (parent == null) return Vector2.zero;
+        // 拉伸锚点（anchorMin != anchorMax）时 anchoredPosition 的语义变成"相对锚点矩形中心的偏移"，
+        // 本项目 tooltip 全是点锚点 → 直接跳过（真要支持拉伸锚点得另算）。
+        if (tipRect.anchorMin != tipRect.anchorMax) return Vector2.zero;
+
+        // ⚠️ `parent.rect` 的坐标原点**就是父节点的 pivot**（xMin = -pivot.x·W，xMax = (1-pivot.x)·W）→
+        //    用 Lerp 在 [xMin,xMax]×[yMin,yMax] 上取锚点归一化坐标，得到的正是"父局部坐标系下的锚点位置"，
+        //    与上面 `local` 同口径，可直接相减。
+        Rect r = parent.rect;
+        return new Vector2(
+            Mathf.Lerp(r.xMin, r.xMax, tipRect.anchorMin.x),
+            Mathf.Lerp(r.yMin, r.yMax, tipRect.anchorMin.y));
+    }
+
+    /// <summary>把 tooltip 摆到鼠标旁（背包 / 箱子 / 商店共用同一份摆位）：
+    /// 优先鼠标右侧，右边放不下翻到左侧，最后整体夹进屏幕内。</summary>
+    public static void PlaceTooltipNearMouse(RectTransform rootRect, RectTransform tipRect, Canvas canvas, Vector2 mouse)
+    {
+        if (tipRect == null || rootRect == null) return;
+
+        float sf = canvas != null && canvas.scaleFactor > 0f ? canvas.scaleFactor : 1f;
+        Vector2 size = tipRect.sizeDelta;                      // Canvas 单位
+        float wPx = size.x * sf, hPx = size.y * sf;
+        float gapPx = 16f * sf;
+
+        // 水平：优先鼠标右侧；右边放不下 → 翻到左侧；最后夹进屏幕
+        float leftPx = mouse.x + gapPx;
+        if (leftPx + wPx > Screen.width) leftPx = mouse.x - gapPx - wPx;
+        leftPx = Mathf.Clamp(leftPx, 0f, Mathf.Max(0f, Screen.width - wPx));
+
+        // 垂直：以鼠标为基准，夹进屏幕
+        float cyPx = mouse.y + 10f * sf;
+        cyPx = Mathf.Clamp(cyPx, hPx * 0.5f, Mathf.Max(hPx * 0.5f, Screen.height - hPx * 0.5f));
+
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                rootRect, new Vector2(leftPx, cyPx), null, out var local))
+            tipRect.anchoredPosition = local - AnchorPointInParent(tipRect);
     }
 
     /// <summary>

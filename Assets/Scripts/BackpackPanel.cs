@@ -34,8 +34,6 @@ using UnityEngine.UI;
 public class BackpackPanel : MonoBehaviour
 {
     // ---- 武器图标类型（程序生成形状；后期可换成真实 PNG）----
-    enum IconKind { Handgun, SMG, Shotgun, Sniper, Rifle, Generic }
-
     static BackpackPanel _inst;
     Canvas _canvas;
     PlayerController _pc;
@@ -56,7 +54,7 @@ public class BackpackPanel : MonoBehaviour
     // `TryBuildFromPrefab` 刻意不改预置节点的布局）。**加/删信息行时两处都要改**（每行约 20px）。
     // 📌 **public**（2026-09-25 起）：**箱子面板**是纯代码 UI、没有 prefab 双轨，它直接取这两个值建自己的 tooltip
     //    → 箱子与背包的 tooltip 尺寸永远一致（改这里两处一起变；同理改上面的行数注释）。
-    public const float TipW = 260f, TipH = 216f;
+    // `TipW / TipH`（tooltip 基准尺寸）已于 2026-10-15 搬到 `UIUtil`（→ `UIUtil.TipW / UIUtil.TipH`）。
 
     // ---- 快捷槽元素 ----
     RectTransform[] _slotCell = new RectTransform[SlotCount];
@@ -117,33 +115,18 @@ public class BackpackPanel : MonoBehaviour
 
     // ---- 缓存（跨实例，只生成一次）----
     // 字体已改用 UIUtil 的**全局共用字体**（原来这里也自己造一份动态字体，见 UIUtil 的注释）
-    static Sprite _sprPanel;        // 圆角填充（面板底）
-    static Sprite _sprFrame;        // 圆角描边（格子边框）
-    static Sprite _sprSlotFrame;    // 槽位边框
-    static Sprite _sprCross;        // 血包十字图标
-    static Sprite _sprRect;         // 纯色矩形（占用条用；圆角图被拉成细条会变形）
-    static readonly Dictionary<IconKind, Sprite> _iconCache = new Dictionary<IconKind, Sprite>();
+    // 注：共享贴图缓存已全部搬走 —— 界面皮肤（面板/边框/槽框/纯色块）→ `UIUtil`（2026-10-15），
+    //     物品图标（血包十字/武器形状）→ `ItemVisuals`（2026-10-15）。缓存与生命周期都归它们各自的
+    //     `ResetStatics` —— 本类不再持有、也**不许**销毁这些 Sprite。
 
     /// <summary>静态状态清理（供 StaticReset 调用）。
-    /// 运行时生成的 Sprite/Font 在退出 Play 时会被销毁，而图标缓存取用时是 TryGetValue 直接返回
-    /// （不判空）→ 关闭 Reload Domain 后背包图标会凭空消失，所以必须整体清掉重建。</summary>
+    /// ⚠️ 本类曾经还负责销毁那批共享贴图缓存，但它们**已随实现搬走**（界面皮肤 → `UIUtil`、
+    ///    物品图标 → `ItemVisuals`，均 2026-10-15）→ 现在这里只剩"清单例引用"这一件事。
+    ///    **别把贴图销毁写回来**：谁创建的谁销毁（§4 #25）。</summary>
     internal static void ResetStatics()
     {
         _inst = null;
-
-        // ⚠️ 字体是 UIUtil 的**共用资源**，由 `UIUtil.ResetStatics` 统一释放，这里不要碰
-        //（销毁共享字体会让整个工程所有 Legacy Text 一起失效，见 §4 #25）
-
-        // 运行时生成的 Sprite 与它的 Texture2D 是**两个独立对象**（Sprite.Create 不托管纹理）→ 必须成对销毁。
-        // 统一走 `UIUtil.DestroySprite`（全项目唯一的成对销毁实现；原来这里各写了一份，2026-09-22 收敛）。
-        UIUtil.DestroySprite(_sprPanel); _sprPanel = null;
-        UIUtil.DestroySprite(_sprFrame); _sprFrame = null;
-        UIUtil.DestroySprite(_sprSlotFrame); _sprSlotFrame = null;
-        UIUtil.DestroySprite(_sprCross); _sprCross = null;
-        UIUtil.DestroySprite(_sprRect); _sprRect = null;
-
-        foreach (var s in _iconCache.Values) UIUtil.DestroySprite(s);
-        _iconCache.Clear();
+        // （字体与界面皮肤由 `UIUtil.ResetStatics` 统一释放；物品图标由 `ItemVisuals.ResetStatics` 释放）
     }
 
     void Awake()
@@ -310,10 +293,10 @@ public class BackpackPanel : MonoBehaviour
     void BuildByCode()
     {
         // ---- 取共享资源（优先 GameAssets 里配的 Sprite，留空才用代码生成）----
-        var sprPanel = PanelSprite();
-        var sprFrame = FrameSprite();
-        var sprSlotFrame = SlotFrameSprite();
-        var sprCross = MedkitSprite();
+        var sprPanel = UIUtil.PanelSprite();
+        var sprFrame = UIUtil.FrameSprite();
+        var sprSlotFrame = UIUtil.SlotFrameSprite();
+        var sprCross = ItemVisuals.MedkitSprite();
 
         _canvas = UIUtil.NewOverlayCanvas("BackpackCanvas", 200);
         var canvasGo = _canvas.gameObject;
@@ -333,7 +316,7 @@ public class BackpackPanel : MonoBehaviour
         float textCx = leftX + 120f;       // 左对齐文字的中心 x（宽 240）
 
         // 面板底（半透明圆角填充）
-        var panelImg = AddImage(_root.transform, "PanelBg", new Vector2(PanelW, PanelH), PanelColor());
+        var panelImg = AddImage(_root.transform, "PanelBg", new Vector2(PanelW, PanelH), UIUtil.PanelColor());
         panelImg.sprite = sprPanel;
         panelImg.type = Image.Type.Sliced;
         panelImg.raycastTarget = true;   // 拦截穿透点击
@@ -353,7 +336,7 @@ public class BackpackPanel : MonoBehaviour
         var sortImg = sortGo.AddComponent<Image>();
         sortImg.sprite = sprFrame;
         sortImg.type = Image.Type.Sliced;
-        sortImg.color = SlotColor();
+        sortImg.color = UIUtil.SlotColor();
         sortImg.raycastTarget = true;
         var sortTxt = AddText(sortGo.transform, "Txt", new Vector2(60f, 22f), "整理", 13, new Color(0.9f, 0.94f, 1f));
         sortTxt.rectTransform.anchoredPosition = Vector2.zero;
@@ -389,10 +372,10 @@ public class BackpackPanel : MonoBehaviour
             _slotCell[i].anchoredPosition = new Vector2(startX + i * (SlotW + SlotGap), slotY);
 
             // 槽位边框（当前槽高亮用，Sliced 描边）
-            _slotFrame[i] = AddImage(cell.transform, "Frame", new Vector2(SlotW, SlotH), SlotColor());
+            _slotFrame[i] = AddImage(cell.transform, "Frame", new Vector2(SlotW, SlotH), UIUtil.SlotColor());
             _slotFrame[i].sprite = sprSlotFrame;
             _slotFrame[i].type = Image.Type.Sliced;
-            _slotIdleColor[i] = SlotColor();   // 普通态槽色（Refresh 里与"当前槽高亮色"二选一）
+            _slotIdleColor[i] = UIUtil.SlotColor();   // 普通态槽色（Refresh 里与"当前槽高亮色"二选一）
 
             // 图标
             _slotIcon[i] = AddImage(cell.transform, "Icon", new Vector2(56f, 34f), Color.white);
@@ -447,11 +430,11 @@ public class BackpackPanel : MonoBehaviour
         // ---- 底部：占用条（已用格数 / 总格数）----
         float barY = gridY - GridH * 0.5f - 16f - BarH * 0.5f;
         var barBg = AddImage(_root.transform, "OccBarBg", new Vector2(BarW, BarH), new Color(0f, 0f, 0f, 0.55f));
-        barBg.sprite = RectSprite();
+        barBg.sprite = UIUtil.RectSprite();
         barBg.rectTransform.anchoredPosition = new Vector2(leftX + BarW * 0.5f, barY);
 
-        _invBarFill = AddImage(_root.transform, "OccBarFill", new Vector2(BarW, BarH), SlotActiveColor());
-        _invBarFill.sprite = RectSprite();
+        _invBarFill = AddImage(_root.transform, "OccBarFill", new Vector2(BarW, BarH), UIUtil.SlotActiveColor());
+        _invBarFill.sprite = UIUtil.RectSprite();
         _invBarFill.rectTransform.pivot = new Vector2(0f, 0.5f);   // 从左往右长
         _invBarFill.rectTransform.anchoredPosition = new Vector2(leftX, barY);
 
@@ -468,14 +451,14 @@ public class BackpackPanel : MonoBehaviour
         _tooltipGo = new GameObject("Tooltip");
         _tooltipGo.transform.SetParent(_root.transform, false);
         var ttRt = _tooltipGo.AddComponent<RectTransform>();
-        ttRt.sizeDelta = new Vector2(TipW, TipH);
+        ttRt.sizeDelta = new Vector2(UIUtil.TipW, UIUtil.TipH);
         ttRt.anchorMin = ttRt.anchorMax = ttRt.pivot = new Vector2(0f, 0.5f);   // 锚在左边：位置按"左边缘 + 垂直中心"给（方便放到鼠标右侧）
         var ttImg = _tooltipGo.AddComponent<Image>();
         ttImg.sprite = sprPanel;
         ttImg.type = Image.Type.Sliced;
         ttImg.color = new Color(0.06f, 0.08f, 0.13f, 0.96f);
         ttImg.raycastTarget = false;
-        _tooltipText = AddText(_tooltipGo.transform, "Txt", new Vector2(TipW - 16f, TipH - 12f), "", 12, Color.white);
+        _tooltipText = AddText(_tooltipGo.transform, "Txt", new Vector2(UIUtil.TipW - 16f, UIUtil.TipH - 12f), "", 12, Color.white);
         _tooltipText.rectTransform.anchoredPosition = new Vector2(0f, 0f);
         _tooltipText.alignment = TextAnchor.MiddleLeft;
         _tooltipText.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -531,9 +514,7 @@ public class BackpackPanel : MonoBehaviour
 
     // ==================== 数据刷新 ====================
 
-    /// <summary>金币显示色（**共享色**，与 `MedkitIconColor` 同性质）：背包标题行右侧的金币、
-    /// 商店面板 / 库存面板的金币都用它 —— 只留一份，改这里三处一起变。</summary>
-    public static readonly Color GoldColor = new Color(1f, 0.84f, 0.45f);
+    // 金币显示色 `GoldColor` 已于 2026-10-15 搬到 `UIUtil`（→ `UIUtil.GoldColor`，与其它界面皮肤色同处）。
 
     /// <summary>标题行右侧的金币文本（**懒创建**）：prefab 与代码生成两条路径共用 ——
     /// 都挂在面板根上、锚到右上角，位置在「整理」按钮左侧（按钮宽 64 + 右内边距 + 8 间隙）。
@@ -548,10 +529,10 @@ public class BackpackPanel : MonoBehaviour
         if (existing != null) _goldText = existing.GetComponent<Text>();
 
         if (_goldText == null)
-            _goldText = AddText(_root.transform, "Gold", new Vector2(150f, 26f), "", 14, GoldColor);
+            _goldText = AddText(_root.transform, "Gold", new Vector2(150f, 26f), "", 14, UIUtil.GoldColor);
 
         _goldText.alignment = TextAnchor.MiddleRight;
-        _goldText.color = GoldColor;
+        _goldText.color = UIUtil.GoldColor;
         var rt = _goldText.rectTransform;
         rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);   // 锚到面板右上角（与"整理"按钮同一行）
         rt.pivot = new Vector2(1f, 1f);
@@ -587,11 +568,11 @@ public class BackpackPanel : MonoBehaviour
             bool isCurrent = bp != null && bp.currentSlot == i;
 
             // 当前槽高亮 / 其余普通。普通色来自 `_slotIdleColor`（代码生成 = SlotColor()；外部 prefab = Frame 的原始色）
-            _slotFrame[i].color = isCurrent ? SlotActiveColor() : _slotIdleColor[i];
+            _slotFrame[i].color = isCurrent ? UIUtil.SlotActiveColor() : _slotIdleColor[i];
 
             if (w != null)
             {
-                _slotIcon[i].sprite = WeaponIconSprite(w);
+                _slotIcon[i].sprite = ItemVisuals.WeaponIconSprite(w);
                 _slotIcon[i].color = w.pickupColor;
                 _slotIcon[i].gameObject.SetActive(true);
                 _slotName[i].text = w.weaponName;
@@ -671,16 +652,16 @@ public class BackpackPanel : MonoBehaviour
                 cell.name = cellName;
                 cell.SetActive(true);
                 cellImg = cell.GetComponent<Image>();
-                if (cellImg == null) { cellImg = cell.AddComponent<Image>(); cellImg.color = CellColor(); }
+                if (cellImg == null) { cellImg = cell.AddComponent<Image>(); cellImg.color = UIUtil.CellColor(); }
             }
             else
             {
                 cell = new GameObject(cellName);
                 cell.transform.SetParent(_invGrid.transform, false);
                 cellImg = cell.AddComponent<Image>();
-                cellImg.sprite = FrameSprite();
+                cellImg.sprite = UIUtil.FrameSprite();
                 cellImg.type = Image.Type.Sliced;
-                cellImg.color = CellColor();
+                cellImg.color = UIUtil.CellColor();
             }
 
             var rt = cell.GetComponent<RectTransform>();
@@ -897,8 +878,8 @@ public class BackpackPanel : MonoBehaviour
             if (!ReferenceEquals(keyDef, _lastHoverDef))
             {
                 _lastHoverDef = keyDef;
-                _tooltipText.text = hoverWeapon != null ? WeaponInfoString(hoverWeapon)
-                                                        : ItemInfoString(hoverItem);
+                _tooltipText.text = hoverWeapon != null ? ItemVisuals.WeaponInfoString(hoverWeapon)
+                                                        : ItemVisuals.ItemInfoString(hoverItem);
             }
             _tooltipGo.SetActive(true);
             PlaceTooltip(mouse);
@@ -909,299 +890,27 @@ public class BackpackPanel : MonoBehaviour
         }
     }
 
-    /// <summary>本面板的 tooltip 摆位 —— 转发给共用实现（见 <see cref="PlaceTooltipNearMouse"/>）。</summary>
-    void PlaceTooltip(Vector2 mouse) => PlaceTooltipNearMouse(_rootRect, _tooltipRect, _canvas, mouse);
+    /// <summary>本面板的 tooltip 摆位 —— 转发给 `UIUtil` 的共用实现（`UIUtil.PlaceTooltipNearMouse`）。</summary>
+    void PlaceTooltip(Vector2 mouse) => UIUtil.PlaceTooltipNearMouse(_rootRect, _tooltipRect, _canvas, mouse);
 
-    /// <summary>
-    /// **摆 tooltip 的共用实现**（背包 / 箱子两个面板同一套，2026-09-25 抽出来）：
-    /// **默认出现在鼠标右侧**（靠屏幕右边放不下时自动翻到左侧），并整体夹在屏幕内。
-    /// ⚠️ 位置必须用 `ScreenPointToLocalPointInRectangle` 换算 —— 调用方的面板锚点可能是**左侧**（背包）
-    ///    也可能是**右上角**（箱子），都不能按"相对屏幕中心的偏移"算
-    ///    （那样 tooltip 会跑到屏幕外，2026-09-21 修掉的 bug）。传进来的 `rootRect` 是谁，就算谁的局部坐标。
-    /// ⚠️ 调用前先确认 `tipRect` 的 **sizeDelta 是最终尺寸**（本函数按它算翻转和夹取）。
-    /// </summary>
-    public static void PlaceTooltipNearMouse(RectTransform rootRect, RectTransform tipRect, Canvas canvas, Vector2 mouse)
-    {
-        if (tipRect == null || rootRect == null) return;
+    // `PlaceTooltipNearMouse`（tooltip 摆位）与它的私有助手 `AnchorPointInParent` 已于 2026-10-15
+    // 整体搬到 `UIUtil`（背包 / 箱子 / 商店共用同一份 —— 那套"父节点 pivot 差异"的教训也跟着注释一起搬过去了）。
 
-        float sf = canvas != null && canvas.scaleFactor > 0f ? canvas.scaleFactor : 1f;
-        Vector2 size = tipRect.sizeDelta;                      // Canvas 单位
-        float wPx = size.x * sf, hPx = size.y * sf;
-        float gapPx = 16f * sf;
+    // 说明文案（`WeaponInfoString` / `ItemInfoString`）已于 2026-10-15 搬到 `ItemVisuals`：
+    // 它们是"物品视觉/文案"，背包 tooltip、箱子、商店格子共用同一份 —— 调用点请写 `ItemVisuals.ItemInfoString(...)`。
 
-        // 水平：优先鼠标右侧；右边放不下 → 翻到左侧；最后夹进屏幕
-        float leftPx = mouse.x + gapPx;
-        if (leftPx + wPx > Screen.width) leftPx = mouse.x - gapPx - wPx;
-        leftPx = Mathf.Clamp(leftPx, 0f, Mathf.Max(0f, Screen.width - wPx));
+    // ==================== 共享资源：贴图 / 颜色 ====================
+    // 界面皮肤（面板底 / 格子边框 / 快捷槽框 / 纯色块 四张贴图 + 面板/槽位/高亮/格子 四个颜色）
+    // 已于 2026-10-15 **整体搬到 `UIUtil`**（那里是 UI 公共基座，本来就负责 UI 贴图生成）：
+    //   → `UIUtil.PanelSprite()` / `UIUtil.FrameSprite()` / `UIUtil.SlotFrameSprite()` / `UIUtil.RectSprite()`
+    //   → `UIUtil.PanelColor()` / `UIUtil.SlotColor()` / `UIUtil.SlotActiveColor()` / `UIUtil.CellColor()` / `UIUtil.GoldColor`
+    // 物品图标（血包十字 / 武器形状）与说明文案则在 `ItemVisuals`。本类不再持有任何共享贴图缓存。
 
-        // 垂直：以鼠标为基准，夹进屏幕
-        float cyPx = mouse.y + 10f * sf;
-        cyPx = Mathf.Clamp(cyPx, hPx * 0.5f, Mathf.Max(hPx * 0.5f, Screen.height - hPx * 0.5f));
+    // 血包图标色 `MedkitIconColor`、武器图标 `WeaponIconSprite()` 及形状判定 `IconKindOf()`
+    // 已于 2026-10-15 搬到 `ItemVisuals`（→ `ItemVisuals.MedkitIconColor` / `ItemVisuals.WeaponIconSprite(w)`）。
 
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                rootRect, new Vector2(leftPx, cyPx), null, out var local))
-            tipRect.anchoredPosition = local - AnchorPointInParent(tipRect);
-    }
-
-    /// <summary>
-    /// **子节点"锚点参考点"在父节点局部坐标系里的位置**（⚠️ 2026-09-25 修 tooltip 偏移时加的，别删）。
-    ///
-    /// 为什么需要：`ScreenPointToLocalPointInRectangle(rootRect, …)` 给的是**相对父节点 pivot** 的局部坐标，
-    /// 而 `anchoredPosition` 的语义是「子节点 pivot 相对**子节点自己的锚点参考点**的位置」——
-    /// 两者只在「父节点 pivot 恰好落在子节点锚点上」时才相等：
-    ///   `实际位置 = 锚点参考点 + anchoredPosition`  →  `anchoredPosition = 目标local - 锚点参考点`
-    /// 所以调用处是 **减** 本函数的结果（当初我写成加，实测立刻偏出整整 2×面板宽，探针一眼就看出来了）。
-    ///
-    /// 为什么以前一直没暴露：背包面板根节点的 pivot 是 **(0, 0.5) 左中**，与 tooltip 的锚点 `(0,0.5)` 重合
-    /// （见类里 `rootRt.anchorMin = … pivot = new Vector2(0f, 0.5f)`）→ 本函数恒返回 `(0,0)`。
-    /// 而**箱子面板的根节点 pivot 是 (1,1) 右上角**（它贴屏幕右上角）→ 少了它，tooltip 整体偏 `(父宽, 父高/2)`：
-    /// 实测 5 格箱子（面板 392×114、画布 scaleFactor=1）时**左边缘偏 -392px、垂直中心偏 -57px**。
-    ///
-    /// 📌 结论：**别假设调用方的父节点 pivot 是什么** —— 一律减掉这一项，谁都不吃亏。
-    /// </summary>
-    static Vector2 AnchorPointInParent(RectTransform tipRect)
-    {
-        var parent = tipRect.parent as RectTransform;
-        if (parent == null) return Vector2.zero;
-        // 拉伸锚点（anchorMin != anchorMax）时 anchoredPosition 的语义变成"相对锚点矩形中心的偏移"，
-        // 本项目 tooltip 全是点锚点 → 直接跳过（真要支持拉伸锚点得另算）。
-        if (tipRect.anchorMin != tipRect.anchorMax) return Vector2.zero;
-
-        // ⚠️ `parent.rect` 的坐标原点**就是父节点的 pivot**（xMin = -pivot.x·W，xMax = (1-pivot.x)·W）→
-        //    用 Lerp 在 [xMin,xMax]×[yMin,yMax] 上取锚点归一化坐标，得到的正是"父局部坐标系下的锚点位置"，
-        //    与上面 `local` 同口径，可直接相减。
-        Rect r = parent.rect;
-        return new Vector2(
-            Mathf.Lerp(r.xMin, r.xMax, tipRect.anchorMin.x),
-            Mathf.Lerp(r.yMin, r.yMax, tipRect.anchorMin.y));
-    }
-
-    static string WeaponInfoString(WeaponData w)
-    {
-        if (w == null) return "";
-        // 格式约定：**每行只放一项数据**（好扫读，以后加/删条目也不用重排整块）。
-        // 单位必须写清（§9 #18 踩过"两个参数单位不同"的坑）：后坐是**米**、散布是**度**、
-        // 速度系数是**倍率**、射速给"发/分"。
-        // 小数位：散布 0.##、后坐 0.###（瞄准散布 / 瞄准后坐可能很小，如 RPG7 瞄准散布 0.15°、
-        // M1911 瞄准横向后坐 0.018m —— 位数不够时显示值会与实际值对不上，误导调参）。
-        // 「后坐·瞄准」那行 = 腰射值 × 瞄准倍率（即**乘倍率以后**的实际值）。
-        // ⚠️ 行数要和 tooltip 的高度配套：代码侧 = `TipH`，prefab 侧 = `Backpack/Tooltip` 的 sizeDelta，**两处一起改**。
-        float rpm = 60f / Mathf.Max(w.fireInterval, 0.001f);
-        float aimRecoilUp = w.hipRecoilUp * Mathf.Max(0f, w.aimRecoilUpMultiplier);
-        float aimRecoilJitter = w.hipRecoilJitter * Mathf.Max(0f, w.aimRecoilJitterMultiplier);
-        return string.Format(
-            "{0}\n伤害 {1}\n爆头倍率 {2:0.##}×\n弹匣 {3}\n射速 {4:0}/分（{5:0.00}s）\n换弹 {6:0.0}s\n" +
-            "腰射散布 {7:0.##}°\n瞄准散布 {8:0.##}°\n" +
-            "后坐·腰射  纵 {9:0.###}m / 横 {10:0.###}m\n后坐·瞄准  纵 {11:0.###}m / 横 {12:0.###}m\n" +
-            "瞄准过渡  {13:0.00}s 进 / {14:0.00}s 出\n移动系数  {15:0.00} / 瞄准移动 {16:0.00}",
-            w.weaponName, w.damage, w.headshotMultiplier, w.magSize, rpm, w.fireInterval, w.reloadTime,
-            w.hipSpread, w.aimSpread,
-            w.hipRecoilUp, w.hipRecoilJitter, aimRecoilUp, aimRecoilJitter,
-            w.hipToAimTime, w.aimToHipTime,
-            w.moveSpeedMultiplier, w.aimMoveSpeedMultiplier);
-    }
-
-    /// <summary>
-    /// 悬停内容（**通用物品**；背包库存格与**箱子格**共用同一份 —— 2026-09-25 起 public）：
-    ///  · 武器 → 直接复用上面那 12 行详细属性
-    ///  · 其它物品（血包 / 以后的子弹…）→ 名字（叠了多个时加 ×N）+ 物品定义卡上的说明文字
-    /// ⚠️ 说明文字来自 `ItemData.description` —— 这就是「只有图标、没有模型」的物品
-    ///    能向玩家讲清自己是什么的地方（新物品记得写上）。
-    /// 📌 箱子里的东西和背包里长一样，玩家在"要不要拿"时同样需要这些信息 → `ChestPanel` 直接调它，
-    ///    于是"同一个物品在箱子里和背包里显示的文字"永远一致（以后改格式只改这一处）。
-    /// </summary>
-    public static string ItemInfoString(ItemStack s)
-    {
-        if (s == null || s.def == null) return "";
-        if (s.def is WeaponData w) return WeaponInfoString(w);
-
-        string text = s.def.DisplayName;
-        if (s.count > 1) text += "   ×" + s.count;
-        if (!string.IsNullOrEmpty(s.def.description)) text += "\n" + s.def.description;
-        return text;
-    }
-
-    // ==================== 共享资源：贴图 / 图标 / 字体 ====================
-
-    // ---- 资源 / 颜色：优先 GameAssets（拖了就替换），留空 / 默认 → 代码生成的占位 ----
-    // ⚠️ 约定：背包的图请用**白色/浅色 + 透明背景**，颜色由代码控制
-    //（因为要表达"当前槽高亮"等状态色；代码会把 Image.color 乘到图上）。
-    // ⚠️ 下面这些是 `public`（2026-09-22 起）：**HUD 的「快捷栏」用的就是同一套**槽框 / 图标 / 状态色
-    //    → 只留一份实现（改 `GameAssets` 或这里，背包与快捷栏一起变）。
-    //    ⚠️ 必须是 public（不能是 internal）：编辑器程序集 `HotbarBuilder` 也要用（internal 跨程序集不可见，
-    //       同 `HUD.BubbleBgColor` 那批"给编辑器工具用"的约定）。
-    //    ⚠️ 生命周期仍归**本类**（`StaticReset` → `BackpackPanel.ResetStatics` 成对销毁 Sprite 与 texture）；
-    //       HUD / 工具**不要**去 Destroy 这些 Sprite —— 它们不是对方创建的（见 §4 #25）。
-    public static Sprite PanelSprite()
-    {
-        var a = GameAssets.I;
-        if (a != null && a.backpackPanelSprite != null) return a.backpackPanelSprite;
-        if (_sprPanel == null) _sprPanel = UIUtil.RoundedRectSprite(128, 18f, 0f);      // 圆角填充
-        return _sprPanel;
-    }
-    public static Sprite FrameSprite()
-    {
-        var a = GameAssets.I;
-        if (a != null && a.backpackFrameSprite != null) return a.backpackFrameSprite;
-        if (_sprFrame == null) _sprFrame = UIUtil.RoundedRectSprite(128, 14f, 4f);     // 圆角描边
-        return _sprFrame;
-    }
-    public static Sprite SlotFrameSprite()
-    {
-        var a = GameAssets.I;
-        if (a != null && a.backpackSlotFrameSprite != null) return a.backpackSlotFrameSprite;
-        if (_sprSlotFrame == null) _sprSlotFrame = UIUtil.RoundedRectSprite(128, 16f, 5f);
-        return _sprSlotFrame;
-    }
-    public static Sprite MedkitSprite()
-    {
-        var a = GameAssets.I;
-        if (a != null && a.backpackMedkitIconSprite != null) return a.backpackMedkitIconSprite;
-        if (_sprCross == null) _sprCross = MakeCrossSprite(48);
-        return _sprCross;
-    }
-    /// <summary>纯色小方块 sprite（占用条用）：圆角图拉到细条上会把圆角压变形，所以条改用这个。</summary>
-    static Sprite RectSprite()
-    {
-        if (_sprRect == null)
-        {
-            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
-            tex.wrapMode = TextureWrapMode.Clamp;
-            var px = new Color[16];
-            for (int i = 0; i < px.Length; i++) px[i] = Color.white;
-            tex.SetPixels(px); tex.Apply();
-            _sprRect = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f));
-        }
-        return _sprRect;
-    }
-
-    public static Color PanelColor()      { var a = GameAssets.I; return a != null ? a.backpackPanelColor      : new Color(0.04f, 0.05f, 0.09f, 0.92f); }
-    public static Color SlotColor()       { var a = GameAssets.I; return a != null ? a.backpackSlotColor       : new Color(0.32f, 0.36f, 0.44f, 0.9f); }
-    // ⚠️ 兜底色必须与 `GameAssets.backpackSlotActiveColor` 的**默认值**保持一致（两处是"同一份默认"的两个副本）。
-    //    2026-09-22 审计发现：`GameAssets` 那边已改成亮蓝，这里还是旧的绿色 → 一旦资源表缺失/加载失败，
-    //    高亮会"莫名变回绿色"（背包 + HUD 快捷栏一起错）。
-    public static Color SlotActiveColor() { var a = GameAssets.I; return a != null ? a.backpackSlotActiveColor : new Color(0.30f, 0.65f, 1f, 1f); }
-    public static Color CellColor()       { var a = GameAssets.I; return a != null ? a.backpackCellColor       : new Color(0.16f, 0.18f, 0.26f, 0.92f); }
-
-    /// <summary>血包图标颜色（库存格子里的红十字；与面板底部那枚血包图标同色）</summary>
-    public static readonly Color MedkitIconColor = new Color(0.95f, 0.22f, 0.22f);
-
-    /// <summary>
-    /// 武器图标（数据驱动）：优先用 WeaponData.icon 里配置的 Sprite（可在 Inspector 拖入）；
-    /// 没配置则回落程序生成的形状图标（兜底）。想全局换风格就在各武器资源里配 icon 即可，无需改代码。
-    /// </summary>
-    public static Sprite WeaponIconSprite(WeaponData w)
-    {
-        if (w == null) return null;
-        if (w.icon != null) return w.icon;   // 数据驱动：配了真实图标就用它
-        IconKind kind = IconKindOf(w);
-        Sprite s;
-        if (_iconCache.TryGetValue(kind, out s)) return s;
-        s = MakeWeaponIcon(kind);
-        _iconCache[kind] = s;
-        return s;
-    }
-
-    static IconKind IconKindOf(WeaponData w)
-    {
-        if (w == null) return IconKind.Generic;
-        // 数据驱动优先：配置里显式指定了图标类型就直接用，不靠猜名字
-        if (w.iconKind != WeaponData.IconKind.Auto)
-        {
-            switch (w.iconKind)
-            {
-                case WeaponData.IconKind.Handgun: return IconKind.Handgun;
-                case WeaponData.IconKind.SMG:     return IconKind.SMG;
-                case WeaponData.IconKind.Shotgun: return IconKind.Shotgun;
-                case WeaponData.IconKind.Sniper:  return IconKind.Sniper;
-                case WeaponData.IconKind.Rifle:   return IconKind.Rifle;
-                default:                          return IconKind.Generic;
-            }
-        }
-        var n = w.weaponName;
-        if (n.Contains("手枪")) return IconKind.Handgun;
-        if (n.Contains("冲锋")) return IconKind.SMG;
-        if (n.Contains("霰弹")) return IconKind.Shotgun;
-        if (n.Contains("狙击")) return IconKind.Sniper;
-        if (n.Contains("AK"))  return IconKind.Rifle;
-        if (w.gunLength >= 0.85f) return IconKind.Sniper;
-        if (w.gunLength >= 0.65f) return IconKind.Shotgun;
-        if (w.gunLength >= 0.5f) return IconKind.Rifle;
-        return IconKind.Generic;
-    }
-
-    // ---- 血包十字 ----
-    static Sprite MakeCrossSprite(int size)
-    {
-        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        tex.wrapMode = TextureWrapMode.Clamp;
-        float c = (size - 1) * 0.5f;
-        float barH = size * 0.16f, barW = size * 0.58f;
-        for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
-        {
-            float a = 0f;
-            if (Mathf.Abs(x - c) < barH * 0.5f && Mathf.Abs(y - c) < barW * 0.5f) a = 1f;   // 横杠
-            if (Mathf.Abs(y - c) < barH * 0.5f && Mathf.Abs(x - c) < barW * 0.5f) a = 1f;   // 竖杠
-            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
-        }
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
-    }
-
-    // ---- 武器形状图标（64×64，枪口朝右，alpha 形状；颜色由 Image.color 上色）----
-    static Sprite MakeWeaponIcon(IconKind kind)
-    {
-        const int size = 64;
-        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        tex.wrapMode = TextureWrapMode.Clamp;
-
-        for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
-        {
-            float u = (x + 0.5f) / size, v = 1f - (y + 0.5f) / size;   // v 上大下小
-            float a = ShapeAlpha(kind, u, v);
-            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
-        }
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
-    }
-
-    /// <summary>矩形包含判断（含边界 1px 羽化，避免像素锯齿）</summary>
-    static bool In(float u, float v, float u0, float u1, float v0, float v1)
-        => u >= u0 && u <= u1 && v >= v0 && v <= v1;
-
-    static float ShapeAlpha(IconKind kind, float u, float v)
-    {
-        switch (kind)
-        {
-            case IconKind.Handgun:   // 短身 + 短管 + 握把
-                return (In(u, v, 0.30f, 0.70f, 0.42f, 0.60f) ||
-                        In(u, v, 0.70f, 0.90f, 0.46f, 0.56f) ||
-                        In(u, v, 0.42f, 0.56f, 0.18f, 0.42f)) ? 1f : 0f;
-            case IconKind.SMG:       // 细长身 + 长管 + 弯弹匣 + 握把
-                return (In(u, v, 0.24f, 0.84f, 0.42f, 0.58f) ||
-                        In(u, v, 0.84f, 0.94f, 0.45f, 0.55f) ||
-                        In(u, v, 0.40f, 0.52f, 0.58f, 0.76f) ||
-                        In(u, v, 0.54f, 0.64f, 0.22f, 0.42f)) ? 1f : 0f;
-            case IconKind.Shotgun:   // 宽身 + 粗管 + 泵动护木
-                return (In(u, v, 0.26f, 0.68f, 0.36f, 0.64f) ||
-                        In(u, v, 0.68f, 0.93f, 0.44f, 0.56f) ||
-                        In(u, v, 0.34f, 0.50f, 0.64f, 0.76f) ||
-                        In(u, v, 0.10f, 0.26f, 0.36f, 0.64f)) ? 1f : 0f;
-            case IconKind.Sniper:    // 超长管 + 瞄具 + 枪托
-                return (In(u, v, 0.10f, 0.94f, 0.45f, 0.55f) ||
-                        In(u, v, 0.40f, 0.62f, 0.55f, 0.66f) ||
-                        In(u, v, 0.10f, 0.30f, 0.30f, 0.62f)) ? 1f : 0f;
-            case IconKind.Rifle:     // 长身 + 长管 + 弯弹匣 + 木托
-                return (In(u, v, 0.24f, 0.84f, 0.42f, 0.58f) ||
-                        In(u, v, 0.84f, 0.94f, 0.45f, 0.55f) ||
-                        In(u, v, 0.40f, 0.52f, 0.58f, 0.80f) ||
-                        In(u, v, 0.08f, 0.24f, 0.34f, 0.62f)) ? 1f : 0f;
-            default:                 // 通用：菱形
-                return (Mathf.Abs(u - 0.5f) + Mathf.Abs(v - 0.5f)) <= 0.24f ? 1f : 0f;
-        }
-    }
+    // 贴图绘制（血包十字 `MakeCrossSprite` / 武器形状 `MakeWeaponIcon` + `ShapeAlpha` + `In`）
+    // 已于 2026-10-15 整体搬到 `ItemVisuals`（与弹药剪影 `MakeAmmoTexture` 同一处：物品图标的唯一来源）。
 
     // ==================== 组件工厂 ====================
 
@@ -1265,20 +974,20 @@ public class BackpackPanel : MonoBehaviour
     /// </summary>
     void FillEmptySprites(Transform root)
     {
-        FillSprite(Comp<Image>(root, "PanelBg"), PanelSprite(), true);
-        FillSprite(Comp<Image>(root, "SortBtn"), FrameSprite(), true);
-        FillSprite(Comp<Image>(root, "Tooltip"), PanelSprite(), true);
-        FillSprite(Comp<Image>(root, "OccBarBg"), RectSprite(), false);
-        FillSprite(_invBarFill, RectSprite(), false);
-        FillSprite(Comp<Image>(root, "MedkitIcon"), MedkitSprite(), false);
-        FillSprite(_cellTemplate != null ? _cellTemplate.GetComponent<Image>() : null, FrameSprite(), true);
+        FillSprite(Comp<Image>(root, "PanelBg"), UIUtil.PanelSprite(), true);
+        FillSprite(Comp<Image>(root, "SortBtn"), UIUtil.FrameSprite(), true);
+        FillSprite(Comp<Image>(root, "Tooltip"), UIUtil.PanelSprite(), true);
+        FillSprite(Comp<Image>(root, "OccBarBg"), UIUtil.RectSprite(), false);
+        FillSprite(_invBarFill, UIUtil.RectSprite(), false);
+        FillSprite(Comp<Image>(root, "MedkitIcon"), ItemVisuals.MedkitSprite(), false);
+        FillSprite(_cellTemplate != null ? _cellTemplate.GetComponent<Image>() : null, UIUtil.FrameSprite(), true);
 
         for (int i = 0; i < SlotCount; i++)
         {
             var slot = root.Find("Slot" + (i + 1));
             if (slot == null) continue;
-            FillSprite(Comp<Image>(slot, "Frame"), SlotFrameSprite(), true);
-            FillSprite(Comp<Image>(slot, "DropBtn"), FrameSprite(), true);
+            FillSprite(Comp<Image>(slot, "Frame"), UIUtil.SlotFrameSprite(), true);
+            FillSprite(Comp<Image>(slot, "DropBtn"), UIUtil.FrameSprite(), true);
         }
     }
 }

@@ -295,8 +295,8 @@ public class ShopInventoryPanel : MonoBehaviour
         _root.anchoredPosition = new Vector2(LeftMargin, 0f);
         _root.sizeDelta = new Vector2(PanelW, 300f);
 
-        _bg = ShopUI.NewImage(_root, "Bg", new Vector2(PanelW, 300f), Vector2.zero, BackpackPanel.PanelColor());
-        _bg.sprite = BackpackPanel.PanelSprite();
+        _bg = ShopUI.NewImage(_root, "Bg", new Vector2(PanelW, 300f), Vector2.zero, UIUtil.PanelColor());
+        _bg.sprite = UIUtil.PanelSprite();
         _bg.type = Image.Type.Sliced;
         _bg.raycastTarget = true;
 
@@ -305,7 +305,7 @@ public class ShopInventoryPanel : MonoBehaviour
         _title.fontStyle = FontStyle.Bold;
 
         _gold = ShopUI.NewText(_root, "Gold", new Vector2(160f, 26f), Vector2.zero, 15,
-                               ShopUI.GoldColor, TextAnchor.MiddleRight);
+                               UIUtil.GoldColor, TextAnchor.MiddleRight);
         ShopUI.TopRight(_gold.rectTransform, new Vector2(-Pad, -6f));
 
         _grid = ShopUI.NewRect(_root, "Grid", new Vector2(ShopUI.GridW, 100f),

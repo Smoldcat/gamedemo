@@ -6,7 +6,7 @@ using UnityEngine.UI;
 /// 调试界面专用控件（**终端风：纯色 + 1px 线，不用任何运行时生成的贴图**）。
 ///
 /// ⚠️ 与游戏 UI 的关系（2026-10-14 用户定：调试面板玩家看不到，以简洁与效率优先）：
-///   本类**不引用** `BackpackPanel.FrameSprite/PanelSprite/CellColor` 等游戏视觉资源 ——
+///   本类**不引用** `UIUtil.FrameSprite/PanelSprite/CellColor` 等游戏视觉资源 ——
 ///   调试工具只依赖游戏的 **public 逻辑入口**，不依赖它的**视觉**资源（发布前删除更干净）。
 ///
 /// 边框怎么来的：用 `UIUtil.RoundedRectSprite` 运行时生成的**带 1px 描边**白盒 + `Image.Type.Sliced`

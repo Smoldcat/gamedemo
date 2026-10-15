@@ -369,7 +369,7 @@ public class HUD : MonoBehaviour
                 btnImg.color = new Color(frame.r, frame.g, frame.b, 1f);
             var btnFrameTr = FindDeep(restartBtn.transform, "BtnFrame");
             var btnFrameImg = btnFrameTr != null ? btnFrameTr.GetComponent<Image>() : null;
-            if (btnFrameImg != null) btnFrameImg.color = BackpackPanel.SlotActiveColor();
+            if (btnFrameImg != null) btnFrameImg.color = UIUtil.SlotActiveColor();
             if (restartBtnLabel != null)
                 restartBtnLabel.color = ga != null ? ga.hudButtonTextColor : new Color(0.95f, 0.97f, 1f, 1f);
         }
@@ -791,7 +791,7 @@ public class HUD : MonoBehaviour
 
                 // "运行时生成的图存不进场景" → 只给**还空着**的 Image 补占位图（节点上配了真图就不动它）
                 for (int i = 0; i < HotbarSlotCount; i++)
-                    UIUtil.FillSprite(_hbFrame[i], BackpackPanel.SlotFrameSprite(), true);
+                    UIUtil.FillSprite(_hbFrame[i], UIUtil.SlotFrameSprite(), true);
 
                 _hbSig = int.MinValue;   // 强制第一帧刷一次状态色 / 图标
                 return;
@@ -893,13 +893,13 @@ public class HUD : MonoBehaviour
         float boxY = h - HotbarSlotSize * 0.5f;   // 槽框中心（贴顶，键位在下面）
 
         // 槽底（半透明深色）→ 复用背包的「库存格底色」
-        var bg = NewHotbarImage(slot, "Bg", new Vector2(HotbarSlotSize, HotbarSlotSize), new Vector2(0f, boxY), BackpackPanel.CellColor());
+        var bg = NewHotbarImage(slot, "Bg", new Vector2(HotbarSlotSize, HotbarSlotSize), new Vector2(0f, boxY), UIUtil.CellColor());
         bg.sprite = UIUtil.RoundedRectSprite(64, 14f, 0f);
         bg.type = Image.Type.Sliced;
 
         // 槽框描边（状态色在 UpdateHotbar 里写：当前槽高亮 / 普通）
-        var frame = NewHotbarImage(slot, "Frame", new Vector2(HotbarSlotSize, HotbarSlotSize), new Vector2(0f, boxY), BackpackPanel.SlotColor());
-        frame.sprite = BackpackPanel.SlotFrameSprite();
+        var frame = NewHotbarImage(slot, "Frame", new Vector2(HotbarSlotSize, HotbarSlotSize), new Vector2(0f, boxY), UIUtil.SlotColor());
+        frame.sprite = UIUtil.SlotFrameSprite();
         frame.type = Image.Type.Sliced;
 
         // 图标（sprite 由 UpdateHotbar 填；空槽时整体隐藏，只留框 + 键位）
@@ -986,8 +986,8 @@ public class HUD : MonoBehaviour
             Color iconColor = Color.white;
             if (isMedkit)
             {
-                spr = med > 0 ? BackpackPanel.MedkitSprite() : null;
-                iconColor = BackpackPanel.MedkitIconColor;
+                spr = med > 0 ? ItemVisuals.MedkitSprite() : null;
+                iconColor = ItemVisuals.MedkitIconColor;
             }
             else if (isMagic)
             {
@@ -1003,7 +1003,7 @@ public class HUD : MonoBehaviour
             }
             else if (w != null)
             {
-                spr = BackpackPanel.WeaponIconSprite(w);
+                spr = ItemVisuals.WeaponIconSprite(w);
                 iconColor = w.pickupColor;
             }
 
@@ -1015,20 +1015,20 @@ public class HUD : MonoBehaviour
             }
 
             // ---- 槽底：与背包的「库存格底色」同源（改 GameAssets 两边一起变）----
-            if (_hbBg[i] != null) _hbBg[i].color = BackpackPanel.CellColor();
+            if (_hbBg[i] != null) _hbBg[i].color = UIUtil.CellColor();
 
             // ---- 槽框：武器格 = 当前手上那把高亮（持弹时不高亮）；魔法格冷却中压暗；投掷物格 = 持弹时高亮 ----
             if (_hbFrame[i] != null)
             {
                 if (isThrow)
                     _hbFrame[i].color = (throwing && thrDef != null && thrCount > 0)
-                        ? BackpackPanel.SlotActiveColor() : BackpackPanel.SlotColor();
+                        ? UIUtil.SlotActiveColor() : UIUtil.SlotColor();
                 else if (!isMedkit && !isMagic && i == cur && !throwing)
-                    _hbFrame[i].color = BackpackPanel.SlotActiveColor();
+                    _hbFrame[i].color = UIUtil.SlotActiveColor();
                 else if (isMagic && cdRatio > 0f)
-                    _hbFrame[i].color = BackpackPanel.SlotColor() * new Color(0.65f, 0.65f, 0.65f, 1f);
+                    _hbFrame[i].color = UIUtil.SlotColor() * new Color(0.65f, 0.65f, 0.65f, 1f);
                 else
-                    _hbFrame[i].color = BackpackPanel.SlotColor();
+                    _hbFrame[i].color = UIUtil.SlotColor();
             }
 
             // ---- 魔法格的键位文字：主动 = E；冷却中 = 剩余秒数；被动 = 被 ----

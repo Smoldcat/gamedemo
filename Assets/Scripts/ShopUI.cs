@@ -32,15 +32,15 @@ internal static class ShopUI
     public static readonly Color DimColor = new Color(0.48f, 0.52f, 0.62f);  // 售罄 / 不收（灰）
     public static readonly Color ToastColor = new Color(1f, 0.62f, 0.5f);    // 面板内提示（失败原因）
 
-    /// <summary>金币色 = `BackpackPanel.GoldColor`（共享色，只留一份）。</summary>
-    public static Color GoldColor => BackpackPanel.GoldColor;
+    // 注：金币色直接用 `UIUtil.GoldColor`（2026-10-15 起唯一的定义处）——本类原来的转发别名已删除，
+    //     避免"同一个值有两个名字"（那正是这次整理要消除的东西）。
 
     /// <summary>5 列格子的总宽（两个面板的网格宽一致）= InvGridUI.GridW。</summary>
     public const float GridW = InvGridUI.GridW;
 
     // tooltip 尺寸：**比背包那一份高一档**（多一行「价格」），其余一致
-    public const float TipW = BackpackPanel.TipW;
-    public const float TipH = BackpackPanel.TipH + 24f;
+    public const float TipW = UIUtil.TipW;
+    public const float TipH = UIUtil.TipH + 24f;
 
     public static float GridHeight(int rows) => rows <= 0 ? 0f : rows * RowUnit + (rows - 1) * RowGap;
     public static float CellX(int col) => col * (CellW + CellGap);
@@ -138,9 +138,9 @@ internal static class ShopUI
         cell.root = NewRect(grid, "Slot" + index, new Vector2(CellW, CellH), new Vector2(CellX(col), CellY(row)));
 
         cell.bg = cell.root.gameObject.AddComponent<Image>();
-        cell.bg.sprite = BackpackPanel.FrameSprite();
+        cell.bg.sprite = UIUtil.FrameSprite();
         cell.bg.type = Image.Type.Sliced;
-        cell.bg.color = BackpackPanel.CellColor();
+        cell.bg.color = UIUtil.CellColor();
         cell.bg.raycastTarget = false;   // 默认不吃射线；**有物品的格子**由面板显式打开（与背包空格子同一约定）
 
         cell.price = NewText(grid, "Price" + index, new Vector2(CellW, PriceH),
@@ -202,7 +202,7 @@ internal static class ShopUI
         rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 0.5f);
 
         var img = go.AddComponent<Image>();
-        img.sprite = BackpackPanel.PanelSprite();
+        img.sprite = UIUtil.PanelSprite();
         img.type = Image.Type.Sliced;
         img.color = new Color(0.06f, 0.08f, 0.13f, 0.96f);   // 与背包 tooltip 同一底色
         img.raycastTarget = false;   // ⚠️ 必须 false：它弹在光标旁，能挡射线的话格子会点不动
@@ -224,7 +224,7 @@ internal static class ShopUI
         if (sell > 0) head += (head.Length > 0 ? "    " : "") + "卖出 " + sell;
         if (head.Length == 0) head = "本店不收";
 
-        string body = BackpackPanel.ItemInfoString(stack);
+        string body = ItemVisuals.ItemInfoString(stack);
         return "<color=#FFD24D>" + head + "</color>" + (string.IsNullOrEmpty(body) ? "" : "\n" + body);
     }
 
@@ -235,7 +235,7 @@ internal static class ShopUI
     {
         if (go == null) return;
         go.SetActive(true);
-        BackpackPanel.PlaceTooltipNearMouse(rootRect, tipRect, canvas, VirtualCursor.MousePosition);
+        UIUtil.PlaceTooltipNearMouse(rootRect, tipRect, canvas, VirtualCursor.MousePosition);
     }
 
     public static void HideTooltip(GameObject go)

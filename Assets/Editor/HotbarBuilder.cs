@@ -114,12 +114,12 @@ public static class HotbarBuilder
 
             // 槽底（半透明深色）→ 与背包的「库存格底色」同源
             MakeImage(slot, "Bg", new Vector2(SlotSize, SlotSize), new Vector2(0f, boxY),
-                bgSprite, BackpackPanel.CellColor(), true);
+                bgSprite, UIUtil.CellColor(), true);
 
             // 描边。⚠️ 颜色由代码每帧写（当前槽 = 高亮色 / 其余 = 普通色）→ 这里只是**预览值**：
             //    1 号槽先填高亮色，好让你在编辑器里就看到"当前槽"长什么样。
             MakeImage(slot, "Frame", new Vector2(SlotSize, SlotSize), new Vector2(0f, boxY),
-                frameSprite, i == 0 ? BackpackPanel.SlotActiveColor() : BackpackPanel.SlotColor(), true);
+                frameSprite, i == 0 ? UIUtil.SlotActiveColor() : UIUtil.SlotColor(), true);
 
             // 图标：**留空并先关掉**（没有 sprite 的 Image 会画成白方块）；运行时按背包内容填。
             var icon = MakeImage(slot, "Icon", new Vector2(IconSize, IconSize), new Vector2(0f, boxY),

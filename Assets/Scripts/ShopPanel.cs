@@ -234,7 +234,7 @@ public class ShopPanel : MonoBehaviour
             if (soldOut)
             {
                 icon.color = ShopUI.Dim(icon.color);
-                cell.bg.color = ShopUI.Dim(BackpackPanel.CellColor());
+                cell.bg.color = ShopUI.Dim(UIUtil.CellColor());
             }
 
             cell.bg.raycastTarget = true;
@@ -328,8 +328,8 @@ public class ShopPanel : MonoBehaviour
         _root.sizeDelta = new Vector2(PanelW, 300f);           // 真实高度 Refresh 里按行数算
 
         // 面板底图（颜色 / 贴图与背包同源）
-        _bg = ShopUI.NewImage(_root, "Bg", new Vector2(PanelW, 300f), Vector2.zero, BackpackPanel.PanelColor());
-        _bg.sprite = BackpackPanel.PanelSprite();
+        _bg = ShopUI.NewImage(_root, "Bg", new Vector2(PanelW, 300f), Vector2.zero, UIUtil.PanelColor());
+        _bg.sprite = UIUtil.PanelSprite();
         _bg.type = Image.Type.Sliced;
         _bg.raycastTarget = true;      // 拦住穿透点击
 
@@ -340,7 +340,7 @@ public class ShopPanel : MonoBehaviour
         _title.fontStyle = FontStyle.Bold;
 
         _gold = ShopUI.NewText(_root, "Gold", new Vector2(160f, 26f), Vector2.zero, 15,
-                               ShopUI.GoldColor, TextAnchor.MiddleRight);
+                               UIUtil.GoldColor, TextAnchor.MiddleRight);
         ShopUI.TopRight(_gold.rectTransform, new Vector2(-Pad, -6f));
 
         // 格子容器（锚在面板左上角；格子按"相对它左上角"的坐标排 —— 与背包库存格同一套算法）
