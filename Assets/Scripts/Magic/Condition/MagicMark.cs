@@ -234,7 +234,7 @@ public class MagicMark : MonoBehaviour
         _indicator.transform.Rotate(Vector3.up, 90f * Time.deltaTime, Space.World);   // 慢慢自转，显眼
     }
 
-    /// <summary>从天而降的雷柱。两条路（存活时长 = `max(卡上 boltLife, 特效自身时长)`，见 <see cref="PrefabLife"/>）：
+    /// <summary>从天而降的雷柱。两条路（存活时长 = `max(卡上 boltLife, 特效自身时长)`，见 <see cref="Effects.PrefabFxLife"/>）：
     /// ① **填了 `boltPrefab`**（推荐）→ 用**它自带的尺寸**、**落在落点上**（不缩放、不抬高）
     ///    —— 目的是"换特效不用改代码、也不用调数值"；
     /// ② **留空** → 代码生成一根细长圆柱，`boltWidth`（粗细）/ `boltHeight`（高度）是它的参数、
@@ -262,7 +262,7 @@ public class MagicMark : MonoBehaviour
         }
 
         // ⭐ 存活时长 = **max(卡上的 `boltLife`, 特效自己播完所需时长)** —— 卡上那个值只当"下限"，
-        //    这样"换特效时忘了调时长"也**不会把特效掐断**（见 `PrefabLife` 的说明）。
+        //    这样"换特效时忘了调时长"也**不会把特效掐断**（见 `Effects.PrefabFxLife` 的说明）。
         float life = _d.boltLife;
         if (_d.boltPrefab != null) life = Mathf.Max(life, Effects.PrefabFxLife(_d.boltPrefab));
         Destroy(bolt, life);

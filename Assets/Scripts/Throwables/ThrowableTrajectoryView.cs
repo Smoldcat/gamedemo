@@ -22,8 +22,7 @@ public class ThrowableTrajectoryView
     /// <summary>范围圈贴地高度（米）：填充在下、环在上；弹道点靠渲染队列压在它们之上。</summary>
     const float RangeFillY = 0.02f;
     const float RangeRingY = 0.03f;
-    /// <summary>环的内径占比（0.92 ~ 1.0 = 一条细环）。</summary>
-    const float RangeRingInner = 0.92f;
+
 
     /// <summary>点间距（米）——调用方做"跨线段连续摆点"的进位初始化要用它（撞点处补一个红点）。</summary>
     public static float Spacing => DotSpacing;
@@ -31,8 +30,19 @@ public class ThrowableTrajectoryView
     Mesh _quad;
     Material _dotMatWhite, _dotMatRed;
     Texture2D _dotTex;
-    Texture2D _rangeRingTex, _rangeFillTex;
+    Texture2D _rangeFillTex;
     Material _rangeRingMat, _rangeFillMat;
+
+    // ⚠️ 2026-10-17：范围圈的**环**改成"按半径生成的固定线宽 mesh"。
+    //    原来用的是"环贴图 × 按半径缩放"→ 环带宽 = `半径 × 2 × 8%`，**半径越大环越粗**（用户实测反馈"边缘有点粗"）。
+    Texture2D _whiteTex;          // 1×1 纯白（mesh 版环用：形状由 mesh 决定，贴图只需能出 alpha）
+    Mesh _ringMesh;
+    float _ringMeshRadius = -1f;  // 已生成 mesh 对应的半径（变了就重建）
+
+    /// <summary>范围圈的**环带宽（米，固定）** —— 不管生效半径多大，环始终这么宽。</summary>
+    const float RangeRingWidth = 0.06f;
+    /// <summary>环用多少段（够圆即可；只在半径变化时重建一次，不是每帧）。</summary>
+    const int RangeRingSegments = 64;
 
     /// <summary>自建资源齐不齐（不齐就什么都不画 —— 调用方不必自己判空）。</summary>
     public bool Ready => _quad != null && _dotMatWhite != null && _dotMatRed != null;
@@ -45,10 +55,11 @@ public class ThrowableTrajectoryView
         _dotMatWhite = BuildDotMaterial("投掷预览-白", Color.white, _dotTex);
         _dotMatRed = BuildDotMaterial("投掷预览-红", new Color(1f, 0.32f, 0.22f, 1f), _dotTex);
 
-        // 范围指示圈：细环 + 实心圆盘（同一个贴图生成器：innerRatio = 0 就是圆盘）
-        _rangeRingTex = UIUtil.RingTexture(128, RangeRingInner, 1f, 0.02f);
+        // 范围指示圈：**环**走"按半径生成的固定线宽 mesh"（线宽恒定、不随半径变粗）；
+        // **填充**仍是圆盘贴图（它没有"线宽"问题，按半径缩放即可）
         _rangeFillTex = UIUtil.RingTexture(128, 0f, 1f, 0.02f);
-        _rangeRingMat = BuildDotMaterial("投掷范围-环", new Color(1f, 0.55f, 0.1f, 0.95f), _rangeRingTex);
+        _whiteTex = BuildWhiteTexture();   // 1×1 纯白：`Sprites/Default` 没有贴图会把整块裁掉
+        _rangeRingMat = BuildDotMaterial("投掷范围-环", new Color(1f, 0.55f, 0.1f, 0.95f), _whiteTex);
         _rangeFillMat = BuildDotMaterial("投掷范围-填充", new Color(1f, 0.55f, 0.1f, 0.10f), _rangeFillTex);
         _rangeFillMat.renderQueue = 2985;                 // 填充最下
         _rangeRingMat.renderQueue = 2990;                 // 环在其上
@@ -62,10 +73,11 @@ public class ThrowableTrajectoryView
         if (_dotTex != null) Object.Destroy(_dotTex);
         if (_dotMatWhite != null) Object.Destroy(_dotMatWhite);
         if (_dotMatRed != null) Object.Destroy(_dotMatRed);
-        if (_rangeRingTex != null) Object.Destroy(_rangeRingTex);
         if (_rangeFillTex != null) Object.Destroy(_rangeFillTex);
         if (_rangeRingMat != null) Object.Destroy(_rangeRingMat);
         if (_rangeFillMat != null) Object.Destroy(_rangeFillMat);
+        if (_whiteTex != null) Object.Destroy(_whiteTex);
+        if (_ringMesh != null) Object.Destroy(_ringMesh);
     }
 
     /// <summary>沿一段线段按 <see cref="DotSpacing"/> 摆点（`carry` = 已走过的"到下一个点还差"的进位，跨段连续）。
@@ -123,11 +135,22 @@ public class ThrowableTrajectoryView
         }
 
         Quaternion flat = Quaternion.Euler(90f, 0f, 0f);
-        float d = radius * 2f;   // 贴图外缘占比 = 1 → 圆盘/环的半径正好落在 r 上
+        float d = radius * 2f;   // 填充贴图的外缘占比 = 1 → 圆盘半径正好落在 r 上
         var mFill = Matrix4x4.TRS(new Vector3(center.x, RangeFillY, center.z), flat, new Vector3(d, d, 1f));
         Graphics.DrawMesh(_quad, mFill, _rangeFillMat, 0, cam, 0, null, false, false, false);
-        var mRing = Matrix4x4.TRS(new Vector3(center.x, RangeRingY, center.z), flat, new Vector3(d, d, 1f));
-        Graphics.DrawMesh(_quad, mRing, _rangeRingMat, 0, cam, 0, null, false, false, false);
+
+        // 环：用按半径生成的固定线宽 mesh（⭐ 线宽恒定，不随半径变粗）
+        EnsureRingMesh(radius);
+        if (_ringMesh != null)
+        {
+            // ⚠️ 这里必须用 `Quaternion.identity`（**不能**用上面那个 `flat`）：
+            //    `_ringMesh` 的顶点本来就建在 **XZ 平面**（y = 0，已经躺平），再套一次"绕 X 转 90°"的 `flat`
+            //    会把它**立成一扇拱门**（2026-10-17 实测踩到）；而填充用的 `_quad` 是 **XY 平面**的方片，
+            //    才需要 `flat` 去转平 —— 两者坐标系不同，别混用。
+            //    mesh 已按真实半径建好 → 这里**缩放 1**（原来环用 `d`，正是"环随半径变粗"的根源）
+            var mRing = Matrix4x4.TRS(new Vector3(center.x, RangeRingY, center.z), Quaternion.identity, Vector3.one);
+            Graphics.DrawMesh(_ringMesh, mRing, _rangeRingMat, 0, cam, 0, null, false, false, false);
+        }
     }
 
     void DrawDot(Vector3 p, Quaternion face, Material mat, Camera cam)
@@ -154,6 +177,54 @@ public class ThrowableTrajectoryView
         mesh.triangles = new int[] { 0, 2, 1, 0, 3, 2 };
         mesh.RecalculateBounds();
         return mesh;
+    }
+
+    /// <summary>1×1 纯白贴图。`Sprites/Default` 若没有贴图会把整块裁掉，所以 mesh 版的环也要给它一张全白的。</summary>
+    static Texture2D BuildWhiteTexture()
+    {
+        var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+        tex.name = "投掷范围-白（运行时）";
+        tex.SetPixel(0, 0, Color.white);
+        tex.Apply();
+        return tex;
+    }
+
+    /// <summary>按半径生成"**固定带宽**"的圆环 mesh —— ⭐ 这是"环不随半径变粗"的关键：形状由 mesh 决定，
+    /// 外圈精确落在 `radius` 上、内圈在 `radius - RangeRingWidth`，所以无论半径多大，环带都是同样宽。
+    /// 📌 只在半径变化时重建（半径是常量 → 实际上每种效果卡只建一次）；绕序与 `BuildUnitQuad` 一致（法线朝 +Y）。</summary>
+    void EnsureRingMesh(float radius)
+    {
+        if (_ringMesh != null && Mathf.Approximately(_ringMeshRadius, radius)) return;
+
+        float outer = radius;
+        float inner = Mathf.Max(0f, radius - RangeRingWidth);
+        int seg = RangeRingSegments;
+        var verts = new Vector3[seg * 2];
+        var tris = new int[seg * 6];
+        for (int i = 0; i < seg; i++)
+        {
+            float a = i / (float)seg * Mathf.PI * 2f;
+            float cs = Mathf.Cos(a), sn = Mathf.Sin(a);
+            verts[i * 2] = new Vector3(cs * inner, 0f, sn * inner);       // 内圈
+            verts[i * 2 + 1] = new Vector3(cs * outer, 0f, sn * outer);   // 外圈
+            int n = (i + 1) % seg;
+            int t = i * 6;
+            // ⚠️ 绕序：从 +Y 往下看是**逆时针** → 法线朝 +Y（这样即使 shader 从 `Sprites/Default`（Cull Off）
+            //    回落到单面渲染的着色器，从俯视视角仍然可见）。2026-10-17 实测确认过绕序方向。
+            tris[t] = i * 2;     tris[t + 1] = n * 2 + 1; tris[t + 2] = n * 2;
+            tris[t + 3] = i * 2; tris[t + 4] = i * 2 + 1; tris[t + 5] = n * 2 + 1;
+        }
+
+        if (_ringMesh == null)
+        {
+            _ringMesh = new Mesh();
+            _ringMesh.name = "投掷范围环（运行时）";
+        }
+        _ringMesh.Clear();
+        _ringMesh.vertices = verts;
+        _ringMesh.triangles = tris;
+        _ringMesh.RecalculateBounds();
+        _ringMeshRadius = radius;
     }
 
     static Texture2D BuildDotTexture()

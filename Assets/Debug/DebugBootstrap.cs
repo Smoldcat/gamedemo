@@ -32,6 +32,9 @@ public static class DebugBootstrap
         var overlay = go.AddComponent<DebugOverlay>();
         panel.overlay = overlay;
 
+        // 效果生效范围指示器（2026-10-17）：爆炸 / 火焰 / 烟云的"实际生效范围"线框，同样挂在常驻对象下
+        panel.rangeIndicator = go.AddComponent<DebugRangeIndicator>();
+
         // 就绪日志：既是给用户的提示，也是"按键没反应"时最快的诊断锚点
         //（没看到这条 = 调试工具没建起来；看到了但按键没日志 = 输入没到游戏窗口/被输入法吞了）
         Debug.Log("[调试工具] 已就绪：按 ~ 或 F1 开关调试面板（左上角是常驻实时条）");

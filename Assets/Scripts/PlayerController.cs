@@ -611,6 +611,7 @@ public class PlayerController : MonoBehaviour
                         h.Heal(used.healAmount);
                         DamageText.Spawn(transform.position + Vector3.up * 1.2f, used.healAmount, DamageText.Kind.Heal);
                         Sfx.Heal();
+                        Effects.HealFx(transform.position);   // 治疗光环（GameAssets.healPrefab 留空则不播）
                         HUD.Announce($"+{used.healAmount:0} 生命值", 1.0f, 28, new Color(0.4f, 1f, 0.5f));
                     }
                 }

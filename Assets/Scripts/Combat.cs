@@ -60,6 +60,19 @@ public static class Combat
     /// 纯容器、每次用前 Clear，跨会话残留无害，不需要 StaticReset 登记。</summary>
     static readonly System.Collections.Generic.List<EnemyAI> _aoeSnapshot = new System.Collections.Generic.List<EnemyAI>();
 
+    /// <summary>[DEBUG-ONLY] **爆炸发生了**（爆点位置 + 生效半径）：`Combat.Explode` 与自爆兵的 Explode **各广播一次**。
+    /// ⭐ **中性语义** —— 游戏逻辑不关心谁订阅；目前唯一订阅者是调试面板的「范围指示器」。
+    /// ⚠️ 静态事件**必须**在 `StaticReset` 里清空（否则重开一局时，上一局已销毁的订阅者还挂在链上）。
+    /// 📌 为调试工具加的核心 API（登记见 `Assets/Debug/README.md`）；发布前 `grep [DEBUG-ONLY]` 可一次找全。</summary>
+    public static event System.Action<Vector3, float> OnExploded;
+
+    /// <summary>[DEBUG-ONLY] 静态清理（供 `StaticReset` 调用）：清掉爆炸事件的订阅链。</summary>
+    public static void ResetStatics() => OnExploded = null;
+
+    /// <summary>[DEBUG-ONLY] 广播一次爆炸（位置 + 生效半径）。**唯一触发口**：`Combat.Explode` 与自爆兵的 Explode 都走它。
+    /// ⚠️ C# 的 `event` **不允许外部类直接 `Invoke`**（自爆兵在另一个类里），所以留这个公开方法。</summary>
+    public static void RaiseExploded(Vector3 point, float radius) => OnExploded?.Invoke(point, radius);
+
     /// <summary>
     /// **有效射程 → 伤害倍率**（唯一实现）：飞行距离在 `shot.effectiveRange` 之内 = 原伤害；
     /// 超出 = `damage × beyondRangeDamage`。`effectiveRange ≤ 0` 或 `beyondRangeDamage ≥ 1` = **不衰减**（旧行为）。
@@ -113,6 +126,7 @@ public static class Combat
         // 命中反馈：爆头换色/换音；**这一发打死敌人**（!h.alive，TakeDamage 之后取）→ 标记升级为"双线击杀"变体
         if (h.team == Health.Team.Enemy) Crosshair.HitMark(headshot, !h.alive);
         Effects.Impact(hit.point, shot.color, 0.9f);
+        Effects.BloodHit(hit.point, dir);   // 命中血迹（**叠加**在火花之上；GameAssets.bloodPrefab 留空则不播）
 
         // 魔法系统的**被动钩子**（2026-09-28）：玩家打中敌人时，通知玩家身上的被动魔法（例：印记斩杀）。
         // ⚠️ 放在 `TakeDamage` **之后**：此时血量已是新值，"血量是否低于阈值"的判定才准确。
@@ -132,11 +146,14 @@ public static class Combat
     /// <summary>爆炸：表现 + 范围伤害（隔墙不掉血）。**爆炸不参与爆头**（范围伤害统一结算）。</summary>
     public static void Explode(Vector3 point, ShotProfile shot)
     {
-        // 表现：大火球 + 白色冲击 + 爆炸范围圈
-        Effects.Impact(point + Vector3.up * 0.3f, new Color(1f, 0.6f, 0.15f), 2.6f);
-        Effects.Impact(point + Vector3.up * 0.3f, new Color(0.95f, 0.95f, 0.9f), 1.8f);
-        Effects.BlastRing(point, shot.explosionRadius);
-        Sfx.Explosion();   // 爆炸声（自爆兵在它自己的 Explode 里调同一份实现）
+        // 表现：优先用 GameAssets.explosionPrefab（按半径缩放）；槽留空则回退代码生成的火球 + 白冲击
+        if (!Effects.ExplosionFx(point, shot.explosionRadius))
+        {
+            Effects.Impact(point + Vector3.up * 0.3f, new Color(1f, 0.6f, 0.15f), 2.6f);
+            Effects.Impact(point + Vector3.up * 0.3f, new Color(0.95f, 0.95f, 0.9f), 1.8f);
+        }
+        Sfx.Explosion();   // 爆炸声（自爆兵走同一个 Effects.ExplosionFx + 同一份音效实现）
+        RaiseExploded(point, shot.explosionRadius);   // 广播（调试「范围指示器」等订阅者用；中性语义）
 
         if (shot.team == Health.Team.Player)
         {

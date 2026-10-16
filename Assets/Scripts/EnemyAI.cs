@@ -311,7 +311,7 @@ public class EnemyAI : MonoBehaviour
 
         // 简单死亡特效：火花 + 尸体下沉消失
         Effects.Impact(transform.position + Vector3.up * 0.4f, new Color(1f, 0.3f, 0.2f), 1.6f);
-        Effects.Decal(transform.position, new Color(0.4f, 0.05f, 0.05f, 0.8f));
+        Effects.BloodPool(transform.position);   // 地面血池（慢慢扩大；槽留空则回退旧的 Decal 贴花）
         if (_bar != null) Destroy(_bar.gameObject);
 
         // 用自定义模型时不强行染成纯色（那会破坏模型本该有的外观）；

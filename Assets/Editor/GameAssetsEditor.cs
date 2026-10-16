@@ -18,8 +18,13 @@ public class GameAssetsEditor : Editor
         ("enemyGunPrefab",   "敌人枪模型",   "远程敌人手里那把枪的模型 Prefab", null),
         ("healthPackPrefab", "血包模型",     "血包模型 Prefab", "道具模型（留空 = 代码生成默认外观）"),
         ("impactPrefab",     "命中火花",     "命中火花，建议带 ParticleSystem 的 Prefab，播完自动销毁", "特效（留空 = 代码生成默认特效）"),
+        ("bloodPrefab",      "命中血迹",     "子弹打中敌人时**叠加**在火花之上的血迹 Prefab（留空 = 不播）。⚠️ 只对【子弹打中敌人】生效 —— 打墙 / 爆炸 / 捡血包 / 敌人出场等其它闪光一律不受影响", null),
         ("muzzleFlashPrefab","枪口火光",     "开火时的枪口火光 Prefab", null),
-        ("decalPrefab",      "弹孔/血迹",    "地面弹孔/血迹 Prefab", null),
+        ("explosionPrefab",  "爆炸特效",     "RPG / 手雷 / 自爆兵**共用**的爆炸特效 Prefab。留空 = 回退到代码生成的火球+白冲击", null),
+        ("explosionFxBenchRadius", "爆炸特效-标定半径", "标定：上面那个 prefab 在**当前缩放**下的视觉大约代表多少米（例如调到与手雷的 8 米对上，就填 8）。之后其它半径按比例**自动缩放**；⚠️ 改小 → 所有爆炸变大；换 prefab / 改过粒子尺寸后需重新标定", null),
+        ("decalPrefab",      "弹孔/血迹",    "地面弹孔/血迹 Prefab（贴地、随机朝向、约 4 秒淡出）", null),
+        ("bloodPoolPrefab",  "死亡血池",     "敌人死后留在地面的血池 Prefab（会慢慢扩大）。⚠️ 只对【敌人死亡】生效；存活时长自动取 prefab 自己的粒子总时长（约 14 秒）。留空 = 回退到上面的「弹孔/血迹」", null),
+        ("healPrefab",       "治疗光环",     "按 Q 使用血包时罩在玩家身上的治疗特效。⚠️ 只在【成功用掉一个血包】时播；存活时长自动取 prefab 自己的粒子总时长（约 2.3 秒）", null),
 
         ("damageTextPrefab", "伤害飘字 Prefab", "伤害数字的预制体（UI 物体，含 Text 即可，可自定义字体/样式/动画）。留空用代码生成默认样式", "UI 特效（留空 = 代码生成默认样式）"),
 

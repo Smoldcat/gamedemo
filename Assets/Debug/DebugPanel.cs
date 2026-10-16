@@ -36,6 +36,10 @@ public class DebugPanel : MonoBehaviour
     [Tooltip("常驻条（由 DebugBootstrap 自动注入）。")]
     public DebugHud hud;
 
+    RectTransform _content;              // 可滚动的"内容容器"（滚轮改它的 anchoredPosition.y）
+    float _scrollY;                      // 当前滚动偏移（0 = 顶部）
+    const float ScrollStep = 60f;        // 滚轮一格滚多少像素
+
     Canvas _canvas;
     RectTransform _root;
 
@@ -65,7 +69,9 @@ public class DebugPanel : MonoBehaviour
     // 视觉页（2026-10-16）：可视化开关（纯显示）+ 注入的可视化组件
     [Tooltip("可视化组件（由 DebugBootstrap 自动注入）。")]
     public DebugOverlay overlay;
-    Text _coneLabel, _seenLabel, _rangeLabel;
+    [Tooltip("效果生效范围指示器（由 DebugBootstrap 自动注入）。")]
+    public DebugRangeIndicator rangeIndicator;
+    Text _coneLabel, _seenLabel, _rangeLabel, _rangeIndLabel;
 
     // 敌人页：测试辅助状态（实例字段，不引入静态）
     bool _enemyFrozen;
@@ -153,6 +159,29 @@ public class DebugPanel : MonoBehaviour
             // 面板关着时保持"期望的时间缩放"：关面板时 UIState.Pop → ApplyPause(false) 会把它重置为 1
             ApplyTimeScale();
             return;
+        }
+
+        // ---- 滚轮滚动内容区（2026-10-17 新增）----
+        // ⚠️ 放在 `!_open` 早退**之后**（2026-10-17 修）：面板关着时不该响应滚轮 —— 否则将来把内容容器
+        //    高度调大后，关着面板滚轮也会"预滚动"内容，开面板那一瞬间就是错位的。
+        // ⚠️ **刻意不依赖 EventSystem / ScrollRect**：面板打开时光标是 Confined + 虚拟光标，
+        //    直接读原始滚轮输入最可靠；这里只改内容容器的 anchoredPosition。
+        if (_content != null)
+        {
+            float maxScroll = Mathf.Max(0f, _content.sizeDelta.y - ContentH);
+            float wheel = Input.mouseScrollDelta.y;
+            if (maxScroll > 0.5f && Mathf.Abs(wheel) > 0.01f)
+            {
+                // ⚠️ 这里是**减号**：与项目既有滚动手感一致（`InvGridUI` 用的是 `_scrollTarget - dy * ScrollStep`）。
+                //    上滚（wheel > 0）→ 内容下移 → 露出**上方**内容。
+                _scrollY = Mathf.Clamp(_scrollY - wheel * ScrollStep, 0f, maxScroll);
+                _content.anchoredPosition = new Vector2(0f, _scrollY);
+            }
+            else if (_scrollY > 0.01f && maxScroll <= 0.5f)   // 内容已不再超出 → 归零（避免切页后残留错位）
+            {
+                _scrollY = 0f;
+                _content.anchoredPosition = Vector2.zero;
+            }
         }
 
         if (Time.unscaledTime < _nextRefresh) return;
@@ -297,6 +326,10 @@ public class DebugPanel : MonoBehaviour
     void SetTab(int i)
     {
         _tab = Mathf.Clamp(i, 0, _page.Length - 1);
+
+        // 切页时把滚动位置归零（2026-10-17）：否则从"滚过的页"切到"需要滚的页"会停在半截
+        _scrollY = 0f;
+        if (_content != null) _content.anchoredPosition = Vector2.zero;
         for (int k = 0; k < _page.Length; k++)
         {
             bool on = k == _tab;
@@ -616,7 +649,14 @@ public class DebugPanel : MonoBehaviour
         DebugUI.NewHSep(_root, "Sep2", W, new Vector2(0f, y)); y -= 8f;
 
         // ---- 内容区（7 页，一次只激活一页）----
-        var content = DebugUI.NewRect(_root, "Content", new Vector2(W, ContentH), new Vector2(0f, y));
+        // ⚠️ 2026-10-17：内容区外包一层**裁剪视口** + 可滚动的**内容容器** ——
+        //    以后某一页的按钮/数据变多、超过 `ContentH` 时，用**鼠标滚轮**就能看全（不再是"挤成一团看不完"）。
+        //    视口固定 `ContentH`；内容容器高度独立 —— 现在 = `ContentH`（即"暂时不需要滚"），
+        //    以后某页内容超过它时，把下面的 `new Vector2(W, ContentH)` 改大即可，**滚动逻辑已经就绪**。
+        var viewport = DebugUI.NewRect(_root, "Viewport", new Vector2(W, ContentH), new Vector2(0f, y));
+        viewport.gameObject.AddComponent<RectMask2D>();   // 裁剪：滚出去的部分不显示（不需要 sprite，比 Mask 轻）
+        var content = DebugUI.NewRect(viewport, "Content", new Vector2(W, ContentH), Vector2.zero);
+        _content = content;
         BuildPageBattle(content, 0);
         BuildPageWave(content, 1);
         BuildPageEnemy(content, 2);
@@ -702,8 +742,10 @@ public class DebugPanel : MonoBehaviour
         _enemyText.text = "（场上无敌人）";
     }
 
-    /// <summary>视觉页（2026-10-16 新增）：**纯显示**的可视化开关 —— 全部只改 `DebugOverlay` 的开关，
-    /// 不碰任何玩法状态与数值。详细的"每一项画的是什么"写在页内提示里。</summary>
+    /// <summary>视觉页（2026-10-16 新增）：**纯显示**的可视化开关 —— 全部只改 `DebugOverlay` / `DebugRangeIndicator`
+    /// 的开关，不碰任何玩法状态与数值。
+    /// ⚠️ 2026-10-17：**页内说明文字已删**（用户："默认会打开调试面板的都是懂相关功能的"）——
+    ///    按钮一多就会挤，改由**滚轮滚动**兜底（见 `Build()` 的 Viewport/Content 与 `Update()` 的滚轮处理）。</summary>
     void BuildPageVisual(RectTransform content, int index)
     {
         var page = DebugUI.NewRect(content, "Page" + index, new Vector2(W, ContentH), Vector2.zero);
@@ -714,21 +756,19 @@ public class DebugPanel : MonoBehaviour
         _coneLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnCone", "视野扇形: 关", new Vector2(148f, 26f), new Vector2(0f, 0f), 13, DebugUI.Dim, OnToggleCone));
         _seenLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnSeen", "已发现高亮: 开", new Vector2(168f, 26f), new Vector2(158f, 0f), 13, DebugUI.Fg, OnToggleSeen));
         _rangeLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnRange", "判定圈: 关", new Vector2(148f, 26f), new Vector2(336f, 0f), 13, DebugUI.Dim, OnToggleRanges));
-
-        DebugUI.NewButton(page, "BtnVisAll", "全部开", new Vector2(96f, 26f), new Vector2(0f, -34f), 13, DebugUI.Fg, () => SetAllVisual(true));
-        DebugUI.NewButton(page, "BtnVisNone", "全部关", new Vector2(96f, 26f), new Vector2(102f, -34f), 13, DebugUI.Fg, () => SetAllVisual(false));
-
-        // ⚠️ 每行都要**短到不换行**（换行后行距会挤在一起 —— 2026-10-16 实测第一版每行都绕行、看着像重叠）
-        DebugUI.NewText(page, "VisTip", new Vector2(W - 16f, 96f), new Vector2(8f, -68f), 12, DebugUI.Dim, TextAnchor.UpperLeft).text =
-            "视野扇形：按敌人的视距×视野角绘制；被墙挡住的部分会被削短。\n" +
-            "已发现高亮：看得见玩家的敌人扇形变红（读游戏判定的真值）。\n" +
-            "判定圈：敌人脚下的身体判定半径；屏幕空间的爆头判定圈。\n" +
-            "⚠️ 纯显示、不改玩法；默认全关，需要手动开。";
+        // 第二行：效果范围（爆炸保留 1 秒 / 火焰与烟云存续期间一直画）+ 全部开 / 全部关
+        // ⚠️ 位置必须与上一行的三个错开（2026-10-17 修：第一版把「效果范围」和「全部开」都放在 (0,-34) → 完全重叠）
+        _rangeIndLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnRangeInd", "效果范围: 关", new Vector2(148f, 26f), new Vector2(0f, -34f), 13, DebugUI.Dim, OnToggleRangeInd));
+        DebugUI.NewButton(page, "BtnVisAll", "全部开", new Vector2(96f, 26f), new Vector2(158f, -34f), 13, DebugUI.Fg, () => SetAllVisual(true));
+        DebugUI.NewButton(page, "BtnVisNone", "全部关", new Vector2(96f, 26f), new Vector2(264f, -34f), 13, DebugUI.Fg, () => SetAllVisual(false));
+        // 📌 本页曾有 7 行说明文字，2026-10-17 按用户要求**删除**（"默认会打开调试面板的都是懂相关功能的"）：
+        //    按钮一多就会挤，改由**滚轮滚动**兜底（见 `Build()` 的 Viewport/Content 与 `Update()` 的滚轮处理）。
     }
 
     void OnToggleCone() { if (overlay == null) return; overlay.showCones = !overlay.showCones; SyncVisLabels(); }
     void OnToggleSeen() { if (overlay == null) return; overlay.highlightSeen = !overlay.highlightSeen; SyncVisLabels(); }
     void OnToggleRanges() { if (overlay == null) return; overlay.showRanges = !overlay.showRanges; SyncVisLabels(); }
+    void OnToggleRangeInd() { if (rangeIndicator == null) return; rangeIndicator.visible = !rangeIndicator.visible; SyncVisLabels(); }
 
     void SetAllVisual(bool on)
     {
@@ -736,17 +776,23 @@ public class DebugPanel : MonoBehaviour
         overlay.showCones = on;
         overlay.highlightSeen = on;
         overlay.showRanges = on;
+        if (rangeIndicator != null) rangeIndicator.visible = on;
         SyncVisLabels();
         SetNote(on ? "可视化：全部打开" : "可视化：全部关闭");
     }
 
-    /// <summary>三个开关按钮的文字/颜色与组件状态同步（颜色：开=正常、关=暗）。</summary>
+    /// <summary>可视化开关按钮的文字/颜色与组件状态同步（颜色：开=正常、关=暗）。
+    /// ⚠️ 2026-10-17 修：**不能因为 `overlay` 为空就整体早退** —— `overlay`（视野扇形/判定圈）与
+    ///    `rangeIndicator`（效果范围）是**两个独立注入项**，前者缺失时后者的标签仍必须能同步。</summary>
     void SyncVisLabels()
     {
-        if (overlay == null) return;
-        if (_coneLabel != null) { _coneLabel.text = overlay.showCones ? "视野扇形: 开" : "视野扇形: 关"; _coneLabel.color = overlay.showCones ? DebugUI.Fg : DebugUI.Dim; }
-        if (_seenLabel != null) { _seenLabel.text = overlay.highlightSeen ? "已发现高亮: 开" : "已发现高亮: 关"; _seenLabel.color = overlay.highlightSeen ? DebugUI.Fg : DebugUI.Dim; }
-        if (_rangeLabel != null) { _rangeLabel.text = overlay.showRanges ? "判定圈: 开" : "判定圈: 关"; _rangeLabel.color = overlay.showRanges ? DebugUI.Fg : DebugUI.Dim; }
+        if (overlay != null)
+        {
+            if (_coneLabel != null) { _coneLabel.text = overlay.showCones ? "视野扇形: 开" : "视野扇形: 关"; _coneLabel.color = overlay.showCones ? DebugUI.Fg : DebugUI.Dim; }
+            if (_seenLabel != null) { _seenLabel.text = overlay.highlightSeen ? "已发现高亮: 开" : "已发现高亮: 关"; _seenLabel.color = overlay.highlightSeen ? DebugUI.Fg : DebugUI.Dim; }
+            if (_rangeLabel != null) { _rangeLabel.text = overlay.showRanges ? "判定圈: 开" : "判定圈: 关"; _rangeLabel.color = overlay.showRanges ? DebugUI.Fg : DebugUI.Dim; }
+        }
+        if (_rangeIndLabel != null && rangeIndicator != null) { _rangeIndLabel.text = rangeIndicator.visible ? "效果范围: 开" : "效果范围: 关"; _rangeIndLabel.color = rangeIndicator.visible ? DebugUI.Fg : DebugUI.Dim; }
     }
 
     /// <summary>物品页：选一个物品（武器/弹药/魔法/投掷物/血包）→ 刷到准星 / 随机刷出 / 直接给背包；外加刷敌人、商店补货、清场。</summary>

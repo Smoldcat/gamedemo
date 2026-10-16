@@ -44,6 +44,13 @@ public class SmokeVolume : MonoBehaviour
 
     float _radius;
     float _blockRadius;   // 挡视线半径 = _radius × blockRatio（圈内 blockRatio 倍才挡，见 SmokeEffectData）
+
+    /// <summary>[DEBUG-ONLY] **可见 / 占地半径**（米）。只读，供调试可视化 / 上层查询用。
+    /// 登记见 `Assets/Debug/README.md`；发布前 `grep [DEBUG-ONLY]` 可一次找全。</summary>
+    public float Radius => _radius;
+    /// <summary>[DEBUG-ONLY] **挡视线半径**（米）= `Radius × blockRatio` —— 敌人真正丢视野的范围。
+    /// 只读；调试的「范围指示器」画的就是它（与投掷预览 `SmokeEffectData.DangerRadius` 同一口径）。</summary>
+    public float BlockRadius => _blockRadius;
     float _clampR;        // XZ 夹取半径：_radius 扣掉单颗烟最大半宽 → 可见外缘≈_radius
     float _tStopEmit;      // 停止生成粒子的时刻（之后剩下的粒子自然消散）
     float _tBlockUntil;    // **遮挡失效**的时刻（消散后段不再挡）

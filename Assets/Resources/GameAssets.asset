@@ -16,10 +16,13 @@ MonoBehaviour:
   enemyGunPrefab: {fileID: 4678497847077736899, guid: 64030c154d0961d4db014a1ae1812b1f, type: 3}
   healthPackPrefab: {fileID: 1954381911622031498, guid: c8badaf47386f9f4ab7bd20e5859dd31, type: 3}
   impactPrefab: {fileID: 8990566893182757910, guid: 365177a9744501240848100a94b676e4, type: 3}
+  bloodPrefab: {fileID: 119212, guid: 67a02ea392505844bab240611d904cc0, type: 3}
   muzzleFlashPrefab: {fileID: 5185705194879035747, guid: 50b51e299dfb4324ba07a23fcb5336d9, type: 3}
+  explosionPrefab: {fileID: 184608, guid: 9edc33f62cf3ae849badc4cc12fe5f8a, type: 3}
   decalPrefab: {fileID: 7122189716286263419, guid: 7e5bfd873a04afb40b978216f931bc99, type: 3}
+  bloodPoolPrefab: {fileID: 192166, guid: c6de9c3e430816d40aedcaaf84000975, type: 3}
+  healPrefab: {fileID: 105942, guid: ff672eaca96d32c419d7a1f1b0346e8d, type: 3}
   damageTextPrefab: {fileID: 0}
-  crosshairSprite: {fileID: 0}
   shot: {fileID: 0}
   shotgun: {fileID: 0}
   sniper: {fileID: 0}

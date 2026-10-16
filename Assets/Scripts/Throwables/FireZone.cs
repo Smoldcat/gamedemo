@@ -29,6 +29,9 @@ public class FireZone : MonoBehaviour
     const int MaxConcurrent = 4;
 
     float _radius;
+    /// <summary>[DEBUG-ONLY] **生效半径**（米）= 每跳伤害的判定圆半径。只读，供调试可视化 / 上层查询用。
+    /// 登记见 `Assets/Debug/README.md`；发布前 `grep [DEBUG-ONLY]` 可一次找全。</summary>
+    public float Radius => _radius;
     float _damagePerTick;
     float _tickInterval;
     float _selfMul;

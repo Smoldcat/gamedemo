@@ -129,36 +129,6 @@ public static class Effects
         return m;
     }
 
-    /// <summary>
-    /// 地面爆炸范围圈：半透明橙红圆环，出现后快速扩散并淡出。
-    /// ⚠️ **已从「LineRenderer + 每次新建材质」改成「池化 Quad + 共享圆环贴图」**：
-    /// 以前每次爆炸都要 new 一个 GameObject + LineRenderer + 一份材质 + 49 个点，
-    /// 现在走对象池、材质全局共用（动画交给 `TimedEffect` 的缩放 + 淡出）。
-    /// 视觉差异：圆环线宽会随半径一起变粗（旧版是固定宽度），观感更接近"冲击波"。
-    /// </summary>
-    public static void BlastRing(Vector3 center, float radius)
-    {
-        var go = ObjectPool.Get(BlastRingPoolKey);
-        if (go == null)
-        {
-            go = CreateMeshObject(PrimitiveType.Quad, "BlastRing", null, RingMaterial());
-            go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // 躺平在地面上
-            Layers.SetRecursively(go, Layers.FX);
-            var fx0 = go.AddComponent<TimedEffect>();
-            fx0.poolKey = BlastRingPoolKey;
-            fx0.fadeOut = true;
-            fx0.fadeLight = false;
-        }
-
-        go.transform.position = new Vector3(center.x, 0.06f, center.z);   // 略高于地面，避免和地面贴图闪烁
-
-        var fx = go.GetComponent<TimedEffect>();
-        fx.lifetime = 0.35f;
-        // TimedEffect 用的是**绝对**缩放，所以这里按直径给起止值（0.35 倍 → 1.5 倍半径，与旧版扩散幅度一致）
-        fx.startScale = radius * 2f * 0.35f;
-        fx.endScale = radius * 2f * 1.5f;
-    }
-
     /// <summary>清除 MaterialPropertyBlock 的颜色覆盖，让渲染器恢复使用材质本身的颜色</summary>
     public static void ClearColor(Renderer r)
     {
@@ -208,11 +178,100 @@ public static class Effects
         return go;
     }
 
+    /// <summary>命中敌人的**血迹**：取 <see cref="GameAssets.bloodPrefab"/>，按 `dir`（子弹方向）摆正朝向，
+    /// 播完自动销毁（存活时长 = `PrefabFxLife(prefab) + 0.3`）。
+    /// ⚠️ **只在"子弹打中敌人"时调用**（`Combat.ResolveHit` 的敌人分支）—— 打墙 / 爆炸 / 拾取 / 敌人出场都不调。
+    /// ⚠️ **朝向直接 `LookRotation(dir)` 就对**（2026-10-16 实测校准）：这个 prefab 的根旋转虽然写着
+    ///    `(0,90,270)`、看着像被预先转过，但**四个轴向实测 100% 吻合"喷溅沿局部 +Z"**（Unity 惯例）。
+    ///    别再试 `FromToRotation(right, dir)`（偏 90°）或 `FromToRotation(back, dir)`（整体反向）—— 两个都实测过，都不对。
+    /// 📌 卡上留空 `bloodPrefab` 时本函数什么都不做 —— 由调用方决定是否回退到 `Impact`。</summary>
+    public static void BloodHit(Vector3 pos, Vector3 dir)
+    {
+        var assets = GameAssets.I;
+        if (assets == null || assets.bloodPrefab == null) return;
+        // ⚠️ **朝子弹"来的方向"喷**（= 反向）：顺着子弹去的方向喷会像"穿甲弹穿过去了"（用户 2026-10-16 的反馈）。
+        //    ⚠️ 这个翻转**只能在代码里做** —— 该 prefab 的主粒子系统挂在**根**上（子物体只有 `BloodDroplets`）：
+        //       · 改子物体旋转 → 实测只反向"血滴"，两股血朝相反方向飞（包围盒 2.05 → 3.65）；
+        //       · 改 prefab 根旋转 → 会被 `Instantiate(prefab, pos, rot)` 覆盖。
+        //    📌 若以后换成**别的**血迹 prefab（喷溅轴约定可能不同）→ 这一行的方向要重新实测校准。
+        var rot = dir.sqrMagnitude > 0.0001f
+            ? Quaternion.LookRotation(-dir.normalized)
+            : Quaternion.identity;
+        var go = Object.Instantiate(assets.bloodPrefab, pos, rot);
+        Object.Destroy(go, PrefabFxLife(assets.bloodPrefab) + 0.3f);
+    }
+
+    /// <summary>敌人死后留在地面的**血池**：取 <see cref="GameAssets.bloodPoolPrefab"/>，**贴地**生成（y=0.02 + 随机水平朝向），
+    /// 存活时长**自动**取 prefab 自己的粒子总时长（+0.5s 余量）。
+    /// ⚠️ 只在【敌人死亡】时调用 —— 命中敌人是另一回事（走 <see cref="BloodHit"/>）；打墙不生成。
+    /// ⚠️ 为什么要独立于 <see cref="Decal"/>：那是"约 4 秒淡出的贴花"，而生长血池要 **14 秒**才长满
+    ///    （`duration 7 + life 7`）→ 用 Decal 会在长到一半时被销毁。
+    /// 📌 槽留空 → 回退到 <see cref="Decal"/>（旧行为，零回归）。</summary>
+    public static void BloodPool(Vector3 pos)
+    {
+        var assets = GameAssets.I;
+        if (assets == null || assets.bloodPoolPrefab == null)
+        {
+            Decal(pos, new Color(0.4f, 0.05f, 0.05f, 0.8f));   // 旧行为兜底
+            return;
+        }
+        var groundPos = new Vector3(pos.x, 0.02f, pos.z);
+        float yaw = Random.Range(0f, 360f);
+        var go = Object.Instantiate(assets.bloodPoolPrefab, groundPos, Quaternion.Euler(0f, yaw, 0f));
+        Object.Destroy(go, PrefabFxLife(assets.bloodPoolPrefab) + 0.5f);
+    }
+
+    /// <summary>使用血包时的**治疗光环**：取 <see cref="GameAssets.healPrefab"/>，在 `pos` 处播放，
+    /// 存活时长**自动**取 prefab 自己的粒子总时长（+0.5s）。
+    /// ⚠️ 只在【按 Q 成功用掉一个血包】时调用（`PlayerController`）—— 拾取药箱、其它回血途径都不调。
+    /// ⚠️ **必须保留 prefab 自带的旋转**：它是"躺平的光环"（根旋转 `X=270°`）→ 所以这里用 `Instantiate(prefab)`
+    ///    再单独设位置；**不要**用 `Instantiate(prefab, pos, Quaternion.identity)`（那会把它立成一堵墙）。
+    /// 📌 槽留空 = 什么都不播（调用方无需判断）。</summary>
+    public static void HealFx(Vector3 pos)
+    {
+        var assets = GameAssets.I;
+        if (assets == null || assets.healPrefab == null) return;
+        var go = Object.Instantiate(assets.healPrefab);
+        go.transform.position = pos;
+        Object.Destroy(go, PrefabFxLife(assets.healPrefab) + 0.5f);
+    }
+
+    /// <summary>爆炸特效：取 <see cref="GameAssets.explosionPrefab"/>，在 `pos` 播放，并按**各自的爆炸半径等比缩放**。
+    /// ⭐ **为什么这样能对齐**：缩放由"**人工标定的基准半径**"（`GameAssets.explosionFxBenchRadius`）换算而来 ——
+    ///    标定值来自"**人眼看着对上**"，而不是去**测量特效的视觉边界**（那个测不准；2026-10-17 踩过：
+    ///    用包围盒量出的 12.96 米当基准 → 环径 12 米 vs 伤害圈 8 米）。
+    ///    ⇒ **只需标定一次**，其它半径按纯比例自动算（半径 4 米 = 8 米的一半大），加新半径也不用改代码；
+    ///      标定值即使偏了，也只影响"所有爆炸整体大小"，**各半径之间仍然对齐**。
+    /// ⚠️ 用**乘法**缩放：prefab 自带的那身缩放要保留（它就是标定时用的缩放），不要覆盖。
+    /// ⚠️ 会**移除 prefab 自带的 AudioSource** —— 音效统一由调用方播 `Sfx.Explosion()`（音效归代码，
+    ///    否则会出现"两个爆炸声叠着"）。
+    /// ⚠️ 保留 prefab 自带旋转（它是躺平的 `X=270°`）→ 用 `Instantiate(prefab)` 再设位置，别传 `Quaternion.identity`。
+    /// 📌 返回 **false** = 槽没配 → 调用方回退到自己那套代码生成的火球（零回归）。
+    /// 📌 `RPG / 手雷 / 自爆兵` 三处**共用这一个函数** —— 想改爆炸长什么样，只改这里（或换槽上的 prefab）。</summary>
+    public static bool ExplosionFx(Vector3 pos, float radius)
+    {
+        var assets = GameAssets.I;
+        if (assets == null || assets.explosionPrefab == null) return false;
+        var go = Object.Instantiate(assets.explosionPrefab);
+        go.transform.position = pos;
+        // ⭐ 按半径等比缩放（基准 = 人工标定值）
+        if (assets.explosionFxBenchRadius > 0.01f)
+            go.transform.localScale *= Mathf.Max(0.02f, radius / assets.explosionFxBenchRadius);
+        // ⚠️ 自带音效必须**先静音再销毁**：`Destroy` 要到帧末才生效，如果只 Destroy，
+        //    它的 `playOnAwake` 会先响一声 → 和 `Sfx.Explosion()` 叠成两个爆炸声（2026-10-16 实测发现）。
+        //    （prefab 那边也顺手关掉了 `playOnAwake`：双保险。音效统一归代码。）
+        var src = go.GetComponentInChildren<AudioSource>(true);
+        if (src != null) { src.playOnAwake = false; src.Stop(); src.enabled = false; Object.Destroy(src); }
+        Object.Destroy(go, PrefabFxLife(assets.explosionPrefab) + 0.5f);
+        return true;
+    }
+
     /// <summary>读一个特效 prefab「播完要多久」= 它所有粒子系统里 `(Duration + 最长粒子寿命)` 的最大值。
     ///
     /// ⚠️ **循环**（`loop = true`）的粒子系统，`Duration` 只是"单个循环的长度"、不代表播完 → 这类只取寿命、不加 Duration。
-    /// ⚠️ **为什么要它**：需要"播完就销毁"的地方（斩杀雷柱 `MagicMark`、魔法球的命中特效 `MagicProjectile`）
-    ///    用它**自动算出销毁时长** → 换特效时**不用改代码、也不用填数值**（卡上的值只当"下限"用）。
+    /// ⚠️ **为什么要它**：需要"播完就销毁"的地方（斩杀雷柱 `MagicMark`、魔法球的命中特效 `MagicProjectile`、
+    ///    命中血迹 / 死亡血池 / 治疗光环 / 爆炸）用它**自动算出销毁时长** → 换特效时**不用改代码、也不用填数值**
+    ///    （卡上人工填的值只当"下限"用）。
     /// 📌 调用方一般再加 0.3~0.5s 余量（淡出 / 收尾），例如 `Effects.PrefabFxLife(prefab) + 0.3f`。
     /// 📌 与"卡上人工填的时长"的关系：那里取 `max(人工值, 本函数返回值)` —— 人工值只会**加长**，永远不会把特效掐断。</summary>
     public static float PrefabFxLife(GameObject prefab)
@@ -228,34 +287,6 @@ public static class Effects
             if (t > max) max = t;
         }
         return max;
-    }
-
-    // ---------------- 爆炸范围圈（池化 Quad + 程序生成的圆环贴图） ----------------
-    const string BlastRingPoolKey = "BlastRing";
-    static Texture2D _ringTex;
-    static Material _ringMat;
-
-    /// <summary>程序生成圆环贴图（白色 + alpha），只建一次，供所有爆炸圈共用。
-    /// ⚠️ 算法已收敛到 `UIUtil.RingTexture`（与准星的散布圈 / 换弹环共用同一份实现）。
-    ///    参数与历史值**逐字相同**：size 128 / inner 0.80 / outer 0.98 / feather 0.05（2026-09-22 合并，像素指纹已核对）。</summary>
-    static Texture2D RingTexture()
-    {
-        if (_ringTex != null) return _ringTex;
-        _ringTex = UIUtil.RingTexture(128, 0.80f, 0.98f, 0.05f);
-        return _ringTex;
-    }
-
-    /// <summary>爆炸圈专用共享材质（支持 alpha 混合，`TimedEffect` 才能淡出）。</summary>
-    static Material RingMaterial()
-    {
-        if (_ringMat != null) return _ringMat;
-        Shader sh = Shader.Find("Sprites/Default");
-        if (sh == null) sh = Shader.Find("Unlit/Transparent");
-        if (sh == null) sh = Shader.Find("Unlit/Color");
-        _ringMat = new Material(sh);
-        _ringMat.mainTexture = RingTexture();
-        if (_ringMat.HasProperty(ColorProp)) _ringMat.color = new Color(1f, 0.55f, 0.1f, 0.95f);
-        return _ringMat;
     }
 
     /// <summary>染色用的共享 MaterialPropertyBlock（只做一次性覆盖，用完不留引用）</summary>

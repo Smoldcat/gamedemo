@@ -388,7 +388,11 @@ public class MagicProjectile : MonoBehaviour
     void SpawnHitFx(Vector3 point)
     {
         if (_d == null || _d.hitPrefab == null) return;      // 延迟期间卡可能已被卸载
-        var go = Instantiate(_d.hitPrefab, point, Quaternion.identity);
+        // ⚠️ 必须**保留 prefab 自带的旋转** —— 本项目对特效 prefab 的统一约定（`HealFx` / `ExplosionFx` / `MagicMark`
+        //    都这么做）。该 prefab 根旋转是 `(270,0,0)`（躺平），用 `Instantiate(prefab, point, Quaternion.identity)`
+        //    会把它转正（2026-10-17 实测：世界尺寸 0.98 → 0.80，虽不严重但没必要偏）。
+        var go = Instantiate(_d.hitPrefab);
+        go.transform.position = point;
         Destroy(go, Effects.PrefabFxLife(_d.hitPrefab) + 0.3f);
     }
 

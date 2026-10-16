@@ -61,6 +61,8 @@ public static class StaticReset
         ResetOf(typeof(SmokeVolume), SmokeVolume.ResetStatics);
         // 火焰区域注册表（2026-10-16；与烟云同一个理由：漏清 → 重开一局残留死引用）
         ResetOf(typeof(FireZone), FireZone.ResetStatics);
+        // 爆炸事件订阅链（2026-10-17；漏清 → 上一局已销毁的订阅者仍会被回调）
+        ResetOf(typeof(Combat), Combat.ResetStatics);
         ResetOf(typeof(MagicMark), MagicMark.ResetStatics);          // 敌人身上的印记注册表（2026-09-28）
         ResetOf(typeof(HealthPack), HealthPack.ResetStatics);        // 静态事件 AnyConsumed（漏登记 → 上一局已销毁的 WaveManager 仍会被回调）
         ResetOf(typeof(SpawnPosition), SpawnPosition.ResetStatics);  // 地图边界（漏登记 → 上一局算出的边界残留到下一局）

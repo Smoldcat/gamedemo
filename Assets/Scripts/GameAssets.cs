@@ -25,10 +25,26 @@ public class GameAssets : ScriptableObject
 
     [Tooltip("命中火花。建议放带 ParticleSystem 的 Prefab，会自动播完即销毁")]
     public GameObject impactPrefab;
+    [Tooltip("命中敌人的**血迹**（叠加在命中火花之上）。留空 = 不播血迹。\n" +
+             "⚠️ 只在【子弹打中敌人】时播 —— 打墙/爆炸/捡血包等其它闪光一律不受影响")]
+    public GameObject bloodPrefab;
     [Tooltip("枪口火光")]
     public GameObject muzzleFlashPrefab;
+    [Tooltip("**爆炸特效**（RPG / 手雷 / 自爆兵共用一份）。会按各自的爆炸半径**自动等比缩放**（基准见下一项）。留空 = 回退到代码生成的火球 + 白冲击")]
+    public GameObject explosionPrefab;
+    [Tooltip("爆炸特效的**标定基准半径**（米）：表示「上面那个 prefab 在**当前缩放**下的视觉大约代表多少米」。\n" +
+             "⭐ 只需标定一次：把 prefab 缩放调到视觉与某个半径（比如手雷的 8 米）对上，就把那个米数填在这里。\n" +
+             "之后**其它半径的爆炸会按比例自动缩放**（半径 4 米 = 8 米的一半大），加新半径也不用改代码。\n" +
+             "⚠️ 语义：改小 → 所有爆炸特效变大。⚠️ 换 prefab 或改过粒子尺寸后，需重新标定一次。")]
+    [Min(0.1f)] public float explosionFxBenchRadius = 8f;
     [Tooltip("地面弹孔/血迹")]
     public GameObject decalPrefab;
+    [Tooltip("敌人死后留在地面的**血池**（会慢慢扩大）。留空 = 回退到上面那个「地面弹孔/血迹」。\n" +
+             "⚠️ 只在【敌人死亡】时播；存活时长自动取 prefab 自己的粒子总时长（生长血池约 14 秒）")]
+    public GameObject bloodPoolPrefab;
+    [Tooltip("使用血包时的**治疗光环**（罩在玩家身上）。留空 = 不播。\n" +
+             "⚠️ 只在【按 Q 成功用掉一个血包】时播；存活时长自动取 prefab 自己的粒子总时长（约 2.3 秒）")]
+    public GameObject healPrefab;
 
     [Tooltip("伤害飘字 Prefab：含 Text 组件的 UI 物体（可自定义字体/样式/动画）。留空则用代码生成默认文字")]
     public GameObject damageTextPrefab;
