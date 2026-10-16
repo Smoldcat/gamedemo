@@ -32,7 +32,11 @@ public class DebugRangeIndicator : MonoBehaviour
     const int Segments = 48;             // 圆用多少段（够圆又不至于太多 draw call）
     const float HoldTime = 1f;           // 爆炸画出来保留多久（用户 2026-10-17 定：1 秒）
     const float LineWidth = 0.08f;       // 线宽（米，**固定**，不随半径变 → 观感统一）
-    const float GroundOffset = 0.02f;    // 贴地高度：在实体平面之上一点点（避免与地面 z-fighting）
+    // ⚠️ 2026-10-17 修正（用户发现）：这里原来写的是 `EntityPlaneY + 0.02`，但 **`EntityPlaneY` 是
+    //    "实体中心平面"（= 0.55，玩家/敌人身体的中心高度），并不是地面** ⇒ 调试圈悬在地面上方 **0.57 米**，
+    //    和投掷预览那个贴地的范围环（`ThrowableTrajectoryView.RangeRingY = 0.03`）**差了 0.54 米**。
+    //    现在直接取与投掷预览环**同一个高度**（地面顶面 y = 0 → +0.03）⇒ 两者**同平面**，可以互相比对。
+    const float GroundRingY = 0.03f;
 
     /// <summary>统一颜色（用户定：只一种 —— 打开它的人本来就知道自己在测什么）。
     /// 选品红：游戏内没有任何元素是这个色，最不容易看错。</summary>
@@ -153,7 +157,7 @@ public class DebugRangeIndicator : MonoBehaviour
         }
     }
 
-    static float GroundPlaneY() => GameConst.EntityPlaneY + GroundOffset;
+    static float GroundPlaneY() => GroundRingY;
 
     // ==================== 形状（放在调用方这一层）====================
 

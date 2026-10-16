@@ -8369,6 +8369,10 @@ PrefabInstance:
       value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 8946929374040157659, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
+      propertyPath: bodyAimRadius
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 8946929374040157659, guid: 395e5564b56d7504195e7017c4d5df7a, type: 3}
       propertyPath: mousePixelScale
       value: 25
       objectReference: {fileID: 0}

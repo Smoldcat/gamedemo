@@ -22,7 +22,6 @@ public class Crosshair : MonoBehaviour
     static float _hitMarkDur;      // 本次标记的时长（同上；与实例参数同步记录，避免中途改参数导致进度跳变）
     static bool _hitMarkHead;      // 本次命中是否爆头（hitmarker 换色用）
     static bool _hitMarkKill;      // 本次命中是否**致死**（击杀变体：双线）
-    static PlayerController.AimState _aimState = PlayerController.AimState.None;   // 缓存的瞄准状态（10Hz 刷新）
 
     /// 供背包面板等隐藏/恢复准星（打开背包时要临时隐藏准星并显示光标）
     public static Crosshair InstanceUI;   // 实例引用（背包面板用它切换准星显隐）
@@ -35,7 +34,6 @@ public class Crosshair : MonoBehaviour
         _hitMarkDur = 0f;
         _hitMarkHead = false;
         _hitMarkKill = false;
-        _aimState = PlayerController.AimState.None;
     }
 
     /// <summary>命中标记的每帧定位 / 配色 / 动画。
@@ -143,22 +141,14 @@ public class Crosshair : MonoBehaviour
     [Tooltip("【击杀】两条平行线之间的间隙（像素，边到边的空隙）—— 这个空隙就是击杀标记比普通标记「宽」出来的部分")]
     public float hitMarkerKillLineGap = 3f;
 
-    [Header("准星颜色（按瞄准状态自动切换）")]
-    [Tooltip("【未瞄准】准星没指着任何敌人时的颜色（默认白）。\n" +
-             "⚠️ 想拿颜色校准受击区域时看这个：白=没指着，红=指着身体，绿=指着头部。")]
+    [Header("准星颜色")]
+    [Tooltip("准星**常态**颜色（默认白）。\n" +
+             "⚠️ 2026-10-17：原先「指着敌人变色」（白=未瞄准 / 红=指着身体 / 绿=指着头部）已**移除** ——\n" +
+             "它最初只是「还没有判定圈调试工具时、用来校准判定的笨办法」，判定圈工具已能替代其调试作用。\n" +
+             "现在准星只有两态：常态 / 命中闪白。（要看判定范围请用调试面板「视觉」页的「判定圈」）")]
     public Color colorIdle = new Color(0.95f, 0.95f, 0.95f, 0.9f);
-    [Tooltip("【指着身体】准星指在敌人身体上时的颜色（默认红）。\n" +
-             "范围由 PlayerController 的「身体瞄准半径 bodyAimRadius」（世界米数，默认 0.9）决定 —— 调它就能校准红圈。\n" +
-             "⚠️ 它比真实命中范围（碰撞体半径 0.4）大，所以旧版存在「红了却打不中」的环带；想一致就把它调到 0.4~0.5。")]
-    public Color colorBody = new Color(1f, 0.25f, 0.2f);
-    [Tooltip("【指着头部】准星指在敌人头部上时的颜色（默认绿）。\n" +
-             "范围 = PlayerController 的「爆头判定圈」：默认就是**屏幕上画出来的那个头球**\n" +
-             "（headshotGateScale = 1，所见即所判）—— 想让绿圈比看到的头更小/更大，调 PlayerController.headshotGateScale。\n" +
-             "绿色 = 此刻开枪必定爆头（2 倍伤害），所以这个颜色就是「爆头可用」的提示。")]
-    public Color colorHead = new Color(0.35f, 1f, 0.45f);
     [Tooltip("【命中闪白】打中敌人瞬间的反馈色（默认纯白）。\n" +
-             "时长由 hitMarkerDuration 控制（与命中标记共用同一计时）；\n" +
-             "⚠️ 它和「未瞄准=白」会撞色，所以单独做成一个字段：嫌看不清就换成别的（比如淡蓝 0.6,0.85,1）。")]
+             "时长由 hitMarkerDuration 控制（与命中标记共用同一计时）。")]
     public Color colorHitFlash = Color.white;
 
     [Header("散布圈（动态）")]
@@ -183,7 +173,6 @@ public class Crosshair : MonoBehaviour
     Image _spreadRing;             // 散布圈（散布楔形的内切圆投影）
     Texture2D _spreadTex, _reloadTex;   // 运行时生成的圆环贴图（OnDestroy 必须释放，否则每局累积一组）
     float _lastArmGap = -1f;       // 上一帧十字留空（脏值检查：没变就不重排四根线）
-    float _nextOverCheck;          // 索敌检测降频计时（不必每帧遍历敌人 + 打射线）
     Health _playerHealth;          // 玩家生命组件（订阅受伤，做准星受击抖动）
     float _hitShakeUntil;          // 受击抖动结束时间
     bool _cursorGameplay = true;   // 当前光标是否处于"游玩"状态（只在变化时切换，见 ApplyCursorMode）
@@ -487,31 +476,17 @@ public class Crosshair : MonoBehaviour
         //    （2026-10-15 用户实测）。放这里则换弹中它也按时消失。
         UpdateHitMarkers();
 
-        if (reloading) return;   // 换弹时准星已隐藏，不必再索敌/变色
+        if (reloading) return;   // 换弹时准星已隐藏，不必再更新配色
 
-        // 准星变色不需要每帧精确：每 0.1 秒刷新一次瞄准状态，省大量遍历和投影。
-        // 判定走 PlayerController.GetAimState —— 与开火的爆头判定是**同一份实现**（看到的 = 打出的）。
-        if (Time.time >= _nextOverCheck)
-        {
-            _nextOverCheck = Time.time + 0.1f;
-            var pcAim = PlayerController.Instance;
-            if (pcAim != null)
-            {
-                EnemyAI aimTmp;
-                _aimState = pcAim.GetAimState(out aimTmp);
-            }
-            else _aimState = PlayerController.AimState.None;
-        }
+        // 颜色：命中闪白 → 常态（`colorIdle`）。
+        // ⚠️ 2026-10-17 **按用户决定移除了"准星指着敌人变色"**（原为 白=未瞄准 / 红=指着身体 / 绿=指着头部）：
+        //    它最初只是"**还没有判定圈调试工具时**用来校准判定的笨办法"，判定圈工具已能替代它的调试作用
+        //    ⇒ 现在准星只剩"常态 + 命中闪白"两态（**更硬核**：射击前的准头要靠玩家自己看画面判断）。
+        //    ⚠️ **开火判定完全不受影响** —— `Fire()` 照旧调 `GetAimState` 决定爆头；命中后的反馈也都在
+        //       （命中标记的爆头变体 `_hitMarkHead` + 伤害飘字）。
+        Color col = Time.time < _hitMarkUntil ? colorHitFlash : colorIdle;
 
-        // 颜色优先级：命中闪白 → 指着头部（绿）→ 指着身体（红）→ 未瞄准（白）
-        Color col;
-        if (Time.time < _hitMarkUntil) col = colorHitFlash;
-        else if (_aimState == PlayerController.AimState.Head) col = colorHead;
-        else if (_aimState == PlayerController.AimState.Body) col = colorBody;
-        else col = colorIdle;
-
-        // ⚠️ 主十字的配色约 0.1s 才可能变一次（上面已节流判定）→ **变了才写**，
-        //    否则每帧给 5 个 Image 写色 = 每帧标脏准星画布（2026-10-15 审计）
+        // ⚠️ **变了才写**，否则每帧给 5 个 Image 写色 = 每帧标脏准星画布（2026-10-15 审计）
         if (_bars != null)
             foreach (var b in _bars)
                 if (b != null && b.color != col) b.color = col;
