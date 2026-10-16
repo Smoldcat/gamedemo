@@ -1205,7 +1205,11 @@ public class PlayerController : MonoBehaviour
     /// FOV / 分辨率 / 宽高比 / 距离怎么变都同步（这是 2026-09-23 从「固定像素圈」改过来的原因）。
     /// 返回 false = 头部在相机后方或退化，调用方应跳过。
     /// </summary>
-    static bool HeadScreenCircle(Camera cam, EnemyHead head, out Vector2 center, out float radiusPx)
+    /// <summary>爆头判定圈的屏幕投影（**开火判定与调试可视化唯一同源实现**）。
+    /// ⚠️ 2026-10-16 由 `static` 提为 `internal`：调试工具要画"同一个圈"，**复刻公式必然会漂**
+    ///    （第一版就漏了 4 处细节：`Max(radius,0.01f)`、`b.z &lt;= 0`、`gate &gt;= 0.5f` 的门限、`headshotGateScale ≤ 0` 时的回退口径）。
+    ///    提为 internal 后直接调它 → "看到的圈 = 判定的圈"永远成立。</summary>
+    internal static bool HeadScreenCircle(Camera cam, EnemyHead head, out Vector2 center, out float radiusPx)
     {
         center = Vector2.zero;
         radiusPx = 0f;

@@ -59,6 +59,8 @@ public static class StaticReset
         // ⚠️ 走 `ResetStatics()`（实现就是 `All.Clear()`）而不是直接 `SmokeVolume.All.Clear()`：
         //    统一写法后，"登记"只剩一种形式，编辑器校验才不会把它当成漏登记（2026-10-15）。
         ResetOf(typeof(SmokeVolume), SmokeVolume.ResetStatics);
+        // 火焰区域注册表（2026-10-16；与烟云同一个理由：漏清 → 重开一局残留死引用）
+        ResetOf(typeof(FireZone), FireZone.ResetStatics);
         ResetOf(typeof(MagicMark), MagicMark.ResetStatics);          // 敌人身上的印记注册表（2026-09-28）
         ResetOf(typeof(HealthPack), HealthPack.ResetStatics);        // 静态事件 AnyConsumed（漏登记 → 上一局已销毁的 WaveManager 仍会被回调）
         ResetOf(typeof(SpawnPosition), SpawnPosition.ResetStatics);  // 地图边界（漏登记 → 上一局算出的边界残留到下一局）

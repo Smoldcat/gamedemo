@@ -43,11 +43,11 @@ MonoBehaviour:
   effectType: 0
   effectValue: 0
   triggerMessage: "\u65A9\u6740\uFF01"
-  boltPrefab: {fileID: 0}
-  boltWidth: 0.1
+  boltPrefab: {fileID: 107252, guid: ce5715dcf97590b4cbec21f0ed7cf1ed, type: 3}
+  boltWidth: 1.2
   boltHeight: 14
   boltColor: {r: 0.75, g: 0.9, b: 1, a: 1}
-  boltLife: 0.25
+  boltLife: 1.2
   flashAmount: 0.6
   triggerSound: {fileID: 0}
   endSound: {fileID: 0}

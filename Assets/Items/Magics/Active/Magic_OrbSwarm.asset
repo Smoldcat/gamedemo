@@ -47,9 +47,11 @@ MonoBehaviour:
   pierceCount: 0
   blockedByObstacle: 0
   endDuration: 0
-  orbPrefab: {fileID: 0}
+  orbPrefab: {fileID: 110476, guid: 8813e80d6641f0b41b9590f58211f3e2, type: 3}
   trailPrefab: {fileID: 0}
   orbColor: {r: 0.45, g: 0.75, b: 1, a: 1}
+  hitPrefab: {fileID: 182714, guid: 0a9aa7cbab47dd34fad18af6ec82969d, type: 3}
+  hitDelay: 0
   castSound: {fileID: 0}
   hitSound: {fileID: 0}
   endSound: {fileID: 0}

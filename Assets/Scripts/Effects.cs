@@ -208,6 +208,28 @@ public static class Effects
         return go;
     }
 
+    /// <summary>读一个特效 prefab「播完要多久」= 它所有粒子系统里 `(Duration + 最长粒子寿命)` 的最大值。
+    ///
+    /// ⚠️ **循环**（`loop = true`）的粒子系统，`Duration` 只是"单个循环的长度"、不代表播完 → 这类只取寿命、不加 Duration。
+    /// ⚠️ **为什么要它**：需要"播完就销毁"的地方（斩杀雷柱 `MagicMark`、魔法球的命中特效 `MagicProjectile`）
+    ///    用它**自动算出销毁时长** → 换特效时**不用改代码、也不用填数值**（卡上的值只当"下限"用）。
+    /// 📌 调用方一般再加 0.3~0.5s 余量（淡出 / 收尾），例如 `Effects.PrefabFxLife(prefab) + 0.3f`。
+    /// 📌 与"卡上人工填的时长"的关系：那里取 `max(人工值, 本函数返回值)` —— 人工值只会**加长**，永远不会把特效掐断。</summary>
+    public static float PrefabFxLife(GameObject prefab)
+    {
+        if (prefab == null) return 0f;
+        var pss = prefab.GetComponentsInChildren<ParticleSystem>(true);
+        float max = 0f;
+        for (int i = 0; i < pss.Length; i++)
+        {
+            var m = pss[i].main;
+            float t = m.startLifetime.constantMax;
+            if (!m.loop) t += m.duration + m.startDelay.constantMax;
+            if (t > max) max = t;
+        }
+        return max;
+    }
+
     // ---------------- 爆炸范围圈（池化 Quad + 程序生成的圆环贴图） ----------------
     const string BlastRingPoolKey = "BlastRing";
     static Texture2D _ringTex;

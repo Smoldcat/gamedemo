@@ -62,6 +62,9 @@ public class DebugOverlay : MonoBehaviour
 
     void LateUpdate()
     {
+        // 死亡结算后敌人已停（`SeesPlayerNow`/位置全是过期读数）→ 直接收摊，别在死亡界面上再盖一层扇形
+        if (GameState.GameOver) { HideAll(); return; }
+
         var cam = CameraCache.Main;
         if (cam == null) { HideAll(); return; }
 
@@ -134,12 +137,20 @@ public class DebugOverlay : MonoBehaviour
     /// <summary>节流：沿弧线打一圈 `Layers.Blocker` 射线，把每个弧点的半径削到"撞墙距离"。</summary>
     void UpdateConeCast(Cone c, EnemyAI ai)
     {
+        // ⚠️ 用 `Time.time` 节流：开面板（暂停）时它不走 → 面板打开期间射线不再重打、半径停在那一刻。
+        //    这是刻意的（暂停时敌人也不动，重算没有意义），但**要知道**：暂停中改了敌人视距不会即时反映。
         if (Time.time < c.nextCast) return;
         c.nextCast = Time.time + CastInterval;
 
+        // ⚠️ 恒按视野角画（**不**因追击而改画整圆 —— 2026-10-16 用户判断：那是过度设计）。
+        //    代价是：游戏**追击时是全向感知**（`EnemyAI.CanSeePlayer` 里只有巡逻态才查视野角），
+        //    所以偶尔会看到"背对玩家、扇形却红色"——那是**游戏规则如此**（已追到你），不是画错了。
         float half = Mathf.Clamp(ai.fov, 1f, 360f) * 0.5f;
         float range = Mathf.Max(0.1f, ai.sightRange);
-        Vector3 origin = OnGround(ai.transform.position);
+        // ⚠️ 射线起点与游戏自己的视线**同源**（`EnemyAI.CanSeePlayer` 用的是 `position + 0.4`）：
+        //    起点高度不同会把 0.55~0.95 之间的矮物体误判成遮挡（2026-10-16 评审提醒）。
+        //    ⚠️ 烟的遮挡**不体现在扇形上**（烟走的是 `SmokeVolume.BlocksLine` 的几何判定，不是物理射线）。
+        Vector3 origin = ai.transform.position + Vector3.up * 0.4f;
         Vector3 fwd = FlatForward(ai.transform.forward);
 
         for (int s = 0; s <= ArcSegments; s++)
@@ -156,6 +167,9 @@ public class DebugOverlay : MonoBehaviour
     /// <summary>把弧点铺到世界空间（圆心 + 各弧点），网格顶点**原地更新**。</summary>
     void BuildConeMesh(Cone c, EnemyAI ai)
     {
+        // ⚠️ 恒按视野角画（**不**因追击而改画整圆 —— 2026-10-16 用户判断：那是过度设计）。
+        //    代价是：游戏**追击时是全向感知**（`EnemyAI.CanSeePlayer` 里只有巡逻态才查视野角），
+        //    所以偶尔会看到"背对玩家、扇形却红色"——那是**游戏规则如此**（已追到你），不是画错了。
         float half = Mathf.Clamp(ai.fov, 1f, 360f) * 0.5f;
         Vector3 origin = OnGround(ai.transform.position);
         Vector3 fwd = FlatForward(ai.transform.forward);
@@ -173,8 +187,10 @@ public class DebugOverlay : MonoBehaviour
 
     void HideCones()
     {
+        // ⚠️ 必须销毁**全部**网格，不能只销毁"敌人已销毁"的那些：`Clear()` 之后这些 Mesh 就没人持有了，
+        //    而 Mesh 是原生资源、GC 收不走 → 每开关一次就泄漏 N 个（2026-10-16 评审发现，反复点「全部关/开」会线性堆积）。
         for (int i = 0; i < _cones.Count; i++)
-            if (_cones[i].ai == null && _cones[i].mesh != null) Destroy(_cones[i].mesh);
+            if (_cones[i].mesh != null) Destroy(_cones[i].mesh);
         _cones.Clear();
     }
 
@@ -205,6 +221,14 @@ public class DebugOverlay : MonoBehaviour
     {
         var pc = PlayerController.Instance;
         if (pc == null) { HideRings(); return; }
+
+        // 判定圈口径与 `PlayerController.GetAimState` 完全一致（二选一，2026-10-16 评审后改为同源）：
+        //  · gateOnVisual（默认）：每个敌人各自算「可见头半径 × headshotGateScale」；
+        //  · 回退（headshotGateScale ≤ 0）：全敌人共用一个固定像素圈 = 屏幕高 × headshotRadiusRatio。
+        bool gateOnVisual = pc.headshotGateScale > 0f;
+        float gateLegacy = Screen.height * Mathf.Max(pc.headshotRadiusRatio, 0f);
+        if (!gateOnVisual && gateLegacy < 0.5f) { HideRings(); return; }   // 两个口径都关掉 = 游戏里不存在爆头判定
+
         EnsureCanvas();
 
         int used = 0;
@@ -214,16 +238,17 @@ public class DebugOverlay : MonoBehaviour
             var h = ai.HealthRef;
             if (h == null || !h.alive || ai.head == null) continue;
 
-            Vector3 headPos = ai.head.WorldPosition;
-            Vector3 s0 = cam.WorldToScreenPoint(headPos);
-            if (s0.z <= 0f) continue;                                     // 在相机背后
-            Vector3 s1 = cam.WorldToScreenPoint(headPos + cam.transform.right * ai.head.radius);
-            float visibleR = Vector2.Distance(new Vector2(s0.x, s0.y), new Vector2(s1.x, s1.y));
-            if (visibleR < 1f) continue;                                  // 太远/太小，画了也看不见
+            // ⚠️ 直接调游戏自己的实现（`PlayerController.HeadScreenCircle`，2026-10-16 提为 internal）——
+            //    复刻公式**必然漂**：第一版就漏了 `Max(radius,0.01f)`、`b.z <= 0`、门限口径等 4 处细节，
+            //    结果"看到的圈 ≠ 判定的圈"。同源调用后这条保证永久成立。
+            if (!PlayerController.HeadScreenCircle(cam, ai.head, out Vector2 hc, out float visibleR)) continue;
 
-            SetRing(used++, s0, visibleR, HeadVis);
-            float gate = visibleR * Mathf.Max(0f, pc.headshotGateScale);
-            if (gate > 0.5f) SetRing(used++, s0, gate, HeadGate);
+            float gate = gateOnVisual ? visibleR * pc.headshotGateScale : gateLegacy;
+            if (gate < 0.5f) continue;               // 与游戏同门槛（<0.5px = 关掉，避免"必中"）
+
+            Vector3 s0 = new Vector3(hc.x, hc.y, 0f);
+            SetRing(used++, s0, visibleR, HeadVis);  // 可见头圈（淡）
+            SetRing(used++, s0, gate, HeadGate);     // 判定圈（亮）
         }
         for (int i = used; i < _ringPool.Count; i++) _ringPool[i].gameObject.SetActive(false);
     }
@@ -250,6 +275,7 @@ public class DebugOverlay : MonoBehaviour
             go.transform.SetParent(_canvasRt, false);
             var rt = go.AddComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            go.layer = UIUtil.UILayer;   // 与画布其它 UI 一致（Overlay 下不影响渲染，但约定要统一 —— 2026-10-16 评审提醒）
             var img = go.AddComponent<Image>();
             img.sprite = RingSprite();
             img.raycastTarget = false;
@@ -300,8 +326,10 @@ public class DebugOverlay : MonoBehaviour
             verts[i * 2] = d * inner;
             verts[i * 2 + 1] = d;
             int n = (i + 1) % seg;
-            tris[i * 6 + 0] = i * 2;     tris[i * 6 + 1] = i * 2 + 1; tris[i * 6 + 2] = n * 2;
-            tris[i * 6 + 3] = i * 2 + 1; tris[i * 6 + 4] = n * 2 + 1; tris[i * 6 + 5] = n * 2;
+            // ⚠️ 绕序按"从上方看逆时针"排 → 法线朝 +Y：这样**即使** shader 从 `Sprites/Default`（Cull Off）
+            //    回落到 `Unlit/Color`（Cull Back），圆环也照样看得见（2026-10-16 评审提醒：原来靠 Cull Off 是碰巧）
+            tris[i * 6 + 0] = i * 2;     tris[i * 6 + 1] = n * 2;        tris[i * 6 + 2] = i * 2 + 1;
+            tris[i * 6 + 3] = i * 2 + 1; tris[i * 6 + 4] = n * 2;        tris[i * 6 + 5] = n * 2 + 1;
         }
         _unitRing = new Mesh { name = "DebugUnitRing" };
         _unitRing.vertices = verts;

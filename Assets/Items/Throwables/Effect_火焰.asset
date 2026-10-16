@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cc3b289866226e469482e162a6c418e, type: 3}
+  m_Name: "Effect_\u706B\u7130"
+  m_EditorClassIdentifier: 
+  effectName: "\u706B\u7130"
+  description: "\u843D\u70B9\u71C3\u8D77\u4E00\u7247\u706B\uFF1A\u6301\u7EED 10 \u79D2\uFF0C\u5708\u5185\u654C\u4EBA\u6BCF
+    0.5 \u79D2\u6389 10 \u8840\uFF08\u9694\u5899\u4E0D\u6389\uFF09\uFF0C\u73A9\u5BB6\u7AD9\u8FDB\u53BB\u4E5F\u4F1A\u88AB\u70E7\u3002\u2014\u2014
+    \u5C01\u9501\u578B\u6548\u679C\uFF08\u539F\u578B\uFF0C\u6570\u503C\u53EF\u8C03\uFF09"
+  showRangeIndicator: 1
+  radius: 3.5
+  duration: 10
+  fadeOut: 3
+  damagePerTick: 10
+  tickInterval: 0.5
+  selfDamageMultiplier: 1
+  material: {fileID: 2100000, guid: 54bc91023d8bde540be25bbe29612ce8, type: 2}
+  particleLifetime: 1.1
+  particleSize: 1.35
+  emitRate: 22
+  riseSpeed: 0.55

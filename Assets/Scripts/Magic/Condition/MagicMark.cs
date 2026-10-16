@@ -234,7 +234,11 @@ public class MagicMark : MonoBehaviour
         _indicator.transform.Rotate(Vector3.up, 90f * Time.deltaTime, Space.World);   // 慢慢自转，显眼
     }
 
-    /// <summary>从天而降的雷柱：一个细长的圆柱，出现 `boltLife` 秒后消失。
+    /// <summary>从天而降的雷柱。两条路（存活时长 = `max(卡上 boltLife, 特效自身时长)`，见 <see cref="PrefabLife"/>）：
+    /// ① **填了 `boltPrefab`**（推荐）→ 用**它自带的尺寸**、**落在落点上**（不缩放、不抬高）
+    ///    —— 目的是"换特效不用改代码、也不用调数值"；
+    /// ② **留空** → 代码生成一根细长圆柱，`boltWidth`（粗细）/ `boltHeight`（高度）是它的参数、
+    ///    `boltColor` 是它的颜色；柱子中心抬到半高 → 底部贴地。
     /// ⚠️ Unity 内置圆柱的原始尺寸是「高 = 2 单位」→ 想得到 `boltHeight` 的实际高度，
     ///    缩放要填 `boltHeight / 2`（这是最容易写错的一处）。</summary>
     void PlayBolt(Vector3 pos)
@@ -243,15 +247,25 @@ public class MagicMark : MonoBehaviour
         if (_d.boltPrefab != null)
         {
             bolt = Instantiate(_d.boltPrefab);
+            bolt.name = "FX_" + _d.boltPrefab.name;   // 与 `Effects` 的实例命名一致（一眼看出这是特效实例）
+            // 归入 FX 层：与项目其它特效一致（**归一入口 = `Layers.SetRecursively`**，不要再自写一份）。
+            // ⚠️ 归层的意义是"语义明确"：将来若给特效加碰撞体/触发器，子弹（`BulletMask`）与视线（`SightMask`）都不会误伤它。
+            Layers.SetRecursively(bolt, Layers.FX);
+            bolt.transform.position = pos;            // prefab 自带尺寸 + 落在落点（不抬高）
         }
         else
         {
             bolt = Effects.CreateMeshObject(PrimitiveType.Cylinder, "LightningBolt", null,
                                             Effects.SharedAlpha(_d.boltColor));
             bolt.transform.localScale = new Vector3(_d.boltWidth, _d.boltHeight * 0.5f, _d.boltWidth);
+            bolt.transform.position = pos + Vector3.up * (_d.boltHeight * 0.5f);   // 中心在半高处 → 底部贴地
         }
 
-        bolt.transform.position = pos + Vector3.up * (_d.boltHeight * 0.5f);   // 柱子中心在半高处 → 底部贴地
-        Destroy(bolt, _d.boltLife);
+        // ⭐ 存活时长 = **max(卡上的 `boltLife`, 特效自己播完所需时长)** —— 卡上那个值只当"下限"，
+        //    这样"换特效时忘了调时长"也**不会把特效掐断**（见 `PrefabLife` 的说明）。
+        float life = _d.boltLife;
+        if (_d.boltPrefab != null) life = Mathf.Max(life, Effects.PrefabFxLife(_d.boltPrefab));
+        Destroy(bolt, life);
     }
+
 }

@@ -112,6 +112,11 @@ public class ProjectileMagicData : MagicData
     public GameObject trailPrefab;
     [Tooltip("占位球体的颜色（仅当 orbPrefab 留空时生效）")]
     public Color orbColor = new Color(0.45f, 0.75f, 1f);
+    [Tooltip("命中特效 prefab（在每个命中点播放）。留空 = 只播代码生成的命中火花（Effects.Impact）")]
+    public GameObject hitPrefab;
+    [Tooltip("命中后延迟多少秒才播放上面的命中特效（0 = 立即）。\n" +
+             "⚠️ 存活时长不用填 —— 自动按 prefab 自己的粒子总时长销毁")]
+    [Min(0f)] public float hitDelay = 0f;
 
     // ==================== 音效（可空） ====================
 

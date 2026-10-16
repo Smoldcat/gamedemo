@@ -64,15 +64,20 @@ public class ConditionMagicData : MagicData
     // ==================== 表现 ====================
 
     [Header("【表现】")]
-    [Tooltip("雷柱外观 prefab。留空 = 用代码生成的圆柱（占位）")]
+    [Tooltip("雷柱外观 prefab。留空 = 用代码生成的圆柱（占位）。\n" +
+             "⭐ 填了它以后：Width / Height / Color 三个字段都【不再作用于它】（那三个是占位圆柱的参数）；\n" +
+             "   它用自己 prefab 里的尺寸和外形，落在落点上（不缩放、不抬高）。")]
     public GameObject boltPrefab;
-    [Tooltip("占位雷柱的直径（米）")]
+    [Tooltip("【仅占位圆柱】直径（米）—— 填了外观 prefab 后本字段不生效")]
     [Min(0.05f)] public float boltWidth = 1.2f;
-    [Tooltip("占位雷柱的高度（米）—— 从天上落下来的柱子，够高才像【从天而降】")]
+    [Tooltip("【仅占位圆柱】高度（米）—— 从天上落下来的柱子，够高才像【从天而降】；\n" +
+             "填了外观 prefab 后本字段不生效")]
     [Min(0.5f)] public float boltHeight = 14f;
-    [Tooltip("雷柱颜色（仅占位外观用）")]
+    [Tooltip("闪光的颜色 + 触发提示文字的颜色（【不改变外观 prefab 自身的颜色】—— 那个由 prefab 的材质决定）；\n" +
+             "仅当留空用占位圆柱时，才兼作圆柱的颜色")]
     public Color boltColor = new Color(0.75f, 0.9f, 1f);
-    [Tooltip("雷柱从生成到消失的时长（秒）")]
+    [Tooltip("存活时长下限（秒）。⭐ 填了外观 prefab 时：它自己播完所需的时长若更长，就按它自己的来\n" +
+             "（本值只保证【至少显示这么久】，不会把特效掐断）；留空时 = 占位圆柱的存活时长")]
     [Min(0.02f)] public float boltLife = 0.25f;
     [Tooltip("触发时的闪光强度（0 = 不闪）")]
     [Range(0f, 1f)] public float flashAmount = 0.6f;

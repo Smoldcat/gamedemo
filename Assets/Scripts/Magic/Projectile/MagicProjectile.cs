@@ -368,6 +368,36 @@ public class MagicProjectile : MonoBehaviour
         return false;
     }
 
+    /// <summary>命中特效：卡上填了 <see cref="ProjectileMagicData.hitPrefab"/> 才播（延迟见 `hitDelay`）。
+    ///
+    /// ⚠️ **必须定时销毁** —— 命中特效 prefab 播完后粒子停下，但 GameObject **不会自己消失**；
+    ///    不销毁的话每个命中点都会留下一份（5 个球打十几下就堆一堆）。
+    ///    ⭐ 销毁时长**自动读** prefab 自己的粒子总时长（`Effects.PrefabFxLife` + 0.3s 余量）
+    ///      → **换特效不用改代码、也不用填数值**。
+    /// ⚠️ **延迟不能挂在球上**：球命中后会 `Expire()` 自毁，挂在它身上的计时器会跟着消失
+    ///    → 延迟走**常驻的 `PlayerMagic`** 上的协程（它挂在 Player 上、跨整局存在）。</summary>
+    void PlayHitFx(Vector3 point)
+    {
+        if (_d == null || _d.hitPrefab == null) return;
+        if (_d.hitDelay <= 0f) { SpawnHitFx(point); return; }
+        var host = PlayerMagic.Instance;
+        if (host == null) { SpawnHitFx(point); return; }     // 找不到宿主就退化成"立即播"，不静默丢失
+        host.StartCoroutine(SpawnHitFxLater(point));
+    }
+
+    void SpawnHitFx(Vector3 point)
+    {
+        if (_d == null || _d.hitPrefab == null) return;      // 延迟期间卡可能已被卸载
+        var go = Instantiate(_d.hitPrefab, point, Quaternion.identity);
+        Destroy(go, Effects.PrefabFxLife(_d.hitPrefab) + 0.3f);
+    }
+
+    System.Collections.IEnumerator SpawnHitFxLater(Vector3 point)
+    {
+        yield return new WaitForSeconds(_d.hitDelay);
+        SpawnHitFx(point);
+    }
+
     /// <summary>结算一次命中。返回 true = 这一帧的检测到此为止（有效命中，或撞墙消散）。
     /// ⚠️ 用 `GetComponentInParent&lt;Health&gt;()`：敌人的碰撞体可能挂在子物体上，
     ///    直接 `GetComponent` 会拿不到（表现是"打中了但没伤害"，极难查）。
@@ -423,6 +453,7 @@ public class MagicProjectile : MonoBehaviour
         h.TakeDamage(dmg, _dir);   // ⭐ 走标准伤害流程 → 白闪 / 飘字 / 击杀播报 / 掉落 全部自动获得
 
         Effects.Impact(point, _d.orbColor, 1.2f);
+        PlayHitFx(point);                                   // 卡上填了命中特效 prefab 才播
         if (_d.hitSound != null) Sfx.Play(_d.hitSound);
 
         if (_pierceLeft > 0)

@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f5d4284f3e7c324bbf2b10ff9cb661a, type: 3}
+  m_Name: "Throwable_\u71C3\u70E7\u5F39"
+  m_EditorClassIdentifier: 
+  icon: {fileID: 0}
+  pickupColor: {r: 1, g: 0.45, b: 0.12, a: 1}
+  pickupModelPrefab: {fileID: 0}
+  canStack: 1
+  maxStack: 3
+  stackId: 
+  description: "\u843D\u5730 0.8 \u79D2\u540E\u71C3\u8D77\u4E00\u7247\u706B\uFF1A\u5708\u5185\u6301\u7EED\u6389\u8840\u3001\u9694\u5899\u4E0D\u6389\uFF1B\u81EA\u5DF1\u4E5F\u8EB2\u8FDC\u70B9\u3002\u2014\u2014
+    \u5C01\u9501\u578B\u6295\u63B7\u7269\uFF08\u539F\u578B\uFF09"
+  baseValue: 200
+  throwableName: "\u71C3\u70E7\u5F39"
+  maxThrowDistance: 16
+  peakHeight: 3.2
+  throwSpeed: 12
+  bounceNormal: 0.4
+  bounceTangential: 0.3
+  stopSpeed: 1.2
+  groundFuse: 0.8
+  impactFuse: 0
+  maxLife: 6
+  effect: {fileID: 11400000, guid: cf122fbf5c14aa14ab2e74da9c71e86c, type: 2}
+  worldIconSize: 0.3
+  worldHoverHeight: 0.16
+  worldShadowSize: 0.26
+  worldShadowAlpha: 0.3

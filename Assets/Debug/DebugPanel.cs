@@ -8,7 +8,7 @@ using UnityEngine.UI;
 ///
 /// 结构（2026-10-14 用户定：功能变多后一屏展示太乱 → 分 tab；调试 UI 以简洁与效率优先）：
 ///   · **顶部常驻信息区**（不随 tab 变）：HP / 移速 / 武器 / 进度 —— 两列，**左标签静态、右值节流刷新**；
-///   · 中部 **5 个 tab**（战斗 / 波次 / 敌人 / 日志 / 杂项），**一次只激活当前页**（其余 SetActive(false) → UGUI 不处理）；
+///   · 中部 **7 个 tab**（战斗 / 波次 / 敌人 / 物品 / 日志 / 杂项 / 视觉），**一次只激活当前页**（其余 SetActive(false) → UGUI 不处理）；
 ///   · 底部一行**提示**（动作结果）。
 ///
 /// 交互约束（别改）：
@@ -51,7 +51,7 @@ public class DebugPanel : MonoBehaviour
     // 页面内容引用
     Text _enemyText, _logText;
     Text _invulLabel, _hudLabel;
-    Text _godLabel;
+    Text _godLabel, _noMagicCdLabel, _noAmmoLabel;
 
     // 物品页状态（可刷物品清单：打开时构建一次，之后只在换 tab 时读）
     List<ItemData> _items;
@@ -73,7 +73,7 @@ public class DebugPanel : MonoBehaviour
     float _barsNext;                                                               // 冻结时血条代刷的节流
     readonly Dictionary<Health, float> _origMaxHp = new Dictionary<Health, float>();   // 被增血的敌人的原 maxHp
 
-    bool _open, _godMode, _logDirty;
+    bool _open, _godMode, _logDirty, _noMagicCd, _noAmmoUse;
     float _nextRefresh;
     float _desiredTimeScale = 1f;
     string _note = "";
@@ -139,6 +139,15 @@ public class DebugPanel : MonoBehaviour
         // 敌人冻结：**每帧压制**（新刷出的敌人下一帧也会被冻住；面板关着也生效 —— 用户此时正在打输出测试）
         if (_enemyFrozen) FreezeEnemyTick();
 
+        // 魔法无冷却：**每帧压制**（面板关着也要生效 —— 用户此时正在连续放技能）。
+        // 与「清魔法冷却」按钮的区别：那个是**一次性**归零，这个是**持续**的（放完立刻清 → 等于没有 CD）。
+        // ⚠️ 主动 / 被动都覆盖：两者读的都是同一个 `PlayerMagic.CooldownRemaining`（`PassiveReady` 也是它）。
+        if (_noMagicCd) SuppressMagicCdTick();
+
+        // 射击不消耗子弹：**每帧压制**（面板关着也要生效 —— 用户此时正在打靶测试手感）。
+        // ⚠️ 覆盖的是"弹匣"（`magAmmo`）；备弹不动，但弹匣始终满 → 打不光、也永远轮不到"空弹自动换弹"。
+        if (_noAmmoUse) SuppressAmmoTick();
+
         if (!_open)
         {
             // 面板关着时保持"期望的时间缩放"：关面板时 UIState.Pop → ApplyPause(false) 会把它重置为 1
@@ -203,6 +212,8 @@ public class DebugPanel : MonoBehaviour
             _invulLabel.color = on ? DebugUI.Warn : DebugUI.Fg;
         }
         if (_godLabel != null) _godLabel.text = _godMode ? "止血: 开" : "止血: 关";
+        if (_noMagicCdLabel != null) _noMagicCdLabel.text = _noMagicCd ? "魔法无冷却: 开" : "魔法无冷却: 关";
+        if (_noAmmoLabel != null) _noAmmoLabel.text = _noAmmoUse ? "射击不耗弹: 开" : "射击不耗弹: 关";
         if (_hudLabel != null && hud != null) _hudLabel.text = hud.visible ? "常驻条: 开" : "常驻条: 关";
 
         // 当前页才刷新（省开销）
@@ -374,6 +385,62 @@ public class DebugPanel : MonoBehaviour
         SetNote("魔法冷却已清零");
     }
 
+    /// <summary>魔法无冷却开关：打开后由 <see cref="Update"/> 每帧压制冷却（放完立刻清），关上即恢复。
+    /// ⚠️ 与「清魔法冷却」按钮的区别：那个是**一次性**归零，这个是**持续**的 —— 连续放技能时用这个。</summary>
+    void OnToggleNoMagicCd()
+    {
+        _noMagicCd = !_noMagicCd;
+        if (_noMagicCdLabel != null)
+        {
+            _noMagicCdLabel.text = _noMagicCd ? "魔法无冷却: 开" : "魔法无冷却: 关";
+            _noMagicCdLabel.color = _noMagicCd ? DebugUI.Warn : DebugUI.Fg;
+        }
+        if (_noMagicCd)
+        {
+            SuppressMagicCdTick();   // 立刻生效一次，不用等下一次施法
+            SetNote("魔法无冷却：开（放完立刻清 CD；关着面板也在生效）");
+        }
+        else SetNote("魔法无冷却：关");
+    }
+
+    /// <summary>魔法无冷却的每帧动作：冷却还没走完就清掉。走 <see cref="PlayerMagic.ClearCooldown"/>
+    /// （README 登记表里的 `[DEBUG-ONLY]` 中性方法）。
+    /// ⚠️ 只在"确实还有冷却"时才调 → 常态零开销；主动 / 被动共用同一个 `CooldownRemaining`，所以两者都覆盖。</summary>
+    void SuppressMagicCdTick()
+    {
+        var pm = PlayerMagic.Instance;
+        if (pm != null && pm.CooldownRemaining > 0f) pm.ClearCooldown();
+    }
+
+    /// <summary>「射击不耗弹」开关：打开后由 <see cref="Update"/> 每帧把弹匣补满。</summary>
+    void OnToggleNoAmmo()
+    {
+        _noAmmoUse = !_noAmmoUse;
+        if (_noAmmoLabel != null)
+        {
+            _noAmmoLabel.text = _noAmmoUse ? "射击不耗弹: 开" : "射击不耗弹: 关";
+            _noAmmoLabel.color = _noAmmoUse ? DebugUI.Warn : DebugUI.Fg;
+        }
+        if (_noAmmoUse)
+        {
+            SuppressAmmoTick();   // 立刻补满，不用等开下一枪
+            SetNote("射击不耗弹：开（弹匣每帧补满；关着面板也在生效）");
+        }
+        else SetNote("射击不耗弹：关");
+    }
+
+    /// <summary>「射击不耗弹」的每帧动作：弹匣没满就补满 —— `PlayerController.Fire()` 里那句 `magAmmo--`
+    /// 因此等于没扣（开火判定读的是同一帧补满后的值，所以也不会走"空弹自动换弹"）。
+    /// ⚠️ 只写游戏**已有的 public 字段**（`PlayerController.weapon` / `magAmmo`）→ **不需要往核心加任何方法**。
+    /// ⚠️ 只在"确实不满"时才写 → 常态零开销，也不会每帧无谓地碰游戏状态。
+    /// 📌 语义边界：它**不碰备弹**（背包里的弹药数量）；但弹匣始终满 → 打不光。</summary>
+    void SuppressAmmoTick()
+    {
+        var pc = PlayerController.Instance;
+        if (pc != null && pc.weapon != null && pc.magAmmo < pc.weapon.magSize)
+            pc.magAmmo = pc.weapon.magSize;
+    }
+
     // ---------- 物品页 ----------
 
     void StepItem(int dir)
@@ -533,7 +600,7 @@ public class DebugPanel : MonoBehaviour
 
         DebugUI.NewHSep(_root, "Sep1", W, new Vector2(0f, y)); y -= 8f;
 
-        // ---- 6 个 tab（索引：0战斗 1波次 2敌人 3物品 4日志 5杂项）----
+        // ---- 7 个 tab（索引：0战斗 1波次 2敌人 3物品 4日志 5杂项 6视觉）----
         // 7 个 tab：宽度收到 80 / 步距 84（12 + 6×84 + 80 = 596 < 面板宽 620，放得下）
         string[] titles = { "战斗", "波次", "敌人", "物品", "日志", "杂项", "视觉" };
         for (int i = 0; i < titles.Length; i++)
@@ -548,7 +615,7 @@ public class DebugPanel : MonoBehaviour
 
         DebugUI.NewHSep(_root, "Sep2", W, new Vector2(0f, y)); y -= 8f;
 
-        // ---- 内容区（5 页，一次只激活一页）----
+        // ---- 内容区（7 页，一次只激活一页）----
         var content = DebugUI.NewRect(_root, "Content", new Vector2(W, ContentH), new Vector2(0f, y));
         BuildPageBattle(content, 0);
         BuildPageWave(content, 1);
@@ -601,6 +668,9 @@ public class DebugPanel : MonoBehaviour
 
         // 一键杀死玩家（测死亡结算 / 重开清场是否干净）
         DebugUI.NewButton(page, "BtnKillPlayer", "杀死玩家", _btn, new Vector2(392f, -68f), 13, DebugUI.Error, OnKillPlayer);
+
+        // 射击不耗弹（连发 / 压枪 / 手感测试时不用反复换弹；语义边界见 OnToggleNoAmmo 注释）
+        _noAmmoLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnNoAmmo", "射击不耗弹: 关", _btn, new Vector2(0f, -100f), 13, DebugUI.Dim, OnToggleNoAmmo));
     }
 
     void BuildPageWave(RectTransform content, int index)
@@ -734,6 +804,8 @@ public class DebugPanel : MonoBehaviour
         _hudLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnHud", "常驻条: 开", new Vector2(110f, 26f), new Vector2(100f, -34f), 12, DebugUI.Fg, OnToggleHud));
 
         DebugUI.NewButton(page, "BtnClearCd", "清魔法冷却", new Vector2(104f, 26f), new Vector2(220f, -34f), 12, DebugUI.Fg, OnClearMagicCd);
+        // ⚠️ 初始文字与 `_noMagicCd` 的默认值一致（默认关）；切到本页时 `RefreshValues` 还会再对齐一次
+        _noMagicCdLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnNoCd", "魔法无冷却: 关", new Vector2(130f, 26f), new Vector2(340f, -34f), 12, DebugUI.Dim, OnToggleNoMagicCd));
 
         // ---- 相机手感微调（全是 CameraRig 的 public 字段；调"跟手/前探/瞄准收窄"用）----
         _camFollowVal = CamRow(page, "跟随平滑", -68f, 1f, 0.5f, 40f, d => { var c = DebugRead.Cam; if (c != null) c.followLerp += d; });
