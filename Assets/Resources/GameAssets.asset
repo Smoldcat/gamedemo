@@ -19,6 +19,7 @@ MonoBehaviour:
   bloodPrefab: {fileID: 119212, guid: 67a02ea392505844bab240611d904cc0, type: 3}
   muzzleFlashPrefab: {fileID: 5185705194879035747, guid: 50b51e299dfb4324ba07a23fcb5336d9, type: 3}
   explosionPrefab: {fileID: 184608, guid: 9edc33f62cf3ae849badc4cc12fe5f8a, type: 3}
+  explosionFxBenchRadius: 8
   decalPrefab: {fileID: 7122189716286263419, guid: 7e5bfd873a04afb40b978216f931bc99, type: 3}
   bloodPoolPrefab: {fileID: 192166, guid: c6de9c3e430816d40aedcaaf84000975, type: 3}
   healPrefab: {fileID: 105942, guid: ff672eaca96d32c419d7a1f1b0346e8d, type: 3}
@@ -64,7 +65,7 @@ MonoBehaviour:
   killFeedOutDuration: 0.3
   killFeedSlideDistance: 40
   killFeedRelayoutSpeed: 900
-  killFeedBottomOffset: 96
+  killFeedBottomOffset: 90
   virtualCursorSprite: {fileID: 0}
   virtualCursorSize: 24
   explosion: {fileID: 0}

@@ -59,10 +59,15 @@ public static class UIUtil
         _font = null;
         _created = false;
 
-        // 界面皮肤里那几张运行时生成的图（2026-10-15 从 BackpackPanel 搬来 → 生命周期一并归本类）
-        DestroySprite(_sprPanel);     _sprPanel = null;
-        DestroySprite(_sprFrame);     _sprFrame = null;
-        DestroySprite(_sprSlotFrame); _sprSlotFrame = null;
+        // 界面皮肤 / 快捷栏 / 拾取气泡用的那些运行时生成图。
+        // ⚠️ 2026-10-17：它们现在**全部收在 `_genSprites` 缓存里** → 这里**统一销毁缓存**即可。
+        //    （改之前只销毁 3 个手写字段 `_sprPanel/_sprFrame/_sprSlotFrame`，而 `HUD` 等在别处
+        //     直接调 `RoundedRectSprite/CircleSprite` 生成的图**没有任何人销毁** —— 关闭 Reload Domain
+        //     后会跨会话累积，是本项目唯一违反"谁创建谁销毁"的地方。）
+        foreach (var kv in _genSprites)
+            if (kv.Value != null) DestroySprite(kv.Value);
+        _genSprites.Clear();
+
         DestroySprite(_sprRect);      _sprRect = null;
     }
 
@@ -78,15 +83,26 @@ public static class UIUtil
     /// ⚠️ 行数要和 tooltip 高度配套：改这里时 prefab 侧 `Backpack/Tooltip` 的 sizeDelta 一起改。</summary>
     public const float TipW = 260f, TipH = 216f;
 
-    static Sprite _sprPanel, _sprFrame, _sprSlotFrame, _sprRect;
+    static Sprite _sprRect;
+
+    /// <summary>运行时生成图**缓存**（键 = 参数，例如 `r|128|18.00|0.00` / `c|48`）。
+    ///
+    /// ⚠️ 为什么要缓存（2026-10-17）：`RoundedRectSprite` / `CircleSprite` 以前**每次调用都 new 一张
+    ///    `Texture2D` + 一个 `Sprite`**（HUD 快捷栏 6 个槽就各生成一张**完全相同**的图），
+    ///    而它们**没有任何调用方负责销毁** ⇒ 每局都在 `ResetStatics` 清理范围之外，
+    ///    关掉 Reload Domain 后会**跨 Play 会话累积**。现在同一组参数只生成一次。
+    /// ⚠️ **缓存里的是共享实例** —— 调用方**绝对不能** `Destroy` / `DestroySprite` 它（会连累所有使用者）。
+    ///    生命周期归本类 `ResetStatics`。
+    /// 📌 键用字符串（含两位小数）而不是元组：可读、且避免浮点相等比较的坑。</summary>
+    static readonly System.Collections.Generic.Dictionary<string, Sprite> _genSprites
+        = new System.Collections.Generic.Dictionary<string, Sprite>();
 
     /// <summary>面板底图：优先资源总表（`GameAssets.backpackPanelSprite`），留空 → 圆角填充图。</summary>
     public static Sprite PanelSprite()
     {
         var a = GameAssets.I;
         if (a != null && a.backpackPanelSprite != null) return a.backpackPanelSprite;
-        if (_sprPanel == null) _sprPanel = RoundedRectSprite(128, 18f, 0f);      // 圆角填充
-        return _sprPanel;
+        return RoundedRectSprite(128, 18f, 0f);      // 圆角填充（已按参数缓存，重复调用不再生成）
     }
 
     /// <summary>格子 / 按钮边框：优先资源总表（`GameAssets.backpackFrameSprite`），留空 → 圆角描边图。
@@ -95,8 +111,7 @@ public static class UIUtil
     {
         var a = GameAssets.I;
         if (a != null && a.backpackFrameSprite != null) return a.backpackFrameSprite;
-        if (_sprFrame == null) _sprFrame = RoundedRectSprite(128, 14f, 4f);     // 圆角描边
-        return _sprFrame;
+        return RoundedRectSprite(128, 14f, 4f);     // 圆角描边（已按参数缓存）
     }
 
     /// <summary>快捷槽边框：优先资源总表（`GameAssets.backpackSlotFrameSprite`），留空 → 圆角描边图。</summary>
@@ -104,8 +119,7 @@ public static class UIUtil
     {
         var a = GameAssets.I;
         if (a != null && a.backpackSlotFrameSprite != null) return a.backpackSlotFrameSprite;
-        if (_sprSlotFrame == null) _sprSlotFrame = RoundedRectSprite(128, 16f, 5f);
-        return _sprSlotFrame;
+        return RoundedRectSprite(128, 16f, 5f);     // 已按参数缓存
     }
 
     /// <summary>纯色小方块 sprite（占用条用）：圆角图拉到细条上会把圆角压变形，所以条改用这个。</summary>
@@ -234,10 +248,15 @@ public static class UIUtil
     /// 生成圆角矩形 Sprite（白色 / 透明底，颜色交给 `Image.color`）。
     /// `borderPx &gt; 0` → 描边（中间挖空）；`= 0` → 实心填充。
     /// ⚠️ 返回的 Sprite **自带九宫格 border = radiusPx** → 把 `Image.type` 设成 `Sliced` 后，拉到任意尺寸圆角都不变形。
-    /// ⚠️ 运行时生成的 Sprite 与其纹理是**两个独立对象**，调用方若要释放必须**成对销毁**（`UIUtil.DestroySprite`）。
+    /// ⚠️ **返回值是共享缓存实例**（2026-10-17 起按参数缓存）—— 调用方**绝对不要** `Destroy` / `DestroySprite` 它，
+    ///    否则会连累所有使用者；生命周期归 `UIUtil.ResetStatics`。
     /// </summary>
     public static Sprite RoundedRectSprite(int size = 64, float radiusPx = 14f, float borderPx = 0f)
     {
+        // ⚠️ 按参数缓存：同一组 (size, radius, border) 只生成一次（见 `_genSprites`）
+        string key = "r|" + size + "|" + radiusPx.ToString("F2") + "|" + borderPx.ToString("F2");
+        if (_genSprites.TryGetValue(key, out var cached) && cached != null) return cached;
+
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
         float r = Mathf.Clamp(radiusPx, 1f, size * 0.5f - 1f);
@@ -268,13 +287,18 @@ public static class UIUtil
             tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
         }
         tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0,
+        var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0,
             SpriteMeshType.FullRect, new Vector4(r, r, r, r));
+        _genSprites[key] = sprite;
+        return sprite;
     }
 
     /// <summary>生成圆形 Sprite（白色 / 透明底）—— 用于"按键圆标"这类圆形底。</summary>
     public static Sprite CircleSprite(int size = 32)
     {
+        string key = "c|" + size;
+        if (_genSprites.TryGetValue(key, out var cached) && cached != null) return cached;
+
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
         float c = (size - 1) * 0.5f;
@@ -286,7 +310,9 @@ public static class UIUtil
             tex.SetPixel(x, y, new Color(1f, 1f, 1f, inside ? 1f : 0f));
         }
         tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        _genSprites[key] = sprite;
+        return sprite;
     }
 
     // ==================== 全项目 UI 都要做的三件小事（原来在 6~7 处各抄了一份，2026-09-22 收敛到这里） ====================
