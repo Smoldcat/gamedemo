@@ -51,6 +51,11 @@ public class ScreenFlash : MonoBehaviour
 
     void Update()
     {
+        // ⚠️ 死亡时立刻收掉：白屏是最上层的全屏遮罩（`sortingOrder 9000`），
+        //    如果刚好"朝脚下扔闪光弹 + 被打死"，它会**盖在死亡结算面板上**最多 `playerBlindDuration` 秒
+        //    （2026-10-18 全面检查发现）。
+        if (GameState.GameOver) { Destroy(gameObject); return; }
+
         // 用 unscaledTime：暂停（timeScale=0）时闪白也照常消失，不会冻在屏幕上
         float t = (Time.unscaledTime - _t0) / _dur;
         if (t >= 1f) { Destroy(gameObject); return; }

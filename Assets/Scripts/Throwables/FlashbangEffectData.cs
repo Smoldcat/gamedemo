@@ -106,7 +106,9 @@ public class FlashbangEffectData : ThrowableEffectData
         var ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         ball.name = "闪光(占位)";
         var col = ball.GetComponent<Collider>();
-        if (col != null) Destroy(col);
+        // ⚠️ `Destroy` 要到**帧末**才生效：这一帧它还是个**实体碰撞球**，会短暂挡住子弹 / 角色。
+        //    先 `enabled = false`（立即生效）再排队销毁（2026-10-18 全面检查）。
+        if (col != null) { col.enabled = false; Destroy(col); }
         ball.transform.position = point;
         ball.transform.localScale = Vector3.one * Mathf.Max(0.4f, radius * 0.35f);
 
@@ -159,5 +161,13 @@ public class FlashBall : MonoBehaviour
             c.a = 1f - t;
             _mat.color = c;
         }
+    }
+
+    /// <summary>销毁自建的材质实例。
+    /// ⚠️ 这个材质是 `SpawnFlash` 里 `new Material(...)` 出来的**独占实例**，而 Unity 销毁 GameObject 时
+    ///    **不会**连带销毁材质 ⇒ 不手动销毁就**每投一次漏一份**（2026-10-18 全面检查发现）。</summary>
+    void OnDestroy()
+    {
+        if (_mat != null) Destroy(_mat);
     }
 }

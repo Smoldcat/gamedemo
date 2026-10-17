@@ -49,7 +49,10 @@ public static class StaticReset
         GameState.Reset();
 
         // ---- 静态注册表 ----
-        EnemyAI.All.Clear();
+        // 敌人：存活注册表 `All` + 新增的致盲图标共享材质（2026-10-18）。
+        // ⚠️ 走 `ResetOf`（`All.Clear()` 已搬进 `EnemyAI.ResetStatics`）—— 同 SmokeVolume / FireZone 的写法，
+        //    否则"有 ResetStatics 却还在外面直接清"会被编辑器校验判成漏登记。
+        ResetOf(typeof(EnemyAI), EnemyAI.ResetStatics);
         WeaponPickup.All.Clear();
         HealthPack.All.Clear();
         AmmoPickup.All.Clear();          // 弹药包注册表（2026-09-27）

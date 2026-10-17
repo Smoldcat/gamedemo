@@ -297,6 +297,12 @@ public class EnemyAI : MonoBehaviour
             _slowUntil = Mathf.Max(_slowUntil, now + slowSec);
         }
         _blindNextTurn = 0f;   // 立刻选一个新方向（不然会沿用上次的）
+
+        // ⚠️ 致盲期间 `FixedUpdate` **整段跳过 `behaviour.Tick`** ⇒ 行为组件里"由 Tick 维护的持续视觉"会**冻住**。
+        //    目前只有狙击手的瞄准线属于这一类（它靠 Tick 里的 ShowLaser/HideLaser 切换），
+        //    不主动收掉的话，红线会**一直指着最后的位置**悬在半空直到致盲结束（2026-10-18 全面检查发现）。
+        //    📌 以后若再加"由 Tick 维护的持续视觉"的行为，也要在这里补一条（或让它能安全跳过 Tick）。
+        if (behaviour is EnemySniperBehaviour sniper) sniper.OnBlinded();
     }
 
     /// <summary>致盲期间：**不听指挥** —— 不追人、不攻击；每隔约 1 秒换个随机方向、以半速摸索着走。
@@ -329,19 +335,86 @@ public class EnemyAI : MonoBehaviour
         if (cam != null) _blindIcon.transform.rotation = cam.transform.rotation;   // 面向相机（billboard）
     }
 
+    /// <summary>致盲图标的**共享材质**（所有敌人外观一致）。
+    /// ⚠️ 原来这里是**每个敌人 `new Material(...)`**：Unity 销毁 GameObject 时**不会**连带销毁材质，
+    ///    一波波刷怪会一路累积（2026-10-18 全面检查发现）。改成共享一份后：**不再泄漏**，
+    ///    而且所有图标能用同一个材质 → **可合批**（少一批 DrawCall）。
+    /// 📌 静态资源必须登记到 `StaticReset`（见本类 `ResetStatics`）。</summary>
+    static Material _blindIconMat;
+
+    static Material BlindIconMaterial
+    {
+        get
+        {
+            if (_blindIconMat == null)
+            {
+                _blindIconMat = new Material(Shader.Find("Sprites/Default"));
+                _blindIconMat.color = new Color(1f, 1f, 1f, 0.9f);
+            }
+            return _blindIconMat;
+        }
+    }
+
+    /// <summary>致盲图标的**共享网格**（一个 1×1 的四边形，朝 -Z）。
+    /// ⚠️ **刻意不用 `CreatePrimitive(Quad)`**：它会附带一个 **MeshCollider**，而图标是敌人的**子物体**
+    ///    ⇒ 那个碰撞体会挂到**父物体的 Rigidbody** 上，Unity 当场报
+    ///    `Non-convex MeshCollider with non-kinematic Rigidbody is no longer supported`
+    ///    （2026-10-18 实测：每建一个图标就一条警告；而且那一物理帧敌人的碰撞体集合多了一个非凸网格）。
+    ///    手搓 4 顶点网格 ⇒ **零碰撞体、零警告**。</summary>
+    static Mesh _blindIconMesh;
+
+    static Mesh BlindIconMesh
+    {
+        get
+        {
+            if (_blindIconMesh == null)
+            {
+                var m = new Mesh { name = "致盲图标Quad" };
+                m.vertices = new[]
+                {
+                    new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, -0.5f, 0f),
+                    new Vector3(-0.5f,  0.5f, 0f), new Vector3(0.5f,  0.5f, 0f)
+                };
+                m.uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f) };
+                m.triangles = new[] { 0, 2, 1, 2, 3, 1 };
+                m.RecalculateBounds();
+                _blindIconMesh = m;
+            }
+            return _blindIconMesh;
+        }
+    }
+
+    /// <summary>静态状态清理（在 `StaticReset` 里用 `ResetOf` 登记）。
+    /// ⚠️ 一旦本类有了 `ResetStatics()`，就**不能再在 `StaticReset` 里直接写 `EnemyAI.All.Clear()`** ——
+    ///    那样编辑器校验会把它判成"有 ResetStatics 却没（统一登记）"，所以 `All.Clear()` 也搬进这里。</summary>
+    internal static void ResetStatics()
+    {
+        All.Clear();                       // 存活敌人注册表（原来在 StaticReset 里直接清）
+
+        if (_blindIconMat != null)
+        {
+            if (Application.isPlaying) Destroy(_blindIconMat);
+            else DestroyImmediate(_blindIconMat);
+        }
+        _blindIconMat = null;
+
+        if (_blindIconMesh != null)
+        {
+            if (Application.isPlaying) Destroy(_blindIconMesh);
+            else DestroyImmediate(_blindIconMesh);
+        }
+        _blindIconMesh = null;
+    }
+
     GameObject MakeBlindIcon()
     {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        go.name = "致盲图标(占位)";
-        var col = go.GetComponent<Collider>();
-        if (col != null) Destroy(col);
+        var go = new GameObject("致盲图标(占位)");
         go.transform.SetParent(transform, false);
         go.transform.localScale = Vector3.one * 0.55f;
 
-        var mat = new Material(Shader.Find("Sprites/Default"));
-        mat.color = new Color(1f, 1f, 1f, 0.9f);
-        var r = go.GetComponent<MeshRenderer>();
-        r.sharedMaterial = mat;
+        go.AddComponent<MeshFilter>().sharedMesh = BlindIconMesh;
+        var r = go.AddComponent<MeshRenderer>();
+        r.sharedMaterial = BlindIconMaterial;
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         return go;
     }

@@ -91,6 +91,18 @@ public class EnemySniperBehaviour : EnemyBehaviour
     void ShowLaser() { if (_laser != null) _laser.enabled = true; }
     public void HideLaser() { if (_laser != null) _laser.enabled = false; }   // public：供 EnemyAI 死亡时隐藏，防止红线冻结在屏幕上
 
+    /// <summary>被闪光弹闪到：**立刻收掉瞄准线并作废这次蓄力**。
+    ///
+    /// ⚠️ 为什么不能只靠 `Tick` 自己收：致盲期间 `EnemyAI.FixedUpdate` 会**整段跳过** `behaviour.Tick`，
+    ///    瞄准线是 Tick 里 Show/Hide 的 ⇒ 会**冻在半空、一直指着最后的位置**，直到致盲结束
+    ///    （2026-10-18 全面检查发现；这是"致盲"和"行为组件持有视觉状态"的冲突点）。
+    /// 📌 回到 `Ready` 之后要重新走「反应时间 → 1 秒红线 → 开枪」，所以玩家恢复视线后**仍有预警**。</summary>
+    public void OnBlinded()
+    {
+        HideLaser();
+        _state = State.Ready;
+    }
+
     void UpdateLaser(Vector3 target, bool seesPlayer)
     {
         if (_laser == null || !_laser.enabled) return;
