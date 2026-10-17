@@ -35,6 +35,13 @@ public class SmokeEffectData : ThrowableEffectData
              "留空 = 代码生成的灰色占位材质（能看清范围与时长，但是没有烟团贴图）")]
     public Material material;
 
+    [Tooltip("**序列帧消散**：材质贴图的帧网格（列 × 行）。**0 × 0 = 关闭**（整张图当一张用，行为与 2026-10-18 之前完全一致）。\n" +
+             "配了它 + 贴图是一张序列帧图时，每片烟会随**自己的年龄**逐帧溶解（浓 → 被噪声啃碎 → 散掉）→ 纹理本身在变，\n" +
+             "不再是「同一张静止贴图在那儿转」。\n" +
+             "⚠️ 贴图必须正好按这个网格排布，否则 UV 会取错格子（默认那张见 `Assets/Art/Effects/SmokeSheet_Dissolve.png`，4×4）。\n" +
+             "⚠️ 内置 `Particles/Standard Unlit` **不支持帧间混合** ⇒ 硬切帧；所以帧数给到 16，且靠多片不同年龄的烟重叠掩盖切帧。")]
+    public Vector2Int flipbookGrid = Vector2Int.zero;
+
     [Header("粒子外观（按半径自动缩放，一般不用动）")]
     [Tooltip("单颗烟粒子的寿命（秒）：4~6 比较像烟；调短 = 更「碎」，调长 = 更「厚」")]
     [Min(0.5f)] public float particleLifetime = 5f;

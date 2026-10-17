@@ -59,6 +59,13 @@ public class SmokeVolume : MonoBehaviour
     float _yMin;           // 粒子的**硬下限**（地面：不许沉到地下被地面挡住白画）
     float _yMax;           // 粒子的**硬上限**（天花板：不许顶到相机 —— 俯视角下这条最要紧）
     bool _evicted;         // 是否已被"同屏上限"顶掉（顶过的不再被挑中 → 保证那个循环有限次）
+
+    /// <summary>溶解**只在整团的最后这一段**才启用（用户 2026-10-18 定：先 2 秒，后改 **1 秒**）。
+    /// ⚠️ 语义是"距**停止生成**还有多久开始溶解" ⇒ 起溶时刻 = `_tStopEmit - DissolveLeadSeconds`。
+    /// ⚠️ 注意它**不是**"距整团散完"：`_tStopEmit`= 10s（停止冒出），但残留粒子要到 ≈16s 才散完，
+    ///    所以溶解开关在 **t=9s** 打开、一直持续到 ≈16s。想改成"真·最后 1 秒"需换成按 `_tEnd` 算。</summary>
+    const float DissolveLeadSeconds = 1f;
+    bool _dissolveOn;      // 是否已切到"溶解曲线"（一次性）
     static ParticleSystem.Particle[] _buf;   // 夹取用的复用缓冲（静态复用 = 零逐帧分配；纯数组、不持有场景对象 → 刻意不清）
 
     /// <summary>生成一片烟云（唯一入口：`SmokeEffectData.Apply`）。返回创建出来的烟云（测试 / 调试用）。</summary>
@@ -149,6 +156,14 @@ public class SmokeVolume : MonoBehaviour
         _clampR = Mathf.Max(_radius - maxParticleHalf, 0.25f * _radius);
 
         _ps = gameObject.AddComponent<ParticleSystem>();
+
+        // ⚠️ 2026-10-18：烟片是 2.6 米高的 Billboard、中心贴地 ⇒ 下半截**必然穿到地面以下**，
+        //    被地面**硬切**出一道直线（多片在不同高度 → 一片片平行的硬边，用户反馈的"割裂感"就是这个）。
+        //    材质已开「软粒子」（`_SOFTPARTICLES_ON`）→ 与几何交界处 1.5 米内淡出；
+        //    但**软粒子需要相机输出深度图**，否则读不到深度 = 等于没开 ⇒ 这里确保一下。
+        var cam = CameraCache.Main;
+        if (cam != null && (cam.depthTextureMode & DepthTextureMode.Depth) == 0)
+            cam.depthTextureMode |= DepthTextureMode.Depth;
         // ⚠️ `AddComponent<ParticleSystem>()` 出来的系统**默认就在播放**，此时设 `duration` 会报
         //    "Setting the duration while system is still playing is not supported"（实测每次起烟 2 条警告）。
         //    先彻底停掉（含清空粒子）→ 再配置 → 最后 `Play()`。
@@ -198,8 +213,16 @@ public class SmokeVolume : MonoBehaviour
         var grad = new Gradient();
         grad.SetKeys(
             new GradientColorKey[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
-            new GradientAlphaKey[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.25f),
-                                     new GradientAlphaKey(0.7f, 0.6f), new GradientAlphaKey(0f, 1f) });
+            // ⭐ 2026-10-18（用户："出现和消失的时间可以做得短一些，平稳期的时间长一些"）：
+            //    「**快进(8%) → 长稳(80%) → 快出(12%)**」。
+            //    原来是 (0→1 @25%、0.7 @60%、0 @100%) ＝ 出场 25% / 平稳 35% / 消亡 40%
+            //    ⇒ 每片烟"忽明忽暗一闪就没"，用户形容"像雨滴打在水面上"。
+            new GradientAlphaKey[] {
+                new GradientAlphaKey(0f, 0f),      // 0%   透明
+                new GradientAlphaKey(1f, 0.04f),   // 4%   就到位（出场极短）
+                new GradientAlphaKey(1f, 0.94f),   // 94%  之前一直满（平稳期 90%）
+                new GradientAlphaKey(0f, 1f)       // 尾 6% 极快消失
+            });
         col.color = new ParticleSystem.MinMaxGradient(grad);
 
         // 每片烟缓慢自转（"看起来像活的"，2026-10-13 用户："做活吧"）：方向逐粒子随机，整团就在翻。
@@ -217,11 +240,15 @@ public class SmokeVolume : MonoBehaviour
         }
         else spin.enabled = false;
 
-        // 长大曲线：起点 / 中段 / 末尾都按卡上的 `sizeGrow` 换算（1.6 → 0.45 / 1.05 / 1.6，与调参前的常数一致）
+        // 长大曲线：**前 10% 就长到接近满**，中间保持平稳，末尾略收（不再是"一路膨胀到最后"）。
+        // ⚠️ 2026-10-18 改：原来是 0.28 → 0.65(@35%) → 1.0(@100%) ＝ **全程都在长大**，
+        //    配上"末段 alpha 归零"就是"一大坨慢慢化掉"（用户说的"出现/消散过程慢、不自然"）。
+        //    现在改成「快长(10%) → 平稳(10~80%) → 略收(80~100%)」，和 alpha 的三段节奏对齐。
         float grow = Mathf.Max(cfg.sizeGrow, 1f);
         var sz = _ps.sizeOverLifetime; sz.enabled = true;
         sz.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(
-            new Keyframe(0f, 0.28f * grow), new Keyframe(0.35f, 0.65f * grow), new Keyframe(1f, grow)));
+            new Keyframe(0f, 0.45f * grow), new Keyframe(0.10f, 0.95f * grow),
+            new Keyframe(0.80f, grow), new Keyframe(1f, 0.90f * grow)));
 
         // ⚠️ 这里原来有一行**硬编码的自转**：`rot.z = new MinMaxCurve(-0.25f, 0.25f)`（≈ ±14.3°/秒）。
         //    它写在上面那个"按卡上 `spinDegPerSec` 设置"的块**之后** → 会把卡上的值**覆盖**掉
@@ -250,6 +277,33 @@ public class SmokeVolume : MonoBehaviour
         rnd.renderMode = ParticleSystemRenderMode.Billboard;
         // ⚠️ 队列：材质资源里必须设成 3000（Transparent）——**早于**视野暗幕（Transparent+100）。
         //    （这里刻意不写 `rnd.material.renderQueue = 3000`：那会为每片烟实例化一份材质副本、且不会自动回收。）
+
+        // ---- 序列帧消散（2026-10-18，用户："给贴图的生成和消失加一个溶解的效果"）----
+        // 卡上 `flipbookGrid` 非 0 时启用：每片烟按**自己的年龄**在网格里走完所有帧
+        // → 纹理从「浓」被噪声啃成「碎」再散掉（不再是同一张静止贴图）。
+        // ⚠️ 内置 `Particles/Standard Unlit` **没有 UV1 混合通道** → 只能硬切帧；
+        //    所以网格给到 4×4=16 帧（每帧 ≈ lifetime/16 ≈ 0.2 秒），并且**不随机起始帧**
+        //    （所有粒子都从第 0 帧「浓」开始，靠出生时间不同自然错开）→ 硬切被重叠的烟掩盖。
+        var tsa = _ps.textureSheetAnimation;
+        if (cfg.flipbookGrid.x > 0 && cfg.flipbookGrid.y > 0)
+        {
+            tsa.enabled = true;
+            tsa.numTilesX = cfg.flipbookGrid.x;
+            tsa.numTilesY = cfg.flipbookGrid.y;
+            tsa.animation = ParticleSystemAnimationType.WholeSheet;
+            tsa.timeMode = ParticleSystemAnimationTimeMode.Lifetime;   // 按"年龄"走，不是按速度
+            tsa.cycleCount = 1;
+            tsa.startFrame = new ParticleSystem.MinMaxCurve(0f);       // 见上：不随机起始帧
+            // ⚠️ 2026-10-18 改：**前 60% 只轻微蚀刻**（保持"平稳期"的浓度）→ **后 40% 集中啃完**
+            //    （原来 "前 25% 不动、之后一路线性" ⇒ 溶解摊在整个寿命里，看起来像"慢慢化掉"）。
+            //    和 alpha 的「快进 8% / 长稳 80% / 快出 12%」三段节奏对齐：**平稳期浓、末尾才碎掉**。
+            // ⭐ 2026-10-18（用户："不必所有照片都发生溶解 —— 只在烟雾的后半段 / 快消散时才溶解"）：
+            //    这里**初始锁死在第 0 帧（完全不溶解）**；等整团进入"最后 2 秒"（见 `Update` 的
+            //    `DissolveLeadSeconds`）才换成下面的溶解曲线。
+            //    ⇒ 平稳期所有烟片都是"完整的一团"，**看不到逐帧被啃**；只有快散时才出现溶解。
+            tsa.frameOverTime = new ParticleSystem.MinMaxCurve(0f);
+        }
+        else tsa.enabled = false;   // 留空回退：老行为（整张图当一张）
 
         _ps.Play();
 
@@ -304,6 +358,22 @@ public class SmokeVolume : MonoBehaviour
         // 暂停 / 结算：游戏时间停了（Time.time 不走）→ 什么都不用做，烟也跟着冻结
         if (GameState.Paused || GameState.GameOver) return;
         float now = Time.time;
+
+        // ⭐ 2026-10-18：**整团进入最后 2 秒**时才放开溶解（此前一直锁在第 0 帧 = 完整的一团）。
+        //    曲线含义：粒子寿命的**前 72% 不溶解**，最后 28% 快速走到"半溶解"（`0.5`＝第 8 帧左右），
+        //    然后停在那儿 —— 呼应"溶解到 50% 就算溶解完了"，不会啃成空壳。
+        if (!_dissolveOn && _ps != null && now >= _tStopEmit - DissolveLeadSeconds)
+        {
+            _dissolveOn = true;
+            var tsa = _ps.textureSheetAnimation;
+            // ⚠️ 2026-10-18（用户："被啃食的区域不应该突兀地变成 0，应该像正弦波一样平滑"）：
+            //    贴图已改成「**乘法式平滑变薄**」（每格从 100% 厚度连续降到 50%，**全程没有任何 0/1 阈值**，
+            //    实测每帧只变 0.0037）⇒ 曲线走到 **1.0 = 最后一帧 = 约 50% 厚度**，不再停在中间。
+            tsa.frameOverTime = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(
+                new Keyframe(0f, 0f), new Keyframe(0.72f, 0.15f),
+                new Keyframe(0.93f, 0.78f), new Keyframe(1f, 1f)));
+        }
+
         if (_ps != null && now >= _tStopEmit && _ps.isPlaying) _ps.Stop();   // 到期：停止生成，剩下的粒子自然消散
         ClampBounds();                                                     // 硬夹圆柱边界：不出圈、不入地、不顶相机
         if (now >= _tEnd) Destroy(gameObject);
@@ -318,6 +388,12 @@ public class SmokeVolume : MonoBehaviour
     void ClampBounds()
     {
         if (_ps == null) return;
+
+        // ⭐ 2026-10-18 性能优化：`GetParticles` 每帧都要**复制全部粒子**（1200 张 ≈ 48KB/帧/团烟）。
+        //    而粒子漂移只有 `driftSpeed`（默认 0.16 m/s）⇒ **3 帧才走 8 毫米**，肉眼完全看不出。
+        //    ⇒ 每 3 帧夹一次；用 `GetInstanceID()` 错开相位，多团烟不会挤在同一帧做。
+        if ((Time.frameCount + GetInstanceID()) % 3 != 0) return;
+
         int count = _ps.particleCount;
         if (count <= 0) return;
         if (_buf == null || _buf.Length < count) _buf = new ParticleSystem.Particle[Mathf.Max(count, 64)];

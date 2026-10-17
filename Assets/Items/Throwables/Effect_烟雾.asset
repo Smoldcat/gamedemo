@@ -17,16 +17,17 @@ MonoBehaviour:
     14 \u79D2\uFF08+6 \u79D2\u81EA\u7136\u6D88\u6563\uFF09\uFF0C\u534A\u5F84 6 \u7C73\u5185**\u6321\u4F4F\u654C\u4EBA\u89C6\u7EBF**\u3002"
   showRangeIndicator: 1
   radius: 7
-  smokeHeight: 1.75
+  smokeHeight: 2.6
   fillRatio: 0.92
   blockRatio: 0.9
   duration: 10
   fadeOut: 6
-  density: 1.4
-  material: {fileID: 2100000, guid: bea3c58e022f4c843a37d3f32d33d3c7, type: 2}
-  particleLifetime: 3.4
-  particleSize: 2.3
-  emitRate: 48
+  density: 1.25
+  material: {fileID: 2100000, guid: 6a644e948249ce644b9b2c305e6b917e, type: 2}
+  flipbookGrid: {x: 6, y: 4}
+  particleLifetime: 4
+  particleSize: 2
+  emitRate: 98
   curl: 0.55
   curlFrequency: 0.28
   curlSpeed: 0.12
