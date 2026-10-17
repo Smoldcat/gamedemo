@@ -118,6 +118,16 @@ public class EnemyAI : MonoBehaviour
         // 暂停（背包打开，timeScale=0）时 FixedUpdate 照常执行，必须显式拦截，否则敌人会趁暂停继续移动/攻击
         if (GameState.GameOver || GameState.Paused || _player == null) return;
 
+        // ⭐ 闪光弹：图标先更新（致盲期间下面会提前 return）；致盲时**整段跳过**索敌/追击/攻击，
+        //    只缓慢乱走 —— 否则它会按"最后目击点"继续追过来，那就不叫致盲了（用户 2026-10-18 选 B）。
+        UpdateBlindIcon();
+        if (Time.time < _blindUntil)
+        {
+            BlindWander();
+            if (_bar != null) _bar.UpdateBar(_hp.hp / _hp.maxHp);   // 血条照常刷新
+            return;
+        }
+
         // 索敌检测降频：每 0.12 秒做一次视线射线（敌人多时省大量物理射线）
         if (Time.time >= _nextSightCheck)
         {
@@ -161,6 +171,10 @@ public class EnemyAI : MonoBehaviour
     // ---------- 视野判断 ----------
     bool CanSeePlayer()
     {
+        // ⭐ 闪光弹致盲：与「烟雾挡视线」**同一个出口** —— 所有敌人行为都读本函数返回值，
+        //    所以这一行就能让全类敌人一起"失明"（不追人、不攻击、不再走"最后目击点"那条路）。
+        if (Time.time < _blindUntil) return false;
+
         Vector3 toPlayer = _player.position - transform.position;
         toPlayer.y = 0f;
         float dist = toPlayer.magnitude;
@@ -231,6 +245,10 @@ public class EnemyAI : MonoBehaviour
     /// <summary>朝方向移动（前方有障碍自动侧向绕行）</summary>
     public void MoveTo(Vector3 dir, float speed)
     {
+        // ⭐ 闪光弹减速：**唯一入口**在这里 —— 巡逻 / 追击 / 致盲乱走 全都走 MoveTo，
+        //    所以这一行就能覆盖所有移动（不随距离衰减，圈内统一）。
+        if (Time.time < _slowUntil) speed *= _slowMul;
+
         // 前方有障碍则侧向绕行。
         // ⚠️ 掩码刻意**带上玩家/敌人**（Layers.AvoidMask）：保留原来"躲开同伴"的行为，
         //    避免敌人贴着同伴硬挤；只看阻挡物会让它们叠在一起。
@@ -256,6 +274,76 @@ public class EnemyAI : MonoBehaviour
     public void Dash(Vector3 velocity)
     {
         _rb.velocity = velocity;
+    }
+
+    // ==================== 闪光弹：致盲 / 减速（2026-10-18）====================
+
+    float _blindUntil;        // 致盲截止时刻（`Time.time` 口径）
+    float _slowUntil;         // 减速截止时刻
+    float _slowMul = 1f;      // 减速倍率（1 = 正常；0.5 = 半速）
+    Vector3 _blindDir;        // 致盲时"乱走"的方向
+    float _blindNextTurn;     // 下次换向的时刻
+    GameObject _blindIcon;    // 头顶致盲图标（懒创建）
+
+    /// <summary>被闪光弹闪到：**致盲 + 减速**。重复命中取**更长的那个**，不叠加（避免叠成十分钟）。
+    /// <paramref name="slowPercent"/> = 减速百分比（0.5 = 速度剩一半）。</summary>
+    public void ApplyFlash(float blindSec, float slowPercent, float slowSec)
+    {
+        float now = Time.time;
+        if (blindSec > 0f) _blindUntil = Mathf.Max(_blindUntil, now + blindSec);
+        if (slowPercent > 0.001f && slowSec > 0f)
+        {
+            _slowMul = Mathf.Clamp01(1f - slowPercent);
+            _slowUntil = Mathf.Max(_slowUntil, now + slowSec);
+        }
+        _blindNextTurn = 0f;   // 立刻选一个新方向（不然会沿用上次的）
+    }
+
+    /// <summary>致盲期间：**不听指挥** —— 不追人、不攻击；每隔约 1 秒换个随机方向、以半速摸索着走。
+    /// 📌 这就是"瞎了的人在乱撞"，比"原地不动"自然（用户 2026-10-18 选 B）。</summary>
+    void BlindWander()
+    {
+        float now = Time.time;
+        if (now >= _blindNextTurn)
+        {
+            _blindNextTurn = now + 0.9f;
+            float a = Random.Range(0f, Mathf.PI * 2f);
+            _blindDir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+        }
+        MoveTo(_blindDir, patrolSpeed * 0.5f);   // ⚠️ 走 MoveTo → 减速倍率也会生效
+        FaceTo(_blindDir);
+    }
+
+    /// <summary>头顶"致盲"图标的显隐 + 位置 + 面向相机（懒创建，只在被闪到时才建）。</summary>
+    void UpdateBlindIcon()
+    {
+        bool on = Time.time < _blindUntil;
+        if (on && _blindIcon == null) _blindIcon = MakeBlindIcon();
+        if (_blindIcon == null) return;
+
+        if (_blindIcon.activeSelf != on) _blindIcon.SetActive(on);
+        if (!on) return;
+
+        _blindIcon.transform.position = transform.position + Vector3.up * 2.35f;
+        var cam = CameraCache.Main;
+        if (cam != null) _blindIcon.transform.rotation = cam.transform.rotation;   // 面向相机（billboard）
+    }
+
+    GameObject MakeBlindIcon()
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = "致盲图标(占位)";
+        var col = go.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+        go.transform.SetParent(transform, false);
+        go.transform.localScale = Vector3.one * 0.55f;
+
+        var mat = new Material(Shader.Find("Sprites/Default"));
+        mat.color = new Color(1f, 1f, 1f, 0.9f);
+        var r = go.GetComponent<MeshRenderer>();
+        r.sharedMaterial = mat;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        return go;
     }
 
     /// <summary>直接攻击玩家（近战行为用；远程行为走子弹）</summary>

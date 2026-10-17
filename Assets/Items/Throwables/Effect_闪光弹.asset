@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cdd261386c23ac04fbcd7d0e1a24e45c, type: 3}
+  m_Name: "Effect_\u95EA\u5149\u5F39"
+  m_EditorClassIdentifier: 
+  effectName: "\u6548\u679C"
+  description: 
+  showRangeIndicator: 1
+  radius: 4
+  blindDuration: 4
+  slowPercent: 0.5
+  slowDuration: 0
+  playerBlindDuration: 1.5
+  playerSlowPercent: 0.5
+  flashPrefab: {fileID: 0}
+  flashColor: {r: 1, g: 0.98, b: 0.9, a: 1}
+  flashSound: {fileID: 0}

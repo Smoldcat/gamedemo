@@ -264,6 +264,20 @@ public class PlayerController : MonoBehaviour
     /// <summary>是否正按住右键瞄准（腰射 ↔ 瞄准）。</summary>
     public bool Aiming => _aiming;
 
+    // ==================== 闪光弹：玩家减速（2026-10-18）====================
+
+    float _slowUntil;      // 减速截止时刻
+    float _slowMul = 1f;   // 减速倍率（1 = 正常；0.5 = 半速）
+
+    /// <summary>被闪光弹闪到时的**移动减速**（与敌人的那套参数完全分开，由效果卡单独给）。
+    /// <paramref name="percent"/> = 减速百分比（0.5 = 速度剩一半）；时长到了自动恢复。</summary>
+    public void ApplySlow(float percent, float seconds)
+    {
+        if (percent <= 0.001f || seconds <= 0.001f) return;
+        _slowMul = Mathf.Clamp01(1f - Mathf.Clamp01(percent));
+        _slowUntil = Mathf.Max(_slowUntil, Time.time + seconds);   // 重复命中取更长的那个
+    }
+
     /// <summary>当前移动速度上限（米/秒）= **基准档 × 当前武器的速度系数**。**优先级：瞄准 &gt; 跑 &gt; 走**。
     /// 设计意图：让「瞄准」有代价（移动变慢），否则全程瞄准就是最优解；
     /// 而「开枪会退出奔跑」（见 <see cref="Fire"/>）保证腰射时也不会一边冲刺一边输出。
@@ -282,7 +296,10 @@ public class PlayerController : MonoBehaviour
             bool throwing = throwables != null && throwables.Active;
             float mulAim = (!throwing && weapon != null) ? Mathf.Max(0f, weapon.aimMoveSpeedMultiplier) : 1f;
             float mulMove = (!throwing && weapon != null) ? Mathf.Max(0f, weapon.moveSpeedMultiplier) : 1f;
-            return _aiming ? aimSpeed * mulAim : (running ? runSpeed : walkSpeed) * mulMove;
+            // ⭐ 闪光弹减速（2026-10-18）：玩家被闪到时也会变慢 —— 百分比/时长由效果卡**单独**给
+            //    （与敌人那套分开调）。放在最后乘 ⇒ 对"瞄准/跑/走"三档一律生效。
+            float slow = Time.time < _slowUntil ? _slowMul : 1f;
+            return (_aiming ? aimSpeed * mulAim : (running ? runSpeed : walkSpeed) * mulMove) * slow;
         }
     }
 
