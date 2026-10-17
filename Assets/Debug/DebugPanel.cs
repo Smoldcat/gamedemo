@@ -847,7 +847,8 @@ public class DebugPanel : MonoBehaviour
         DebugUI.NewButton(page, "T20", "2x", _small, new Vector2(204f, 0f), 12, DebugUI.Fg, () => OnTimeScale(2f));
 
         DebugUI.NewButton(page, "BtnShot", "一键截图", _small, new Vector2(0f, -34f), 12, DebugUI.Fg, OnScreenshot);
-        _hudLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnHud", "常驻条: 开", new Vector2(110f, 26f), new Vector2(100f, -34f), 12, DebugUI.Fg, OnToggleHud));
+        // ⚠️ 初始文字必须与 `DebugHud.visible` 的默认值一致（2026-10-17 起**默认关**）；切到本页时 RefreshValues 还会再对齐一次
+        _hudLabel = DebugUI.LabelOf(DebugUI.NewButton(page, "BtnHud", hud != null && hud.visible ? "常驻条: 开" : "常驻条: 关", new Vector2(110f, 26f), new Vector2(100f, -34f), 12, DebugUI.Fg, OnToggleHud));
 
         DebugUI.NewButton(page, "BtnClearCd", "清魔法冷却", new Vector2(104f, 26f), new Vector2(220f, -34f), 12, DebugUI.Fg, OnClearMagicCd);
         // ⚠️ 初始文字与 `_noMagicCd` 的默认值一致（默认关）；切到本页时 `RefreshValues` 还会再对齐一次

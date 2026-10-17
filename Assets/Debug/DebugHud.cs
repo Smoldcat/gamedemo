@@ -21,8 +21,8 @@ public class DebugHud : MonoBehaviour
     const float RefreshInterval = 0.25f;    // 文本刷新节流（避免每帧拼字符串产生 GC）
     const float FpsWindow = 1f;             // "最差帧"统计窗口
 
-    [Tooltip("常驻条当前是否显示（详情面板里可切换；默认开）。")]
-    public bool visible = true;
+    [Tooltip("常驻条当前是否显示（详情面板「杂项」页里可切换）。\n⚠️ 2026-10-17 起**默认关**：它常驻在左上角、和游戏内的血量等信息重复，\n死亡结算界面上也会压住卡片 —— 需要实时观察时按 `~` 打开面板再开。")]
+    public bool visible = false;
 
     Canvas _canvas;
     Text _text;
@@ -129,6 +129,10 @@ public class DebugHud : MonoBehaviour
         // ⚠️ 必须挂到本组件（常驻对象）下：否则死亡重开 `LoadScene` 会销毁这块场景根画布，
         //    而组件常驻 → **常驻条永久消失**（2026-10-14 评审发现）。
         _canvas.transform.SetParent(transform, false);
+        // ⭐ 2026-10-17：把 `visible` 的初始值**真正作用到画布**。
+        //    原来这里没有这一句 —— 因为默认是 `true`，看不出问题；改成默认 `false` 之后，
+        //    若不应用，画布会一直留在激活态（常驻条仍然显示、还白占一层 overdraw）。
+        _canvas.gameObject.SetActive(visible);
 
         // 背板（贴在屏幕**左上角**；纯色黑，终端风 —— 不再用游戏的气泡贴图）
         var bg = DebugUI.NewSolid(_canvas.transform, "HudBg", new Vector2(430f, 96f), Vector2.zero, DebugUI.Bg);

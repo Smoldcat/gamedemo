@@ -251,43 +251,62 @@ public static class UIUtil
     /// ⚠️ **返回值是共享缓存实例**（2026-10-17 起按参数缓存）—— 调用方**绝对不要** `Destroy` / `DestroySprite` 它，
     ///    否则会连累所有使用者；生命周期归 `UIUtil.ResetStatics`。
     /// </summary>
+    /// <summary>输出分辨率倍数（**配合 `pixelsPerUnit` 同步放大 ⇒ 视觉尺寸一点不变，只是更细腻**）。
+    ///
+    /// 为什么要它（2026-10-17 用户两次反馈"边缘毛糙/锯齿"）：画布是 `ScaleWithScreenSize`，
+    /// 在 2560×1440 下 `scaleFactor = 2`。
+    /// ⚠️ **必须严格大于 `scaleFactor` 才有意义**：第一版只把 `ResMult` 设成 **2** —— 而画布缩放**恰好也是 2**
+    ///    ⇒ 1 纹素 = 1 物理像素 ⇒ **等于没有超采样**，圆角仍被量化到像素格子上（用户当场指出"还是有很明显的锯齿"）。
+    ///    现在取 **4**：每 1 个画布单位 = 4 个纹素 = **2 个物理像素** ⇒ 圆弧与斜边才有真正的中间灰阶。
+    /// ⚠️ 改这个值**必须同时**保证 `pixelsPerUnit = 100 × ResMult`、`border` 也按同倍数放大，否则整张图会变大。
+    /// 📌 代价：最大的那几张（128 基础尺寸）会变成 512×512 ≈ 1 MB/张，全套约 **3~4 MB** 显存 —— 桌面端可接受。</summary>
+    const int ResMult = 4;
+
+    /// <summary>抗锯齿过渡宽度（**输出像素**，单侧）：`alpha` 在边界两侧各 `AaPx` 个纹素内线性过渡。
+    /// ⚠️ 原来这里是**二值阈值**（`d <= r ? 1 : 0`）—— 零抗锯齿，是"毛糙感"的直接来源。
+    /// 📌 现在 `ResMult = 4` ⇒ 一个物理像素 = 2 个纹素 ⇒ `AaPx = 2` 正好对应**约 1 个物理像素**的过渡带
+    ///    （太窄会重新变成台阶，太宽圆角会发虚）。</summary>
+    const float AaPx = 2f;
+
     public static Sprite RoundedRectSprite(int size = 64, float radiusPx = 14f, float borderPx = 0f)
     {
         // ⚠️ 按参数缓存：同一组 (size, radius, border) 只生成一次（见 `_genSprites`）
         string key = "r|" + size + "|" + radiusPx.ToString("F2") + "|" + borderPx.ToString("F2");
         if (_genSprites.TryGetValue(key, out var cached) && cached != null) return cached;
 
-        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        // 生成用的实际像素尺寸（判定/尺寸全部在"输出像素"空间算）
+        int px = size * ResMult;
+        var tex = new Texture2D(px, px, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
-        float r = Mathf.Clamp(radiusPx, 1f, size * 0.5f - 1f);
+        tex.filterMode = FilterMode.Bilinear;
+        float r = Mathf.Clamp(radiusPx * ResMult, 1f, px * 0.5f - 1f);
+        float bd = borderPx * ResMult;
 
-        for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
+        for (int y = 0; y < px; y++)
+        for (int x = 0; x < px; x++)
         {
-            float cx = Mathf.Clamp(x, r, size - 1f - r);
-            float cy = Mathf.Clamp(y, r, size - 1f - r);
+            float cx = Mathf.Clamp(x, r, px - 1f - r);
+            float cy = Mathf.Clamp(y, r, px - 1f - r);
             float dx = x - cx, dy = y - cy;
-            bool outer = dx * dx + dy * dy <= r * r;
+            float d = Mathf.Sqrt(dx * dx + dy * dy);   // 到"最近角圆心"的距离；直边区域即到边的距离
 
-            float a = 0f;
-            if (borderPx > 0f)
+            // 覆盖率法抗锯齿：d < r-AaPx → 1；d > r+AaPx → 0；中间线性（边缘因此是平滑灰阶，不是台阶）
+            float a = Mathf.Clamp01(AaPx + (r - d));
+            if (bd > 0f)
             {
-                // ⚠️ 内圈必须用**同一个 core 矩形**（`cx` / `cy`），只把半径缩到 `r - borderPx` —— 这样才是"外圈内缩 borderPx 的环"。
-                //    🐞 曾经这里把内圈的 clamp 边界也一起缩成 `ir` → 内圈反而**整个包住**外圈 → `outer && !inner` 永远为假
-                //       → **描边模式生成出来的图整张全透明**（2026-09-22 实测：borderPx>0 时 0/4096 个不透明像素）。
-                //       后果：所有"框 / 描边"图（背包快捷槽框、库存格底、整理按钮、拾取气泡外圈、HUD 快捷栏槽框）
-                //       一直不可见 —— 表现为"当前槽高亮怎么调都看不到"。
-                float ir = Mathf.Max(r - borderPx, 0.01f);
-                float idx = x - cx, idy = y - cy;
-                bool inner = idx * idx + idy * idy <= ir * ir;
-                if (outer && !inner) a = 1f;
+                // ⚠️ 内圈必须用**同一个 core 矩形**（`cx` / `cy`），只把半径缩到 `r - bd` —— 这样才是"外圈内缩 bd 的环"。
+                //    🐞 曾经这里把内圈的 clamp 边界也一起缩成 `ir` → 内圈反而**整个包住**外圈 → 描边图整张全透明
+                //       （2026-09-22 实测：borderPx>0 时 0/4096 个不透明像素），所有"框 / 描边"图都不可见。
+                //    ⭐ 现在用"外缘覆盖率 − 内缘覆盖率"，**内外两条边都有抗锯齿**。
+                float ir = Mathf.Max(r - bd, 0.01f);
+                a -= Mathf.Clamp01(AaPx + (ir - d));
             }
-            else if (outer) a = 1f;
 
-            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(a)));
         }
         tex.Apply();
-        var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0,
+        // ⚠️ `pixelsPerUnit` 必须 ×ResMult、`border` 用放大后的 r → 画布上的尺寸与九宫格切分**与改动前完全一致**
+        var sprite = Sprite.Create(tex, new Rect(0, 0, px, px), new Vector2(0.5f, 0.5f), 100f * ResMult, 0,
             SpriteMeshType.FullRect, new Vector4(r, r, r, r));
         _genSprites[key] = sprite;
         return sprite;
@@ -299,18 +318,22 @@ public static class UIUtil
         string key = "c|" + size;
         if (_genSprites.TryGetValue(key, out var cached) && cached != null) return cached;
 
-        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        int px = size * ResMult;
+        var tex = new Texture2D(px, px, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
-        float c = (size - 1) * 0.5f;
-        for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
+        tex.filterMode = FilterMode.Bilinear;
+        float c = (px - 1) * 0.5f;
+        for (int y = 0; y < px; y++)
+        for (int x = 0; x < px; x++)
         {
             float dx = x - c, dy = y - c;
-            bool inside = dx * dx + dy * dy <= c * c;
-            tex.SetPixel(x, y, new Color(1f, 1f, 1f, inside ? 1f : 0f));
+            float d = Mathf.Sqrt(dx * dx + dy * dy);
+            // 覆盖率法抗锯齿（同 `RoundedRectSprite`）：原来这里是 `inside ? 1 : 0` 的二值阈值 ⇒ 圆周一圈台阶
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(AaPx + (c - d))));
         }
         tex.Apply();
-        var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        // ⚠️ 与 `RoundedRectSprite` 同理：PPU ×ResMult ⇒ 画布上的尺寸与改动前一致
+        var sprite = Sprite.Create(tex, new Rect(0, 0, px, px), new Vector2(0.5f, 0.5f), 100f * ResMult);
         _genSprites[key] = sprite;
         return sprite;
     }

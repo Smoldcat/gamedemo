@@ -281,6 +281,8 @@ public class HUD : MonoBehaviour
         BuildPickupBubble();     // 拾取气泡（靠近可拾取物时显示，默认隐藏）
         BuildHotbar();           // 快捷栏（1/2/3 = 武器槽、Q = 血包；场景预置优先，留空则代码生成）
         ApplyHudStyle();         // HUD 容器化风格（颜色统一从 GameAssets「HUD 风格」组读；引用留空则完全不动）
+        _modeHintUntil = Time.time + ModeHintSeconds;   // 开局先亮一次完整「奔跑模式 [Shift 切换]」提示
+        StyleDeathPanel();       // ⭐ 2026-10-17：死亡结算面板（背景压暗 + 中央卡片 + 红色主按钮）—— 放在 ApplyHudStyle 之后，覆盖它对按钮的着色
 
         // 纯显示元素不需要接收点击：关掉 raycastTarget，每帧 UI 射线检测只剩重启按钮
         DisableDisplayRaycasts();
@@ -491,8 +493,134 @@ public class HUD : MonoBehaviour
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
+    // ==================== 死亡结算界面（2026-10-17）====================
+
+    /// <summary>死亡结算面板的外观：**背景压暗 + 中央圆角卡片 + 红色主按钮**。
+    ///
+    /// 为什么写在代码里（而不是改场景节点）：和 HUD 其它块同一套约定 —— **颜色 / 皮肤由代码驱动**，
+    /// 场景被重建、或跑 `Tools/游戏/优化 HUD 风格` 时都不会丢；卡片本身**运行时创建、只建一次**。
+    /// 📌 想调观感改这里的常量即可（将来也可以接 `GameAssets` 的「HUD 风格」组）。
+    /// ⚠️ 必须在 `ApplyHudStyle()` **之后**调用 —— 那边也会给重启按钮着色，否则会被覆盖。</summary>
+    void StyleDeathPanel()
+    {
+        if (deathPanel == null) return;
+
+        // ① 背景：原来是不透明的暗红（alpha 0.75）→ 把整个场景压成一片黑红。
+        //    改成「中性深底 + 一点红调」、并透一点，让后面的战场还看得见（死亡瞬间的画面有叙事感）。
+        var bg = deathPanel.GetComponent<Image>();
+        if (bg != null)
+        {
+            bg.color = new Color(0.055f, 0.035f, 0.035f, 0.58f);
+            bg.raycastTarget = false;   // 纯装饰；挡点击交给按钮自己
+        }
+
+        // ② 标题「你死了」：原来和正文同色，层次出不来 → 单独给红色
+        var titleTr = FindDeep(deathPanel.transform, "DeathText");
+        var title = titleTr != null ? titleTr.GetComponent<Text>() : null;
+        if (title != null) title.color = new Color(0.96f, 0.34f, 0.30f, 1f);
+
+        // ③ 中央卡片（只在第一次进入时创建；`SetSiblingIndex(0)` → 永远在所有文字后面）
+        if (FindDeep(deathPanel.transform, "DeathCard") == null)
+        {
+            var cardGo = new GameObject("DeathCard", typeof(RectTransform));
+            var cardRt = (RectTransform)cardGo.transform;
+            cardRt.SetParent(deathPanel.transform, false);
+            cardRt.SetSiblingIndex(0);
+            cardRt.anchorMin = cardRt.anchorMax = new Vector2(0.5f, 0.5f);
+            cardRt.pivot = new Vector2(0.5f, 0.5f);
+            cardRt.sizeDelta = new Vector2(820f, 560f);
+            cardRt.anchoredPosition = new Vector2(0f, 10f);
+
+            var cardImg = cardGo.AddComponent<Image>();
+            cardImg.sprite = UIUtil.PanelSprite();     // 圆角填充（九宫格，任意尺寸不变形）
+            cardImg.type = Image.Type.Sliced;
+            cardImg.color = new Color(0.085f, 0.09f, 0.10f, 0.96f);
+            cardImg.raycastTarget = false;
+
+            var frameGo = new GameObject("DeathCardFrame", typeof(RectTransform));
+            var frameRt = (RectTransform)frameGo.transform;
+            frameRt.SetParent(cardRt, false);
+            frameRt.anchorMin = Vector2.zero;
+            frameRt.anchorMax = Vector2.one;
+            frameRt.offsetMin = Vector2.zero;
+            frameRt.offsetMax = Vector2.zero;
+            var frameImg = frameGo.AddComponent<Image>();
+            frameImg.sprite = UIUtil.FrameSprite();    // 圆角描边（同皮肤）
+            frameImg.type = Image.Type.Sliced;
+            frameImg.color = new Color(0.86f, 0.30f, 0.26f, 0.85f);   // 呼应标题的红色描边
+            frameImg.raycastTarget = false;
+        }
+
+        // ④ 重启按钮：原来是 Unity 默认的灰蓝系统皮肤 → 换成圆角红按钮
+        if (restartBtn != null)
+        {
+            if (restartBtn.targetGraphic is Image btn)
+            {
+                btn.sprite = UIUtil.PanelSprite();
+                btn.type = Image.Type.Sliced;
+                btn.color = new Color(0.70f, 0.24f, 0.20f, 1f);
+            }
+            if (restartBtnLabel != null) restartBtnLabel.color = new Color(1f, 0.96f, 0.94f, 1f);
+        }
+    }
+
+    /// <summary>死亡时把**游戏信息**全部收起来，只留结算面板。
+    ///
+    /// 依据是 `Canvas` 的直接子节点：`HPText / HPBg / WeaponText / ModeText / WaveText / KillText /
+    /// AnnounceText / PickupBubble / Hotbar` —— 死亡后它们还亮着会**压在结算面板下面**，视觉层级很乱
+    /// （2026-10-17 实测截图确认）。`DeathPanel` 自己的三个子节点（`DeathText` / `DeathStat` / `RestartBtn`）
+    /// 都在面板**内部**，不受影响。
+    /// 📌 重开一局是 `LoadScene(当前场景)` ⇒ 全部恢复，所以**不需要任何"还原"逻辑**。
+    /// 📌 准星在**独立 Canvas**（`CrosshairCanvas`）上，死亡时同样不该继续画着十字 ⇒ 一起收。</summary>
+    bool _deathUiApplied;   // 是否已执行过"收起 HUD"（`ShowDeathPanel` 每帧幂等调用 → 这里必须一次性，否则每帧都会 FindObjectOfType 全场景搜索）
+
+    /// <summary>切换奔跑/行走后，"完整提示"还要亮多久（秒）。之后收敛成「奔跑 / 步行」小字。</summary>
+    const float ModeHintSeconds = 1.5f;
+    float _modeHintUntil;   // 完整提示的截止时间（`Time.time` 口径）
+
+    void HideGameplayHudForDeath()
+    {
+        if (_deathUiApplied) return;
+        _deathUiApplied = true;
+
+        if (_canvas != null)
+        {
+            for (int i = 0; i < _canvas.transform.childCount; i++)
+            {
+                var c = _canvas.transform.GetChild(i);
+                if (deathPanel != null && c.gameObject == deathPanel) continue;   // 结算面板本身留着
+                c.gameObject.SetActive(false);
+            }
+        }
+
+        // ⚠️ 实测：`FindObjectOfType<Crosshair>()` 在这个时机**取不到**（准星是运行时创建、或所在节点未激活）
+        //    ⇒ 先按组件找，取不到再按画布名兜底（`CrosshairCanvas` 是场景里的固定节点）。
+        bool hidden = false;
+        var cross = FindObjectOfType<Crosshair>();
+        if (cross != null)
+        {
+            var cc = cross.GetComponentInParent<Canvas>();
+            if (cc != null && (_canvas == null || cc.gameObject != _canvas.gameObject))
+            {
+                cc.gameObject.SetActive(false);
+                hidden = true;
+            }
+        }
+        if (!hidden)
+        {
+            var ccGo = GameObject.Find("CrosshairCanvas");
+            if (ccGo != null) ccGo.SetActive(false);
+        }
+    }
+
     void Update()
     {
+        // ⭐ 2026-10-17：**死亡后只维持结算面板**，其余每帧逻辑全部停掉。
+        //    原因：原来"隐藏 HUD"只在死亡那一帧做一次，而 `UpdatePickupBubble` / `UpdateHotbar` 等
+        //    仍在每帧跑 —— 玩家尸体旁边若有可拾取物，拾取气泡会被**重新 SetActive(true)** 冒到
+        //    结算面板上面（实测发现）。放在 `pc == null` 之前判断，顺便防"玩家对象被销毁时面板不出现"。
+        if (GameState.GameOver) { ShowDeathPanel(); return; }
+
         var pc = PlayerController.Instance;
         if (pc == null) return;
 
@@ -605,11 +733,27 @@ public class HUD : MonoBehaviour
             if (weaponText.color != wCol) weaponText.color = wCol;
         }
 
-        // 模式（只在切换时改文本）
-        if (modeText != null && pc.running != _sRunning)
+        // 模式提示（2026-10-17 改）：原来切换后**一直**挂着「奔跑模式  [Shift 切换]」，
+        // 是一句"操作教学"却常驻在屏幕上，很吵（用户反馈）。现在：
+        //   · 切换后显示**完整提示 1.5 秒**（让玩家知道按了 Shift 有效果）；
+        //   · 之后收敛成「奔跑 / 步行」两个字，并降到 55% 透明度当安静的常驻状态。
+        if (modeText != null)
         {
-            _sRunning = pc.running;
-            modeText.text = pc.running ? "奔跑模式  [Shift 切换]" : "行走模式  [Shift 切换]";
+            if (pc.running != _sRunning)
+            {
+                _sRunning = pc.running;
+                _modeHintUntil = Time.time + ModeHintSeconds;
+            }
+
+            bool hinting = Time.time < _modeHintUntil;
+            string want = hinting
+                ? (pc.running ? "奔跑模式  [Shift 切换]" : "行走模式  [Shift 切换]")
+                : (pc.running ? "奔跑" : "步行");
+            if (modeText.text != want) modeText.text = want;
+
+            float wantA = hinting ? 1f : 0.55f;
+            var mc = modeText.color;
+            if (!Mathf.Approximately(mc.a, wantA)) modeText.color = new Color(mc.r, mc.g, mc.b, wantA);
         }
 
         // 顶部：击杀 / 波次（+ 清场阶段的下一波倒计时）
@@ -669,12 +813,22 @@ public class HUD : MonoBehaviour
             _sAnnounceStart = -1f;
         }
 
-        // 死亡结算
-        if (GameState.GameOver && deathPanel != null && !deathPanel.activeSelf)
+        // 死亡结算：已挪到 `Update` 开头（`GameState.GameOver` 早退分支 → `ShowDeathPanel()`），
+        // 这里不再处理，避免两处逻辑并存。
+    }
+
+    /// <summary>死亡结算面板的"每帧幂等"维护：面板开着、其余 HUD 收着、文案正确。
+    /// 📌 幂等 ⇒ 每帧调用也不会重复做任何事（`SetActive` 判重 + 文案判重）。</summary>
+    void ShowDeathPanel()
+    {
+        if (deathPanel == null) return;
+        if (!deathPanel.activeSelf) deathPanel.SetActive(true);
+        HideGameplayHudForDeath();   // 内部每个节点都判了 activeSelf，重复调用无开销
+
+        if (deathStat != null)
         {
-            deathPanel.SetActive(true);
-            if (deathStat != null)
-                deathStat.text = $"击杀 {GameState.Kills} 人 · 坚持到第 {GameState.Wave} 波";
+            string s = $"击杀 {GameState.Kills} 人 · 坚持到第 {GameState.Wave} 波";
+            if (deathStat.text != s) deathStat.text = s;
         }
     }
 

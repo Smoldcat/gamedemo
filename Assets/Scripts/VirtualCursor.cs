@@ -214,46 +214,69 @@ public static class VirtualCursor
 
     /// <summary>画一个"经典鼠标箭头"（白色 + 深色描边，纯程序生成、零美术资源）。
     /// ⚠️ **pivot 定在箭头尖端** → 激活那一刻，箭头尖正好落在准星原来的位置上（连续感的关键）。</summary>
-    static Sprite MakeArrowSprite(int size = 32)
+    static Sprite MakeArrowSprite(int size = 128)
     {
-        // 经典指针多边形（y 轴向下、32×32 空间内）
+        // 经典指针多边形（y 轴向下、**32×32 设计空间** —— 与输出分辨率解耦，改 `size` 不会让图形跑偏）
         var pts = new[]
         {
             new Vector2(2f, 2f), new Vector2(2f, 21f), new Vector2(7f, 16.5f),
             new Vector2(11f, 24f), new Vector2(15f, 22f), new Vector2(11f, 14.5f), new Vector2(17.5f, 14.5f)
         };
 
+        // ⚠️ 2026-10-17（用户反馈"UI 边缘毛糙"）：原来输出 **32px** 且是**二值硬边**（`InPolygon ? body : 0`），
+        //    在 2560×1440（画布 scaleFactor=2）下等于把 32px 的箭头放大 2 倍 ⇒ 边缘全是台阶。
+        //    现在：输出 64px（**2 倍纹素**）+ 每像素 **3×3 超采样**（覆盖率法）⇒ 边缘是平滑灰阶。
+        //    📌 `Image` 默认 `Simple` 类型会按 `sizeDelta` 拉伸 → 提高分辨率**不改变显示尺寸**；
+        //       pivot 用**归一化**值（除以设计空间 32），所以热点位置也不变。
+        const float Design = 32f;      // 多边形设计空间边长
+        const int SS = 3;              // 每像素 3×3 超采样
+        float scale = size / Design;   // 纹理像素 / 设计单位
+
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
+        tex.filterMode = FilterMode.Bilinear;
 
         var body = new Color(1f, 1f, 1f, 1f);
         var edge = new Color(0.08f, 0.09f, 0.13f, 1f);   // 与项目深色 UI（backpackCellColor）同一族
-        const float r = 1.3f;                             // 描边宽度（约 1px）
+        const float r = 1.3f;                             // 描边宽度（设计单位，约 1px@32）
 
         for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++)
         {
-            float px = x + 0.5f;
-            float py = (size - 1 - y) + 0.5f;             // 贴图 y 向上 → 把多边形翻过来
-            Color c = new Color(1f, 1f, 1f, 0f);
-
-            if (InPolygon(pts, px, py)) c = body;
-            else
+            int bodyHits = 0, edgeHits = 0;
+            for (int sy = 0; sy < SS; sy++)
+            for (int sx = 0; sx < SS; sx++)
             {
-                // 描边：只要"邻域内有多边形"就画深色（比做真正的距离场简单，效果足够）
+                // 采样点 → 设计空间（注意贴图 y 向上 → 把多边形翻过来）
+                float px = (x + (sx + 0.5f) / SS) / scale;
+                float py = (size - 1 - y + (sy + 0.5f) / SS) / scale;
+
+                if (InPolygon(pts, px, py)) { bodyHits++; continue; }
+
+                // 描边：只要"邻域内有多边形"就算描边（比做真正的距离场简单，效果足够）
                 if (InPolygon(pts, px + r, py) || InPolygon(pts, px - r, py) ||
                     InPolygon(pts, px, py + r) || InPolygon(pts, px, py - r) ||
                     InPolygon(pts, px + r * 0.7f, py + r * 0.7f) || InPolygon(pts, px - r * 0.7f, py + r * 0.7f) ||
                     InPolygon(pts, px + r * 0.7f, py - r * 0.7f) || InPolygon(pts, px - r * 0.7f, py - r * 0.7f))
-                    c = edge;
+                    edgeHits++;
             }
-            tex.SetPixel(x, y, c);
+
+            float n = SS * SS;
+            float cb = bodyHits / n;   // 本体覆盖度
+            float ce = edgeHits / n;   // 描边覆盖度
+            float a = cb + ce;
+            if (a <= 0.0001f) { tex.SetPixel(x, y, new Color(1f, 1f, 1f, 0f)); continue; }
+
+            // 按覆盖度混合本体/描边的颜色（未预乘 → RGB 只在 a>0 处有意义）
+            var rgb = (body * cb + edge * ce) / a;
+            tex.SetPixel(x, y, new Color(rgb.r, rgb.g, rgb.b, a));
         }
         tex.Apply();
 
         const float tipX = 2f, tipY = 2f;   // 多边形第一个点 = 箭头尖端（y 向下）
+        // ⚠️ pivot 必须是**归一化**（0~1）：用设计空间 32 去除，与输出分辨率无关
         return Sprite.Create(tex, new Rect(0, 0, size, size),
-            new Vector2(tipX / size, (size - 1f - tipY) / size));
+            new Vector2(tipX / Design, (Design - 1f - tipY) / Design));
     }
 
     /// <summary>取 Sprite 的**归一化热点**（0~1，相对图片左下角）—— 也就是"指针尖 / 点击生效点在哪"。

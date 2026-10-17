@@ -393,16 +393,29 @@ public static class ItemVisuals
     // ---- 武器形状图标（64×64，枪口朝右，alpha 形状；颜色由 Image.color 上色）----
     static Sprite MakeWeaponIcon(IconKind kind)
     {
-        const int size = 64;
+        // ⚠️ 2026-10-17：`ShapeAlpha` 返回的是**二值**（0 或 1），而"通用"图标是个**菱形（45° 斜边）**
+        //    ⇒ 原来斜边上全是台阶（枪械类图标因为是轴对齐矩形，看不出来，所以只有菱形/斜边显脏）。
+        //    **3×3 超采样**求覆盖率 → 斜边变平滑；轴对齐的边只要正好落在像素边界上就不受影响。
+        // ⚠️ 分辨率从 64 提到 **128**：图标在快捷栏里约 40 画布单位，画布 `scaleFactor = 2` ⇒
+        //    64px 只有 ~1.6 纹素/单位（≈0.8 纹素/物理像素，等于被放大）→ 提到 128 才有富余。
+        const int size = 128;
+        const int SS = 3;
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
+        tex.filterMode = FilterMode.Bilinear;
 
         for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++)
         {
-            float u = (x + 0.5f) / size, v = 1f - (y + 0.5f) / size;   // v 上大下小
-            float a = ShapeAlpha(kind, u, v);
-            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+            float acc = 0f;
+            for (int sy = 0; sy < SS; sy++)
+            for (int sx = 0; sx < SS; sx++)
+            {
+                float u = (x + (sx + 0.5f) / SS) / size;
+                float v = 1f - (y + (sy + 0.5f) / SS) / size;   // v 上大下小
+                acc += ShapeAlpha(kind, u, v);
+            }
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, acc / (SS * SS)));
         }
         tex.Apply();
         return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
