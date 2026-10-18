@@ -23,22 +23,11 @@ public static class FireVisual
         return _tex;
     }
 
-    /// <summary>建一份火焰材质：优先**加法混合**的粒子 shader（黑=透明、亮=发光，最像火）；
-    /// 一个都找不到就退回 `Sprites/Default`（仍是 unlit 透明，只是不发亮）。
+    /// <summary>建一份火焰材质（**加法混合**：黑=透明、亮=发光，最像火）。
+    /// 📌 实现在 `Effects.AdditiveMaterial`（唯一实现，闪光弹的"范围光"也用同一份）。
     /// ⚠️ 用 `HasProperty` 探测再写属性（项目铁律：不同 shader 属性集不同，直接写会报错）。</summary>
     public static Material CreateMaterial(Texture2D tex)
-    {
-        Shader sh = Shader.Find("Legacy Shaders/Particles/Additive");
-        if (sh == null) sh = Shader.Find("Particles/Additive");
-        if (sh == null) sh = Shader.Find("Mobile/Particles/Additive");
-        if (sh == null) sh = Shader.Find("Sprites/Default");
-
-        var m = new Material(sh) { name = "火焰（运行时）" };
-        if (tex != null && m.HasProperty("_MainTex")) m.mainTexture = tex;
-        if (m.HasProperty("_TintColor")) m.SetColor("_TintColor", Color.white);
-        if (m.HasProperty("_Color")) m.color = Color.white;
-        return m;
-    }
+        => Effects.AdditiveMaterial(tex, Color.white, "火焰（运行时）");
 
     /// <summary>画一张火舌贴图（`size × size`，RGBA32）。</summary>
     public static Texture2D CreateTexture(int size)

@@ -15,12 +15,17 @@ MonoBehaviour:
   effectName: "\u6548\u679C"
   description: 
   showRangeIndicator: 1
-  radius: 4
+  radius: 7
   blindDuration: 4
   slowPercent: 0.5
   slowDuration: 0
   playerBlindDuration: 1.5
   playerSlowPercent: 0.5
-  flashPrefab: {fileID: 0}
+  flashPrefab: {fileID: 135726, guid: fa0f45d143def4e4188900695d955614, type: 3}
+  flashAreaPrefab: {fileID: 0}
+  flashAreaTexture: {fileID: 2800000, guid: 1273bc78308aafa48971994edacfc1e7, type: 3}
   flashColor: {r: 1, g: 0.98, b: 0.9, a: 1}
+  flashLife: 0.1
+  flashAlpha: 0.506
+  flashLightIntensity: 4
   flashSound: {fileID: 0}

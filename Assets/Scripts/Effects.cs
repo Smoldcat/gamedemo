@@ -129,6 +129,26 @@ public static class Effects
         return m;
     }
 
+    /// <summary>**加色（Additive）**材质：黑 = 透明、亮 = 发光 —— "光"类效果的标准做法。
+    ///
+    /// ⚠️ 这是加色材质的**唯一实现**（`FireVisual.CreateMaterial` 与闪光弹的"范围光"都用它）。
+    ///    原来这段 shader 优先级散落在 `FireVisual` 里，第二处要用时复制一遍就会各自跑偏。
+    /// 📌 用 `HasProperty` 探测再写属性（项目铁律：不同 shader 属性集不同，直接写会报错）。
+    /// 📌 找不到任何加色 shader 时退回 `Sprites/Default`（仍是 unlit 透明，只是**不发亮**）。</summary>
+    internal static Material AdditiveMaterial(Texture2D tex, Color tint, string name = "加色（运行时）")
+    {
+        Shader sh = Shader.Find("Legacy Shaders/Particles/Additive");
+        if (sh == null) sh = Shader.Find("Particles/Additive");
+        if (sh == null) sh = Shader.Find("Mobile/Particles/Additive");
+        if (sh == null) sh = Shader.Find("Sprites/Default");
+
+        var m = new Material(sh) { name = name };
+        if (tex != null && m.HasProperty("_MainTex")) m.mainTexture = tex;
+        if (m.HasProperty("_TintColor")) m.SetColor("_TintColor", tint);
+        if (m.HasProperty("_Color")) m.color = tint;
+        return m;
+    }
+
     /// <summary>清除 MaterialPropertyBlock 的颜色覆盖，让渲染器恢复使用材质本身的颜色</summary>
     public static void ClearColor(Renderer r)
     {
