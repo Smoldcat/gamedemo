@@ -13,6 +13,7 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - _ALPHABLEND_ON
+  - _FADING_ON
   - _REQUIRE_UV2
   m_InvalidKeywords:
   - _FLIPBOOKBLENDING_ON

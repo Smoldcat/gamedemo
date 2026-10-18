@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3ea5d1f33301b4b438dbdfe77ebf262c, type: 3}
   m_Name: Medkit
   m_EditorClassIdentifier: 
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 63b1e34700a8d6e4597875fa7a1d3cb0, type: 3}
   pickupColor: {r: 0.95, g: 0.22, b: 0.22, a: 1}
   pickupModelPrefab: {fileID: 1954381911622031498, guid: c8badaf47386f9f4ab7bd20e5859dd31, type: 3}
   canStack: 0
@@ -20,5 +20,6 @@ MonoBehaviour:
   stackId: 
   description: "\u4F7F\u7528\u540E\u56DE\u590D 50 \u70B9\u751F\u547D\u503C\uFF08\u6309
     Q \u4F7F\u7528\uFF0C\u9700\u672A\u6EE1\u8840\uFF09"
+  baseValue: 100
   itemName: "\u8840\u5305"
   healAmount: 50

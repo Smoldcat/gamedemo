@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc7cac2f169f01048bdf8bf94328df7d, type: 3}
   m_Name: Weapon_Uzi
   m_EditorClassIdentifier: 
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: cae1828e60421374e8902d31c84a898b, type: 3}
   pickupColor: {r: 0.4, g: 0.9, b: 1, a: 1}
   pickupModelPrefab: {fileID: 4292694271627039545, guid: bef59411e0ebb02469fff62c59c3f1ac, type: 3}
   canStack: 0

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc7cac2f169f01048bdf8bf94328df7d, type: 3}
   m_Name: Weapon_M107
   m_EditorClassIdentifier: 
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: e6adeb566596ca74dbc3b8b68e9caa88, type: 3}
   pickupColor: {r: 0.8, g: 0.4, b: 1, a: 1}
   pickupModelPrefab: {fileID: 5975588500266691430, guid: e91e9cef667c68540806a67280ef123d, type: 3}
   canStack: 0

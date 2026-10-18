@@ -1141,7 +1141,11 @@ public class HUD : MonoBehaviour
             Color iconColor = Color.white;
             if (isMedkit)
             {
-                spr = med > 0 ? ItemVisuals.MedkitSprite() : null;
+                // 血包：优先用卡片上的 icon（`IconOf` 内部已做"没配就回落程序生成"）。
+                // ⚠️ 2026-10-19 修：原来固定调 `MedkitSprite()`（程序画的红十字）→ 快捷栏永远不跟 `Medkit.asset`
+                //    的图标替换走，而背包/拾取物都会跟，表现就是"其他地方换了、快捷栏没换"。
+                var medkitDef = PlayerBackpack.MedkitDef();
+                spr = med > 0 ? (medkitDef != null ? ItemVisuals.IconOf(medkitDef) : ItemVisuals.MedkitSprite()) : null;
                 iconColor = ItemVisuals.MedkitIconColor;
             }
             else if (isMagic)
@@ -1158,7 +1162,8 @@ public class HUD : MonoBehaviour
             }
             else if (w != null)
             {
-                spr = ItemVisuals.WeaponIconSprite(w);
+                // 武器：同样优先用卡片上的 icon（`IconOf` 没配时回落到形状图标，零回归）
+                spr = ItemVisuals.IconOf(w);
                 iconColor = w.pickupColor;
             }
 

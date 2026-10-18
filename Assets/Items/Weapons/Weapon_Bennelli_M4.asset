@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc7cac2f169f01048bdf8bf94328df7d, type: 3}
   m_Name: Weapon_Bennelli_M4
   m_EditorClassIdentifier: 
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 81ce572686ea6a049b24a144dc0bc6d3, type: 3}
   pickupColor: {r: 1, g: 0.5, b: 0.1, a: 1}
   pickupModelPrefab: {fileID: 7664263260796425675, guid: a9c3ce1d056dfc44181b4d9e2945cd7d, type: 3}
   canStack: 0

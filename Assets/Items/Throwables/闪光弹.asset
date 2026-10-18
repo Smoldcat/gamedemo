@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4f5d4284f3e7c324bbf2b10ff9cb661a, type: 3}
   m_Name: "\u95EA\u5149\u5F39"
   m_EditorClassIdentifier: 
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: e01b11b07c34abe4a8aa716e4dc5558a, type: 3}
   pickupColor: {r: 0.35, g: 0.45, b: 0.3, a: 1}
   pickupModelPrefab: {fileID: 0}
   canStack: 1
