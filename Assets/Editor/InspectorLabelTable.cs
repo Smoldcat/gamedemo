@@ -43,6 +43,10 @@ public static class InspectorLabelTable
         { "PlayerController.magic",                     "魔法组件（PlayerMagic）" },
         { "PlayerController.throwables",                "投掷物组件（PlayerThrowable）" },
         { "PlayerController.ammoSel",                   "弹种选择器（AmmoSelector）" },
+        { "PlayerController.bulletUpAngle",             "子弹上偏角（普通）" },
+        { "PlayerController.bulletDownAngle",           "子弹下偏角（普通）" },
+        { "PlayerController.headshotUpAngle",           "子弹上偏角（爆头）" },
+        { "PlayerController.headshotDownAngle",         "子弹下偏角（爆头）" },
 
         // -------------------------------- Crosshair --------------------------------
         { "Crosshair.size",              "十字线长度" },

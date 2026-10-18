@@ -158,6 +158,43 @@ public class PlayerController : MonoBehaviour
              "  · 调大 = 更安全（但准星贴近玩家时会「枪不听使唤」的区域变大）；调小 = 更跟手（但可能抖）。")]
     [Min(0f)] public float aimDeadZoneRadius = 0.6f;
 
+    // ==================== 子弹纵向扰动（2026-10-18）====================
+    // 目的：让弹道在 y 方向轻微上/下偏，增加俯视角下的空间感（原来所有子弹都飞在同一个 0.55 平面）。
+    // ⚠️ 只影响**玩家开火**（写在 `Fire()` 里）；敌人子弹、玩家朝向、激光、爆头判定全部不受影响。
+
+    [Header("子弹纵向扰动（普通子弹）")]
+    [Tooltip("【普通子弹】单发向上偏的最大角度（度）。\n\n" +
+             "分布 = 三角分布（两次均匀随机相加）：中间概率高、两端趋近 0，典型值约为上限的 1/3。\n" +
+             "每颗弹丸独立掷角（霰弹的多颗会各自偏）。\n" +
+             "向上/向下的**概率**按 上偏 : 下偏 两个参数的比例分配（不是各 50%；所以下偏角设 0 → 100% 向上）。\n\n" +
+             "按 0.6° 换算的世界抬高量：\n" +
+             "10m ≈ 10.5cm\n20m ≈ 20.9cm\n30m ≈ 31.4cm\n40m ≈ 41.9cm\n\n" +
+             "⚠️ 敌人身体胶囊顶约 1.17m（0.55 + 0.62）：0.6° 要 59m 才越顶 → 40m 内不会出现瞄了打不到。\n" +
+             "⚠️ 爆炸类武器（RPG，射程 27m）的命中点同时是爆炸中心：up 超过 0.74° 时，27m 处的爆炸点" +
+             "会高到让「隔墙不炸」判定从 1.2m 墙顶越过。默认 0.6° 安全。")]
+    [Min(0f)] public float bulletUpAngle = 0.6f;
+
+    [Tooltip("【普通子弹】单发向下偏的最大角度（度）。分布同上一项；这个值越小，向下偏的**概率**也越低。\n\n" +
+             "按 0.15° 换算：\n10m ≈ 2.6cm\n20m ≈ 5.2cm\n30m ≈ 7.9cm\n40m ≈ 10.5cm\n\n" +
+             "⚠️ 子弹固定飞在 0.55m，而可交互箱子（box(0~3)）的碰撞体顶面只有 0.50m —— 向下余量仅 5cm。\n" +
+             "0.15° 在 19m 外就会跌破箱顶 → 远距离隔着箱子射击时，约 5% 的子弹会被箱子挡住（时中时不中）。\n" +
+             "想完全避免：设 0 ~ 0.07°。")]
+    [Min(0f)] public float bulletDownAngle = 0.15f;
+
+    [Header("子弹纵向扰动（爆头弹）")]
+    [Tooltip("【爆头弹】向上偏的角度（度）。爆头弹 = 开火瞬间判为爆头、弹道已改指向该敌人的那一发。\n" +
+             "三角分布、每颗弹丸独立，且**只用爆头这对参数**（不叠加普通那对）。\n" +
+             "下偏角设 0 时 = 100% 向上偏（不会出现「一半没偏」）。\n\n" +
+             "按 0.7° 换算：\n10m ≈ 12.2cm\n20m ≈ 24.4cm\n30m ≈ 36.7cm\n40m ≈ 48.9cm\n\n" +
+             "⚠️ 敌人的头没有碰撞体（爆头是屏幕空间判定），子弹最高只能打到身体胶囊顶（约 1.17m）：\n" +
+             "0.7° 在 40m 处抬到约 1.04m，仍稳稳命中身体；超过 1° 会开始从头顶越过（打空）。")]
+    [Min(0f)] public float headshotUpAngle = 0.7f;
+
+    [Tooltip("【爆头弹】向下偏的角度（度）。设 0 = 100% 向上偏（推荐）。\n" +
+             "该值越大，向下偏的概率越高（概率按 上偏 : 下偏 的比例分配）。\n" +
+             "⚠️ 与普通向下同一个箱顶约束：0.15° 在 19m 外可能被 0.5m 高的箱子挡住。")]
+    [Min(0f)] public float headshotDownAngle = 0f;
+
     Rigidbody _rb;
     Health _hp;
     Vector2 _moveInput;
@@ -1109,10 +1146,14 @@ public class PlayerController : MonoBehaviour
         bool ammoOk = magAmmoId != null && magAmmoId.ammoKind == weapon.ammoKind;
         float ammoMult = ammoOk ? Mathf.Max(0f, magAmmoId.damageMultiplier) : 1f;
 
+        // 爆头弹是否用「爆头」那一对扰动参数（循环外算一次：霰弹 7 颗不必重复判空）
+        bool tiltAsHeadshot = headshotTarget != null;
         for (int i = 0; i < weapon.pellets; i++)
         {
             float angle = Random.Range(-CurrentSpread, CurrentSpread);
             Vector3 dir = Quaternion.AngleAxis(angle, Vector3.up) * baseDir;
+            // 纵向扰动：放在水平散布**之后**（绕 Y 的散布会保持 y 分量不变，两种旋转正交）。
+            dir = ApplyVerticalTilt(dir, tiltAsHeadshot);
             Bullet.Spawn(muzzle, dir, weapon, Health.Team.Player, headshotTarget, headshotMult, ammoMult);
         }
 
@@ -1120,6 +1161,50 @@ public class PlayerController : MonoBehaviour
         Sfx.Shot(weapon);
         CameraRig.Shake(weapon.shake);   // 每把武器独立的镜头后坐强度
         PlayGunKick();                   // 枪的「后坐动画」（挂在 Gun 上的 Animation，可选；没挂就什么都不做）
+    }
+
+    /// <summary>
+    /// 子弹纵向扰动（2026-10-18）：让弹道在 y 方向轻微上/下偏，增加俯视角下的空间感
+    /// （原来所有子弹都飞在 `GameConst.EntityPlaneY` = 0.55 这一个水平面上）。
+    ///
+    /// **为什么放在这里、而不是 `Bullet` 里**：
+    ///   · 只影响玩家开火这一处（敌人子弹完全不变）；
+    ///   · **不碰 `BulletDir`** —— 玩家朝向 / 激光 / 爆头判定继续读水平方向，零联动。
+    ///
+    /// **分布 = 三角分布**（两次均匀随机相加，值域 [-1,1]，中间高、两端概率密度趋近 0）：
+    ///   大多数子弹只有上限的 1/3 左右，偶尔才偏到上限；不会像均匀分布那样"每发都偏同样量级"。
+    ///
+    /// **旋转轴 = `Cross(dir, up)`**（垂直于弹道的水平横轴，不是世界 X 轴）：
+    ///   斜着射时也不会带出横向偏移；绕它转正角 = 向上（已验算：dir=+Z 时正向旋转得到 (0,+sin,cos)）。
+    ///
+    /// ⚠️ 40m 内的安全边界（数值依据写在 4 个字段的 Tooltip 里）：
+    ///   · 向上：普通 0.6° 要 59m 才越过敌人胶囊顶（1.17m）；
+    ///   · 向下：余量仅 5cm（子弹 0.55 / 可交互箱子顶 0.50），0.15° 在 19m 外开始会被箱子挡；
+    ///   · 爆炸类武器（RPG，射程 27m）的命中点同时是爆炸中心：`up > 0.74°` 会让隔墙判定从 1.2m 墙顶越过。
+    /// </summary>
+    /// <param name="headshot">本次开火是否判为爆头（决定用哪一对参数）</param>
+    Vector3 ApplyVerticalTilt(Vector3 dir, bool headshot)
+    {
+        float up = headshot ? headshotUpAngle : bulletUpAngle;
+        float down = headshot ? headshotDownAngle : bulletDownAngle;
+        float total = up + down;
+        if (total <= 0f) return dir;                     // 两个都关：零开销直接返回
+
+        // ① 方向：按 up : down 的比例决定（down = 0 → 100% 向上；up = 0 → 100% 向下）。
+        //    ⚠️ 不能写成 "r >= 0 ? r*up : r*down"：三角分布在 0 两侧的概率各 50%，
+        //    那样 down = 0 时会有一半子弹**完全不偏**（2026-10-18 实测 8000 次、中位数 = 0 抓到）。
+        //    用 Random.Range（float 版上界不包含）而不是 Random.value * total：
+        //    Random.value 可能返回 1.0，down = 0 时会让这一颗误走「向下」分支（概率 2^-24，后果只是不偏）。
+        bool upward = Random.Range(0f, total) < up;
+
+        // ② 幅度：三角分布取绝对值 —— 0 附近概率最高、上限处概率密度趋近 0，**永远不会超过上限**。
+        float mag = Mathf.Abs(Random.value + Random.value - 1f);
+        float tilt = (upward ? up : -down) * mag;        // 正 = 向上，负 = 向下
+        if (Mathf.Abs(tilt) < 0.0001f) return dir;       // 几乎为 0：省一次四元数乘法
+
+        Vector3 side = Vector3.Cross(dir, Vector3.up);   // dir × up = 弹道的水平横轴
+        if (side.sqrMagnitude < 1e-8f) return dir;       // 弹道垂直向上/下（本作不会出现）→ 原样返回
+        return Quaternion.AngleAxis(tilt, side.normalized) * dir;
     }
 
     /// <summary>准星当前指向敌人的状态（由 <see cref="GetAimState"/> 产出）。
