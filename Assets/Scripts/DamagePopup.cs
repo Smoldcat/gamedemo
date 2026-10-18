@@ -26,7 +26,11 @@ public class DamagePopup : MonoBehaviour
     /// <summary>显示一次飘字。worldPos 是命中点的世界坐标（生成时抬高到头顶由调用方负责）。</summary>
     public void Show(Vector3 worldPos, string value, Color color, int fontSize)
     {
-        if (_text == null) _text = GetComponent<Text>();
+        // ⚠️ 必须查**整棵子树**：`DamageText` 那边注入字体用的是 `GetComponentInChildren<Text>(true)`，
+        //    所以「Text 挂在子物体上」的飘字 prefab 是合法配置；这里若只 `GetComponent<Text>()`（只看根）
+        //    就会取到 null → 下一行 `_text.text = value` **NRE**（2026-10-18 审查发现，当时该 prefab 槽为空、
+        //    走代码生成路径所以一直休眠）。
+        if (_text == null) _text = GetComponentInChildren<Text>(true);
         if (_rt == null) _rt = GetComponent<RectTransform>();
         if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
 

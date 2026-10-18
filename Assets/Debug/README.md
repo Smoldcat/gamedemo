@@ -135,6 +135,10 @@
    （⚠️ 旧版这里写的是 `DebugCanvas` —— 那个类型**从来不存在**，2026-10-17 更正为实际类型清单）
 3. 全局搜索 `[DEBUG-ONLY]` 确认 0 残留 —— ⚠️ **这条必须做**：本工具**确实**往核心加了 **10 条**（见登记表），
    漏删会留下"只为调试服务"的 API 与静态事件
+   ⚠️ **但不要"清空就收工"**：登记表里有 **1 条不带标记、也不该删** —— `PlayerController.HeadScreenCircle`，
+   它是**开火时的爆头判定**在用的实现（`PlayerController.cs:1196`），只是被提成 `internal` 供调试画同一个圈。
+   ⇒ 它的可见性**可以保持**；**绝不要**为了"清干净"去删它或把它改回去（改回 `static` 只会让调试画圈失效，无害；
+   但**删除方法**会让爆头判定编译失败）。详见登记表下方那条 ⚠️ 说明。
 4. 完成 —— 场景 / prefab 无需任何改动（从来没挂过东西）
 ```
 
@@ -154,7 +158,8 @@
 | `FireZone.Radius`（只读属性） | `Assets/Scripts/Throwables/FireZone.cs` | 暴露"每跳伤害的判定半径"，供「范围指示器」画**火焰的生效范围** | 纯只读；若将来要做"危险区 UI / 火焰范围提示"可直接复用 |
 | `SmokeVolume.Radius` + `BlockRadius`（只读属性） | `Assets/Scripts/Throwables/SmokeVolume.cs` | 暴露"占地半径"与"**挡视线半径**"（`Radius × blockRatio`）；指示器画的是**后者** —— 那才是敌人真正丢视野的范围 | 纯只读；若将来要做"烟雾内视野提示 / 潜行 UI"可直接复用 |
 
-| `PlayerController.HeadScreenCircle`（由 `static` 提为 `internal`） | `Assets/Scripts/PlayerController.cs` | 调试可视化要画"同一个爆头判定圈" —— 复刻公式必然漂（第一版漏了 4 处细节），提为 internal 后直接调它 | 仅可见性变更、行为零变化；无需"转正"，随时可改回 `static` |
+| `PlayerController.HeadScreenCircle`（由 `static` 提为 `internal`） | `Assets/Scripts/PlayerController.cs` | 调试可视化要画"同一个爆头判定圈" —— 复刻公式必然漂（第一版漏了 4 处细节），提为 internal 后直接调它 | 仅可见性变更、行为零变化 |
+| ⚠️ **注意（2026-10-18 外部审查澄清）** | ↑ 同一条 | 它**没有** `[DEBUG-ONLY]` 标记，**这是对的**：`HeadScreenCircle` 是**开火时的爆头判定**在用的实现（`PlayerController.cs:1196` 调用），**不是调试专用代码** ✗ 千万别按删除清单给它补标记再删 —— 删了会让爆头判定编译不过 / 失效 ✗ 发布时保留 `internal` 或改回 `static` 都行，**唯一不能做的是删掉它** | 无需任何处理 |
 
 规则（新增时必须遵守）：
 - **中性命名**（`ForceNextWave()`，不要 `DebugSkipWave()`）、不带 `#if`、不带"调试专用"参数；

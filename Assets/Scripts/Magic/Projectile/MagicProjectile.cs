@@ -60,6 +60,12 @@ public class MagicProjectile : MonoBehaviour
     /// <summary>球体的命中半径（球比看起来大一点，手感更跟手）。</summary>
     const float HitRadius = 0.28f;
 
+    /// <summary>② 兜底查询用的**复用缓冲**（`OverlapSphereNonAlloc`）。
+    /// ⭐ 2026-10-18（外部审查 A13）：原来每帧每球 `Physics.OverlapSphere` 都**新建一个 `Collider[]`**
+    ///    （5 颗球 = 每帧 5 次分配）。改成 NonAlloc + 这个常量容量。
+    /// 📌 `HitRadius` 只有 0.28m，32 个槽足够；万一塞满，返回的 count 会被截断（漏掉的只是"同帧叠在一起的第 33 个"）。</summary>
+    readonly Collider[] _hitBuf = new Collider[32];
+
     // ==================== 创建 ====================
 
     /// <summary>生成一颗**挂在玩家身上**的法球（用户 2026-09-28 定：参考诸葛亮被动）。
@@ -360,10 +366,10 @@ public class MagicProjectile : MonoBehaviour
             if (HandleHit(hit.collider, hit.point)) return true;
         }
 
-        // ② 当前位置兜底
-        var cols = Physics.OverlapSphere(transform.position, HitRadius, _enemyMask, QueryTriggerInteraction.Ignore);
-        for (int i = 0; i < cols.Length; i++)
-            if (HandleHit(cols[i], transform.position)) return true;
+        // ② 当前位置兜底（复用缓冲，避免每帧每球分配 `Collider[]` —— 外部审查 A13）
+        int n = Physics.OverlapSphereNonAlloc(transform.position, HitRadius, _hitBuf, _enemyMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < n; i++)
+            if (HandleHit(_hitBuf[i], transform.position)) return true;
 
         return false;
     }

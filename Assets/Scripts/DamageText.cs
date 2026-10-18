@@ -55,11 +55,14 @@ public static class DamageText
             else
                 go = CreateDefault();
             go.name = "DamageText";
+
+            // ⚠️ 字体只在**新建这一个**的时候注入一次（不截断，含"资源总表里配的飘字 Prefab"这条路径；
+            //    理由见 `UIUtil.ApplyFont` 的注释）。
+            //    ⭐ 2026-10-18（外部审查 A4）：原来这行在池外、**每次飘字**都跑
+            //    `GetComponentInChildren<Text>(true)` ⇒ 每发子弹都分配一个 `Text[]` + 遍历子树。
+            UIUtil.ApplyFont(go.GetComponentInChildren<Text>(true), null);
         }
         go.layer = UIUtil.UILayer;   // 统一 UI 层（Overlay 下不影响渲染）
-
-        // ⚠️ 不截断（含「资源总表里配的飘字 Prefab」这条路径）：见 UIUtil.ApplyFont 的注释
-        UIUtil.ApplyFont(go.GetComponentInChildren<Text>(true), null);
 
         var popup = go.GetComponent<DamagePopup>();
         if (popup == null) popup = go.AddComponent<DamagePopup>();

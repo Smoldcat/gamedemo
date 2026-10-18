@@ -324,6 +324,16 @@ public class PlayerThrowable : MonoBehaviour
         Vector3 impactPos = Vector3.zero, impactVel = Vector3.zero;
 
         int maxSteps = Mathf.CeilToInt(ThrowableBallistics.MaxPreviewTime / ThrowableBallistics.SimDt);
+
+        // ⭐ 2026-10-18（外部审查 A2）：**提前收手**的两个阈值。
+        //    原先只有"撞到东西"才 break ⇒ 准星指向地平线/天空时落点极远、4 秒模拟跑满
+        //    **480 步 × 每步 1 条射线**（每帧）。这两个判据覆盖 99% 的"再算下去也没意义"：
+        //    · 落到地面高度（与 `ThrownGrenade` 用的同一个 `LandY`）
+        //    · 水平距离超过「最大投掷距离 × 1.5」（超出的部分真投也扔不到）
+        //    📌 只影响**预览弧线画到哪儿**；真正投掷走物理飞行，与本循环无关。
+        float maxFlat = Mathf.Max(1f, _selected.maxThrowDistance) * 1.5f;
+        float maxFlatSq = maxFlat * maxFlat;
+
         for (int i = 0; i < maxSteps; i++)
         {
             Vector3 np, nv; RaycastHit hit;
@@ -333,6 +343,10 @@ public class PlayerThrowable : MonoBehaviour
 
             _view.DrawDots(pos, np, face, false, cam, ref acc);
             pos = np; vel = nv;
+
+            if (np.y <= ThrowableBallistics.LandY) break;          // 已经落地：再模拟没有意义
+            Vector3 flat = np - origin; flat.y = 0f;
+            if (flat.sqrMagnitude > maxFlatSq) break;              // 超出可投掷范围：弧线到此为止
         }
 
         if (!impacted)
