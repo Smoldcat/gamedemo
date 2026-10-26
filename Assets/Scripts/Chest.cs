@@ -140,6 +140,21 @@ public class Chest : MonoBehaviour, IInteractable
         if (disappearWhenEmpty && IsEmpty) Destroy(gameObject);
     }
 
+    // ==================== 拖拽写入（2026-10-27） ====================
+
+    /// <summary>这个槽位能不能作为拖拽目标：必须是**已揭示**的格子（未搜出来的格子不能放东西）。</summary>
+    public bool CanPlaceAt(int i) => i >= 0 && _slots != null && i < _slots.Length && IsRevealed(i);
+
+    /// <summary>写入 / 替换第 i 格（拖拽用）。放入后**标记为已揭示** ——
+    /// 玩家自己放进来的东西不该再显示成"未知态"。s 为空 = 清空该格（位置保留）。</summary>
+    public void SetSlot(int i, ItemStack s)
+    {
+        if (i < 0 || _slots == null || i >= _slots.Length) return;
+        _slots[i] = (s != null && !s.IsEmpty) ? s : null;
+        if (_revealed != null && i < _revealed.Length) _revealed[i] = true;
+        AfterLoot();
+    }
+
     /// <summary>静态状态清理（供 `StaticReset` 调用）。</summary>
     internal static void ResetStatics()
     {

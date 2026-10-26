@@ -1624,8 +1624,9 @@ public class PlayerController : MonoBehaviour
         if (isMedkit) { HealthPack.Create(pos); return; }
     }
 
-    /// 把当前手上弹匣写回背包槽（换枪/切槽前调用，防止弹匣状态丢失导致免费回满弹）
-    void SaveCurrentSlotAmmo()
+    /// 把当前手上弹匣写回背包槽（换枪/切槽前调用，防止弹匣状态丢失导致免费回满弹）。
+    /// ⚠️ `internal`（2026-10-27）：拖拽移动当前手持枪之前，`ItemMoveService` 也要先写回一次。
+    internal void SaveCurrentSlotAmmo()
     {
         if (backpack == null) return;
         if (backpack.currentSlot >= 0 && backpack.currentSlot < backpack.slots.Length)

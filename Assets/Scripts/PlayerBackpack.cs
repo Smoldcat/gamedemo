@@ -123,6 +123,23 @@ public class PlayerBackpack : MonoBehaviour
         }
     }
 
+    /// <summary>库存里**有物品**的格数。
+    /// ⚠️ 不能用 `inventory.Count` 当"用了几格"：拖拽会把空位留在中间（固定槽位语义），
+    ///    拖到第 40 格后 `Count` 会变成 40+，但实际可能只有 2 件东西。</summary>
+    public int InventoryItemCount
+    {
+        get
+        {
+            int n = 0;
+            for (int i = 0; i < inventory.Count; i++)
+            {
+                var s = inventory[i];
+                if (s != null && s.def != null && !s.IsEmpty) n++;
+            }
+            return n;
+        }
+    }
+
     // ==================== 通用物品（库存） ====================
 
     /// <summary>能不能再收下任意一种物品（至少 1 个）。规则与 <see cref="AddItems"/> 一致。</summary>
@@ -140,7 +157,39 @@ public class PlayerBackpack : MonoBehaviour
                 if (s.def.CanMergeWith(def) && s.count < s.MaxStack) return true;
             }
         // 还有空格 → 能
+        return HasFreeInventorySlot();
+    }
+
+    /// <summary>库存还有没有空位（含 `null` 空位；拖拽会把格子留在原位，所以不能只看 `Count`）。</summary>
+    public bool HasFreeInventorySlot()
+    {
+        for (int i = 0; i < inventory.Count; i++)
+        {
+            var s = inventory[i];
+            if (s == null || s.def == null || s.IsEmpty) return true;
+        }
         return inventory.Count < Capacity;
+    }
+
+    /// <summary>第一个可用的库存空位下标；没有则返回 -1（必要时把列表扩到 Capacity）。</summary>
+    public int FirstFreeInventorySlot()
+    {
+        for (int i = 0; i < inventory.Count; i++)
+        {
+            var s = inventory[i];
+            if (s == null || s.def == null || s.IsEmpty) return i;
+        }
+        if (inventory.Count < Capacity)
+        {
+            inventory.Add(null);
+            return inventory.Count - 1;
+        }
+        return -1;
+    }
+
+    void EnsureInventorySize(int size)
+    {
+        while (inventory.Count < size) inventory.Add(null);
     }
 
     /// <summary>
@@ -163,14 +212,16 @@ public class PlayerBackpack : MonoBehaviour
                 left = s.Add(left);
             }
 
-        // ② 还有剩 → 一格一格地开新格（不可堆叠的物品每格只收 1 个）
-        while (left > 0 && inventory.Count < Capacity)
+        // ② 还有剩 → 一格一格地开新格（优先用拖拽留下的 null 空位，再追加到末尾）
+        while (left > 0)
         {
+            int idx = FirstFreeInventorySlot();
+            if (idx < 0) break;   // 库存满了
             var s = new ItemStack();
             s.def = def;
             s.count = 0;
             left = s.Add(left);
-            if (s.count > 0) inventory.Add(s);
+            if (s.count > 0) inventory[idx] = s;
             else break;   // 兜底：一格都收不下（正常不会发生）
         }
 
@@ -192,6 +243,64 @@ public class PlayerBackpack : MonoBehaviour
         int take = s.Take(n);
         if (s.IsEmpty) { s.Clear(); inventory.RemoveAt(i); }
         return take;
+    }
+
+    // ==================== 按索引读写（拖拽用；2026-10-27） ====================
+
+    /// <summary>库存第 i 格（越界 / 空位 → null）。⚠️ 返回的是**引用**，只读；写入请走 <see cref="SetInventoryAt"/>。</summary>
+    public ItemStack InventoryAt(int i) => (i >= 0 && i < inventory.Count) ? inventory[i] : null;
+
+    /// <summary>把库存第 i 格替换成 s（null / 空 = 清空成空位）。
+    /// ⚠️ **不 `RemoveAt`**：拖拽要保证"物品待在原格"，索引不能因为别的格子被拿走而整体前移。</summary>
+    public void SetInventoryAt(int i, ItemStack s)
+    {
+        if (i < 0 || i >= Capacity) return;
+        EnsureInventorySize(i + 1);
+        inventory[i] = (s != null && !s.IsEmpty) ? s : null;
+    }
+
+    /// <summary>把快捷武器槽第 i 格转成 `ItemStack` **副本**（空槽 → null）。弹匣余量 / 等级一起带出。</summary>
+    public ItemStack SlotToStack(int i)
+    {
+        EnsureSlots();
+        if (i < 0 || i >= slots.Length) return null;
+        var slot = slots[i];
+        if (slot == null || slot.weapon == null) return null;
+        return new ItemStack
+        {
+            def = slot.weapon,
+            count = 1,
+            magAmmo = slot.magAmmo,
+            ammoId = slot.ammoId,
+        };
+    }
+
+    /// <summary>把 `ItemStack` 写回快捷武器槽（只接受武器；s 为空 = 清空该槽）。返回是否成功。</summary>
+    public bool SetSlotFromStack(int i, ItemStack s)
+    {
+        EnsureSlots();
+        if (i < 0 || i >= slots.Length) return false;
+        if (s == null || s.IsEmpty) { ClearSlot(i); return true; }
+
+        var w = s.def as WeaponData;
+        if (w == null) return false;
+        slots[i].weapon = w;
+        slots[i].magAmmo = AmmoOf(w, s.magAmmo);
+        slots[i].ammoId = s.ammoId;
+        return true;
+    }
+
+    /// <summary>这个物品能不能放进快捷武器槽（只接受武器）。</summary>
+    public static bool CanEquipInSlot(ItemData def) => def is WeaponData;
+
+    /// <summary>清空一个快捷槽（武器 + 弹匣 + 等级）。</summary>
+    public void ClearSlot(int i)
+    {
+        EnsureSlots();
+        if (i < 0 || i >= slots.Length) return;
+        slots[i].weapon = null;
+        slots[i].magAmmo = -1;
+        slots[i].ammoId = null;
     }
 
     // ⚠️ 2026-09-27 **已删除**按口径的 `CountAmmo(AmmoKind)` / `TakeAmmo(AmmoKind, int)`：
@@ -334,7 +443,7 @@ public class PlayerBackpack : MonoBehaviour
         EnsureSlots();
         for (int i = 0; i < slots.Length; i++)
             if (slots[i].weapon == null) return true;
-        return inventory.Count < Capacity;
+        return HasFreeInventorySlot();
     }
 
     /// <summary>`ItemStack.magAmmo` 与各处形参 `magAmmo` 的**唯一解析**：**负值 = 满弹**（新枪的统一约定），
@@ -548,7 +657,12 @@ public class PlayerBackpack : MonoBehaviour
     {
         inventory.Sort((a, b) =>
         {
-            if (a == null || b == null) return 0;
+            // 拖拽留下的空位（null）统一排到最后，不能让它们插在物品中间
+            bool ea = a == null || a.def == null || a.IsEmpty;
+            bool eb = b == null || b.def == null || b.IsEmpty;
+            if (ea && eb) return 0;
+            if (ea) return 1;
+            if (eb) return -1;
             return string.CompareOrdinal(a.DisplayName, b.DisplayName);
         });
     }

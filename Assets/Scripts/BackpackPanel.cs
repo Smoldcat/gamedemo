@@ -67,7 +67,12 @@ public class BackpackPanel : MonoBehaviour
 
     // ---- 库存 ----
     GameObject _invGrid;
-    readonly List<RectTransform> _invCells = new List<RectTransform>();
+    readonly List<RectTransform> _invCells = new List<RectTransform>();        // 有物品的格子（tooltip 用，空格为 null）
+    readonly List<RectTransform> _invDropCells = new List<RectTransform>();    // **所有**格子（含空格；拖拽放置目标用）
+
+    // ---- 拖拽高亮（2026-10-27）----
+    readonly List<(Image img, Color color)> _dragHighlighted = new List<(Image, Color)>();
+    bool _refreshPending;   // 拖拽中被要求刷新 → 延迟到拖拽结束（见 Refresh）
 
     // ---- 库存滚动：机制在共享的 ScrollableGrid（InvGridUI.cs，背包 / 商店库存面板同一份实现）----
     // ⚠️ 历史教训都沉淀在那边：绝不动 _invGrid 的 transform（prefab 坐标系）；空格子也必须 AddMover
@@ -512,6 +517,70 @@ public class BackpackPanel : MonoBehaviour
         Refresh();
     }
 
+    /// <summary>拖拽结束后补上被延迟的刷新（拖拽中 Refresh 只记标记、不重建）。</summary>
+    public void FlushPendingRefresh()
+    {
+        if (!_refreshPending) return;
+        _refreshPending = false;
+        RefreshIfOpen();
+    }
+
+    // ==================== 拖拽（2026-10-27） ====================
+
+    /// <summary>给格子挂上拖拽源 / 放置目标（幂等；每次 Refresh 重设索引）。</summary>
+    void EnsureDragTargets(GameObject go, ItemRef r)
+    {
+        var drag = go.GetComponent<ItemDragHandler>();
+        if (drag == null) drag = go.AddComponent<ItemDragHandler>();
+        drag.source = r;
+
+        var drop = go.GetComponent<ItemDropTarget>();
+        if (drop == null) drop = go.AddComponent<ItemDropTarget>();
+        drop.target = r;
+    }
+
+    /// <summary>拖拽开始：高亮所有能接受这个物品的格子（亮蓝 = 与「当前槽高亮」同一支状态色）。</summary>
+    public void SetDragHighlight(ItemRef source)
+    {
+        ClearDragHighlight();
+        var bp = _pc != null ? _pc.backpack : null;
+        if (bp == null) return;
+
+        // 快捷槽
+        for (int i = 0; i < SlotCount; i++)
+        {
+            if (_slotFrame[i] == null) continue;
+            if (ItemMoveService.CanDrop(source, ItemRef.Slot(i))) Highlight(_slotFrame[i]);
+        }
+
+        // 库存（含空格 —— `_invDropCells` 是"所有格子"）
+        for (int i = 0; i < _invDropCells.Count; i++)
+        {
+            var rt = _invDropCells[i];
+            if (rt == null) continue;
+            if (!ItemMoveService.CanDrop(source, ItemRef.Inventory(i))) continue;
+            var img = rt.GetComponent<Image>();
+            if (img != null) Highlight(img);
+        }
+    }
+
+    void Highlight(Image img)
+    {
+        _dragHighlighted.Add((img, img.color));
+        img.color = UIUtil.SlotActiveColor();
+    }
+
+    /// <summary>拖拽结束 / 取消：恢复所有高亮格子的原色。</summary>
+    public void ClearDragHighlight()
+    {
+        for (int i = 0; i < _dragHighlighted.Count; i++)
+        {
+            var h = _dragHighlighted[i];
+            if (h.img != null) h.img.color = h.color;
+        }
+        _dragHighlighted.Clear();
+    }
+
     // ==================== 数据刷新 ====================
 
     // 金币显示色 `GoldColor` 已于 2026-10-15 搬到 `UIUtil`（→ `UIUtil.GoldColor`，与其它界面皮肤色同处）。
@@ -541,12 +610,16 @@ public class BackpackPanel : MonoBehaviour
 
     void Refresh()
     {
+        // 同 ChestPanel：拖拽中不重建（会销毁拖拽源 → OnEndDrag 不触发 → 图标卡住）
+        if (ItemDragHandler.IsDragging) { _refreshPending = true; return; }
+        _refreshPending = false;
+
         if (_invGrid == null || _medkitText == null) return;   // 面板还没建完
         if (_pc == null) _pc = PlayerController.Instance;
         var bp = _pc != null ? _pc.backpack : null;
 
         int cap = bp != null ? bp.Capacity : 20;
-        int used = bp != null ? bp.inventory.Count : 0;
+        int used = bp != null ? bp.InventoryItemCount : 0;   // ⚠️ 不是 inventory.Count（拖拽会留下 null 空位）
 
         // 标题计数 + 底部占用条
         if (_titleText != null) _titleText.text = "背包   " + used + "/" + cap;
@@ -599,11 +672,19 @@ public class BackpackPanel : MonoBehaviour
                 _slotDropTxt[i].text = "丢弃";
                 _slotDropTxt[i].color = new Color(1f, 0.8f, 0.75f);
             }
+
+            // 拖拽（2026-10-27）：快捷槽既是源也是目标；Frame 必须接射线（prefab 里可能关掉了）
+            if (_slotCell[i] != null)
+            {
+                EnsureDragTargets(_slotCell[i].gameObject, ItemRef.Slot(i));
+                if (_slotFrame[i] != null) _slotFrame[i].raycastTarget = true;
+            }
         }
 
         // 库存：清空重建（**固定显示 capacity 个格子**，空格子也画出来 —— 一眼看出还剩几格）
         // ⚠️ 模板节点（外部 prefab 带来的格子原型）必须留着 —— 下面靠它实例化
         _invCells.Clear();
+        _invDropCells.Clear();
         for (int i = _invGrid.transform.childCount - 1; i >= 0; i--)
         {
             var ch = _invGrid.transform.GetChild(i);
@@ -672,7 +753,12 @@ public class BackpackPanel : MonoBehaviour
                 startY - row * (cellH + CellGap));
             rt.anchoredPosition = basePos;      // 基准位置；滚动偏移由 ScrollableGrid 统一叠加
             _invScroll.AddMover(rt, basePos);   // 全部格子都登记（含空格子 —— 都要一起滚）
-            cellImg.raycastTarget = hasItem;   // 空格子不接点击
+            // 空格也要接拖拽 → raycastTarget 一律 true（点击装备已删除，空格点了也不会做事）
+            cellImg.raycastTarget = true;
+
+            // 拖拽源 + 放置目标：**所有格子**都挂（空格可以作为放置目标）
+            _invDropCells.Add(rt);
+            EnsureDragTargets(cell, ItemRef.Inventory(i));
 
             // 右键丢弃：给**有物品**的格子挂一个点击分发器（左键仍归下面那个 Button 管）
             // ⚠️ `index` 必须**每次 Refresh 重新绑** —— 格子是重建的，且丢弃后下标会整体前移
@@ -712,32 +798,10 @@ public class BackpackPanel : MonoBehaviour
             }
             else if (cnt != null) cnt.gameObject.SetActive(false);
 
-            // 点击 = 装备到空槽；没有空槽则替换当前槽，被换下的枪**下放进库存**（只有库存真放不下才掉地上）。
-            // ⚠️ **只有武器**才挂这个事件：血包 / 子弹点它不该进快捷武器槽（血包靠 Q 键消耗）
+            // 2026-10-27：**点击装备已删除**（用户明确：改成拖到快捷槽才能换）。
+            // 只清掉可能残留的 onClick（格子是重建的，正常没有），点击本身不做任何事。
             var btn = cell.GetComponent<Button>();
-            var asWeapon = item.def as WeaponData;
-            var asMagic = item.def as MagicData;
-            // ⚠️ 武器与魔法都能"装备"到各自的槽（2026-09-28 起魔法也有槽）；
-            //    血包 / 子弹点它不该进任何装备槽（血包靠 Q 键消耗）
-            if (asWeapon != null || asMagic != null)
-            {
-                if (btn == null) btn = cell.AddComponent<Button>();
-                btn.targetGraphic = cellImg;
-                btn.onClick.RemoveAllListeners();
-                string id = item.def.StackId;   // 用**身份证**而不是名字（敌人掉的枪是副本，名字/引用都不可靠）
-                bool isMagic = asMagic != null;
-                btn.onClick.AddListener(() =>
-                {
-                    if (_pc != null)
-                    {
-                        if (isMagic) _pc.EquipMagicFromInventory(id);   // 装到魔法槽（HUD 的 E 格）
-                        else _pc.EquipFromInventory(id);                // 装到武器槽（1/2/3）
-                        Sfx.Confirm();
-                    }
-                    Refresh();
-                });
-            }
-            else if (btn != null) btn.onClick.RemoveAllListeners();
+            if (btn != null) btn.onClick.RemoveAllListeners();
 
             _invCells.Add(rt);
         }
@@ -843,6 +907,13 @@ public class BackpackPanel : MonoBehaviour
 
     void UpdateTooltip()
     {
+        // 拖拽中不显示 tooltip（会跟着光标乱跳，且挡住目标格）
+        if (ItemDragHandler.IsDragging)
+        {
+            if (_tooltipGo != null) _tooltipGo.SetActive(false);
+            return;
+        }
+
         if (_pc == null) _pc = PlayerController.Instance;
         var bp = _pc != null ? _pc.backpack : null;
         // ⚠️ 鼠标位置统一走 `VirtualCursor.MousePosition`（非游玩态 = 虚拟光标的位置，继承准星）。

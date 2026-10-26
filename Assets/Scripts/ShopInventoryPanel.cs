@@ -151,7 +151,7 @@ public class ShopInventoryPanel : MonoBehaviour
         var pc = PlayerController.Instance;
         var bp = pc != null ? pc.backpack : null;
         int cap = bp != null ? bp.Capacity : 20;                       // 格子数 = 背包库存格子数（用户 2026-09-25 定）
-        int used = bp != null ? bp.inventory.Count : 0;
+        int used = bp != null ? bp.InventoryItemCount : 0;   // ⚠️ 不是 inventory.Count（拖拽会留下 null 空位）
 
         ShopUI.SetGold(_gold, GameState.Gold);
         _title.text = "背包   " + used + "/" + cap;

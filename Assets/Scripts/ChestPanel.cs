@@ -71,12 +71,77 @@ public class ChestPanel : MonoBehaviour
     static Sprite _magnifierSprite;
     static Texture2D _magnifierTex;
 
+    // 拖拽高亮（2026-10-27）
+    readonly List<(Image img, Color color)> _dragHighlighted = new List<(Image, Color)>();
+    bool _refreshPending;   // 拖拽中被要求刷新 → 延迟到拖拽结束（见 Refresh）
+
     Chest _chest;
     bool _opened;
     int _openedFrame = -1;   // 打开的帧号（防止"开箱的同一帧又被 F 关掉"，见 Update）
 
     /// <summary>面板当前是不是开着。</summary>
     public bool IsOpen => _opened;
+
+    /// <summary>外部改了箱子数据（拖拽）后的刷新入口；面板没开时什么都不做。
+    /// 箱子被拿空消失时（`disappearWhenEmpty`）顺手关掉面板，避免显示一个已销毁的箱子。</summary>
+    public void RefreshIfOpen()
+    {
+        if (!_opened) return;
+        if (_chest == null) { Close(); return; }
+        Refresh();
+    }
+
+    /// <summary>拖拽结束后补上被延迟的刷新（拖拽中 Refresh 只记标记、不重建）。</summary>
+    public void FlushPendingRefresh()
+    {
+        if (!_refreshPending) return;
+        _refreshPending = false;
+        RefreshIfOpen();
+    }
+
+    // ==================== 拖拽（2026-10-27） ====================
+
+    void EnsureDragTargets(GameObject go, ItemRef r)
+    {
+        var drag = go.GetComponent<ItemDragHandler>();
+        if (drag == null) drag = go.AddComponent<ItemDragHandler>();
+        drag.source = r;
+
+        var drop = go.GetComponent<ItemDropTarget>();
+        if (drop == null) drop = go.AddComponent<ItemDropTarget>();
+        drop.target = r;
+    }
+
+    /// <summary>拖拽开始：高亮所有能接受这个物品的格子（未揭示格 / 跨容器有物品的格会自动排除）。</summary>
+    public void SetDragHighlight(ItemRef source)
+    {
+        ClearDragHighlight();
+        if (_chest == null) return;
+
+        for (int i = 0; i < _cells.Count; i++)
+        {
+            var cell = _cells[i];
+            if (cell == null) continue;
+            if (!ItemMoveService.CanDrop(source, ItemRef.ChestSlot(_chest, i))) continue;
+
+            var img = cell.GetComponent<Image>();
+            if (img != null)
+            {
+                _dragHighlighted.Add((img, img.color));
+                img.color = UIUtil.SlotActiveColor();
+            }
+        }
+    }
+
+    public void ClearDragHighlight()
+    {
+        for (int i = 0; i < _dragHighlighted.Count; i++)
+        {
+            var h = _dragHighlighted[i];
+            if (h.img != null) h.img.color = h.color;
+        }
+        _dragHighlighted.Clear();
+    }
 
     void Awake()
     {
@@ -194,6 +259,12 @@ public class ChestPanel : MonoBehaviour
 
     void Refresh()
     {
+        // ⚠️ 拖拽中不重建（2026-10-27 bug）：
+        //    重建会 Destroy 正在拖拽的源格子 → UGUI 的 OnEndDrag 不再触发 → 拖拽图标永远卡在屏幕上。
+        //    延迟到拖拽结束再补刷新（搜刮计时 / 揭示状态照常写入，只是视觉晚一点）。
+        if (ItemDragHandler.IsDragging) { _refreshPending = true; return; }
+        _refreshPending = false;
+
         if (_grid == null) return;
 
         int slots = _chest != null ? _chest.SlotCount : 0;
@@ -216,6 +287,8 @@ public class ChestPanel : MonoBehaviour
 
             var cell = NewCell(i);
             _cells.Add(cell);
+            // 拖拽（2026-10-27）：空格也要能接收（放入）；未揭示格由 CanDrag/CanDrop 自动拒绝
+            EnsureDragTargets(cell.gameObject, ItemRef.ChestSlot(_chest, i));
             if (!has) continue;
 
             // 还没搜出来 → 未知态：只告诉玩家"这格有东西"，不画图标 / 数量、也不挂点击
@@ -627,6 +700,13 @@ public class ChestPanel : MonoBehaviour
     /// </summary>
     void UpdateTooltip()
     {
+        // 拖拽中不显示 tooltip（会跟着光标乱跳，且挡住目标格）
+        if (ItemDragHandler.IsDragging)
+        {
+            if (_tipGo != null) _tipGo.SetActive(false);
+            return;
+        }
+
         if (_tipGo == null || _tipText == null) return;
 
         Vector2 mouse = VirtualCursor.MousePosition;
