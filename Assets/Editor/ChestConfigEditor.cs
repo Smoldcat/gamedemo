@@ -24,6 +24,7 @@ public class ChestConfigEditor : Editor
         ("guaranteedMin",  "保底数量（最少）",  "保底物品一次出几个（最少）"),
         ("guaranteedMax",  "保底数量（最多）",  "保底物品一次出几个（最多）"),
         ("rollTable",      "抽取次数表",       "每项 = 次数 + 权重（例：3 样 50% / 5 样 10%）→ 箱子不会每箱都塞满。\n留空 = 每箱都抽满（次数 = 格数）"),
+        ("searchSecondsPerItem", "每件搜刮时长(秒)", "有物品的格子从「未知态」变成「显示图标」要经过多久。\n⚠️ 0 = 用资源总表 GameAssets 的全局默认（0.6）；填 >0 = 这个箱子统一按它来（个别物品仍可在物品卡上覆盖）"),
     };
 
     readonly HashSet<string> _handled = new HashSet<string>();

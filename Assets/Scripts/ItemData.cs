@@ -49,6 +49,10 @@ public abstract class ItemData : ScriptableObject
              "⚠️ 没单独填的物品都用这个默认值 → 想让不同东西卖出不同价，就逐件在 Inspector 里填")]
     public int baseValue = 100;
 
+    [Header("搜刮（2026-10-26 新增）")]
+    [Tooltip("这件物品的搜刮时长覆盖（秒）。\n⚠️ 0 = 用箱子配方的值（再没有就用全局默认 0.6）。\n想让稀有 / 贵重物品搜得更久就填这里（例：1.5）—— **不用改代码**")]
+    [Min(0f)] public float searchSeconds = 0f;
+
     /// <summary>显示名（背包 / 箱子 / 拾取气泡里显示的名字）。
     /// ⚠️ 做成**抽象属性**是刻意的：让每个子类用自己**已有的**字段名实现它（WeaponData → weaponName），
     ///    这样不需要把已存资源里的字段改名（改名 = 数据静默丢失，见类注释里的铁律）。</summary>

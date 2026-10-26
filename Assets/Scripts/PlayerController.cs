@@ -439,8 +439,10 @@ public class PlayerController : MonoBehaviour
         LoadMirrorFromSlot();
     }
 
-    /// <summary>把当前快捷槽(backpack.currentSlot)状态同步到 weapon/magAmmo 镜像,并刷枪模型</summary>
-    void LoadMirrorFromSlot()
+    /// <summary>把当前快捷槽(backpack.currentSlot)状态同步到 weapon/magAmmo 镜像,并刷枪模型。
+    /// ⚠️ 提到 `internal`（2026-10-26）：训练图脚本 `TrainingStartWeapon` 在 `Start` 里改完背包后要补调一次
+    ///    （它自己的 `Awake` 早于本类的 `Awake`，不能再靠反射——改方法名会静默失效）。</summary>
+    internal void LoadMirrorFromSlot()
     {
         // 这些运行时状态必须先复位，不能放在下面的分支之后：
         // Player.prefab 里存着 reloading=1 之类的脏值，若走「空手 / 空槽」早退分支就不复位，

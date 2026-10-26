@@ -55,8 +55,10 @@ public class CameraOcclusion : MonoBehaviour
         CollectBuildings();
     }
 
-    /// <summary>扫描建筑：记录每栋的「屋顶渲染器（含原始开关状态）」与「外墙包围盒」。</summary>
-    void CollectBuildings()
+    /// <summary>扫描建筑：记录每栋的「屋顶渲染器（含原始开关状态）」与「外墙包围盒」。
+    /// ⚠️ 提到 `internal`（2026-10-26）：训练图脚本会在自己的 `Start` 里补调一次 ——
+    ///    因为它自己的 `Awake` 跑在场景对象就绪前（实测 `_buildings.Count = 0`）。</summary>
+    internal void CollectBuildings()
     {
         _buildings.Clear();
         var root = GameObject.Find(buildingsRootName);

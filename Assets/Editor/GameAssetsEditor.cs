@@ -102,6 +102,15 @@ public class GameAssetsEditor : Editor
         ("throwableRangeFillColor",  "范围圈·填充色",    "投掷物「范围指示圈」的填充颜色（含透明度）；默认 10% 橙 = 提亮变暖、一眼看出危险区", null),
 
         ("switchWindup", "切枪动作时长(秒)", "从按下切枪键到「新枪可以开火」之间的时间（收枪段 + 出枪段都算）：期间不能开火、不能起手换弹 / 按 T 换级。\n以后做了切枪动画 → 把这个数填成动画的实际长度即可。⚠️ 填 0 = 关闭（切完枪立刻能开火）。默认 0.3", "切枪动作（2026-10-12 新增）"),
+
+        ("chestSearchSecondsPerItem",  "每件搜刮时长(秒)",   "全局默认：有物品的格子从「未知态」变成「显示图标」要经过多久。⚠️ 箱子配方与物品卡都能覆盖它。默认 0.6（5 件 ≈ 3 秒）", "箱子搜刮（2026-10-26 新增）"),
+        ("chestSearchFirstDelay",      "开始搜刮前等待(秒)", "打开容器后多久才开始搜刮。0 = 立刻开始（默认）；填 0.3 = 打开后先等 0.3 秒才开始第一格。⚠️ 第一格本身也要走完整的搜索时长，不是打开就显示", null),
+        ("chestSearchOrbitDegPerSec",  "放大镜转速(度/秒)",  "放大镜在**当前格内部**做小幅圆周移动的速度。默认 300（约 1.2 秒一圈）。⚠️ 它**不自转**，只沿小圆移动", null),
+        ("chestSearchOrbitRadiusRatio","格内小圆半径比例",   "放大镜在格子内部的小圆半径 = 格子高度 × 这个比例（默认 0.08 ≈ 5px）。⚠️ 实际半径会自动夹取到「整枚放大镜不超出这一格」", null),
+        ("chestSearchMagnifierSizeRatio","放大镜大小比例",   "放大镜大小 = 格子高度 × 这个比例。默认 0.5（约 34px @ 68px 格子）", null),
+        ("chestSearchFadeTime",        "放大镜淡出(秒)",     "搜索完成后放大镜淡出的时长。0 = 立刻消失。默认 0.2", null),
+        ("chestSearchUnknownTint",     "未知态斜纹色",       "未知态格子的斜纹磨砂颜色（含透明度）。默认白色 40%，与贴图里的深/浅灰条纹相乘。调低更含蓄、调高条纹更亮", null),
+        ("chestSearchMagnifierColor",  "放大镜颜色",         "放大镜的颜色（含透明度）。默认白色 90%", null),
     };
 
     readonly HashSet<string> _handled = new HashSet<string>();

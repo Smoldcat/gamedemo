@@ -88,3 +88,11 @@ MonoBehaviour:
   throwableRangeRingColor: {r: 1, g: 0.55, b: 0.1, a: 0.95}
   throwableRangeFillColor: {r: 1, g: 0.55, b: 0.1, a: 0.1}
   switchWindup: 0.4
+  chestSearchSecondsPerItem: 1
+  chestSearchFirstDelay: 0
+  chestSearchOrbitDegPerSec: 300
+  chestSearchOrbitRadiusRatio: 0.08
+  chestSearchMagnifierSizeRatio: 0.5
+  chestSearchFadeTime: 0.2
+  chestSearchUnknownTint: {r: 1, g: 1, b: 1, a: 0.4}
+  chestSearchMagnifierColor: {r: 1, g: 1, b: 1, a: 0.9}

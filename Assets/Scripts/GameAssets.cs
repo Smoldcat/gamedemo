@@ -224,6 +224,28 @@ public class GameAssets : ScriptableObject
              "⚠️ 填 0 = 关闭（退回「切完枪立刻能开火」）。默认 0.3")]
     [Min(0f)] public float switchWindup = 0.3f;
 
+    // ---------------- 箱子搜刮（2026-10-26 新增） ----------------
+    // ⚠️ 物理位置在**末尾**（§6.8「新字段只能在已有字段之后追加」）；Inspector 里归「箱子搜刮」分组
+    //    （分组与顺序由 `GameAssetsEditor.Fields` 决定，与类里的物理位置无关）。
+    [Tooltip("每件物品的搜刮时长（秒）：有物品的格子从「未知态」变成「显示图标」要经过这么久。\n" +
+             "⚠️ 这是**全局默认**；箱子配方（ChestConfig）和物品卡（ItemData）都能覆盖它。\n" +
+             "默认 0.6（5 件 ≈ 3 秒）")]
+    [Min(0.05f)] public float chestSearchSecondsPerItem = 0.6f;
+    [Tooltip("**打开容器后多久才开始搜刮**（秒）。0 = 立刻开始（默认）；填 0.3 = 打开后先等 0.3 秒才开始第一格。\n⚠️ 第一格本身也要走完整的「每件搜刮时长」，不是打开就显示")]
+    [Min(0f)] public float chestSearchFirstDelay = 0f;
+    [Tooltip("放大镜在**当前格内部**做小幅圆周移动的速度（度/秒）。默认 300（约 1.2 秒一圈）。\n⚠️ 它**不自转**，只沿这个小圆移动")]
+    [Min(0f)] public float chestSearchOrbitDegPerSec = 300f;
+    [Tooltip("放大镜在格子内部的小圆半径 = 格子高度 × 这个比例（默认 0.08 ≈ 5px）。\n⚠️ 实际半径会自动夹取到「整枚放大镜不超出这一格」，填大也不会溢出")]
+    [Range(0f, 0.5f)] public float chestSearchOrbitRadiusRatio = 0.08f;
+    [Tooltip("放大镜大小 = 格子高度 × 这个比例。默认 0.5（约 34px @ 68px 格子）")]
+    [Range(0.2f, 1f)] public float chestSearchMagnifierSizeRatio = 0.5f;
+    [Tooltip("搜索完成后放大镜淡出的时长（秒）。0 = 立刻消失。默认 0.2")]
+    [Min(0f)] public float chestSearchFadeTime = 0.2f;
+    [Tooltip("未知态格子的**斜纹磨砂**颜色（含透明度）。默认白色 40% —— 与贴图里的深/浅灰条纹相乘，形成参考图那种斜纹磨砂。\n调低更含蓄、调高条纹更亮（太高会抢过格子内容）")]
+    public Color chestSearchUnknownTint = new Color(1f, 1f, 1f, 0.40f);
+    [Tooltip("放大镜颜色（含透明度）。默认白色 90%")]
+    public Color chestSearchMagnifierColor = new Color(1f, 1f, 1f, 0.9f);
+
     const string ResourcePath = "GameAssets";
 
     static GameAssets _instance;

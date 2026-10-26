@@ -178,7 +178,9 @@ public class PlayerBackpack : MonoBehaviour
     }
 
     /// <summary>从库存第 i 格取走 n 个（商店卖出 / 以后的消耗品用）；返回**实际取走**的数量。
-    /// 这一格空了就把格腾出来（与箱子取物 `Chest.TakeFromSlot` 同一套语义）。
+    /// 这一格空了就把格腾出来（**背包是紧凑列表：后面的格子会前移**）。
+    /// ⚠️ 箱子的 `Chest.TakeFromSlot` 2026-10-26 起改成**固定槽位、拿走后不前移**（搜刮需要"物品待在原格"）
+    ///    —— 两者语义**不同**，别再当成同一套。
     /// ⚠️ 这是库存的"取出"**唯一入口**（与 `AddItems` 对称）—— 别在别处直接改 `inventory`，
     ///    否则"空了要腾格"这类规则会散落在各处。</summary>
     public int TakeFromInventory(int i, int n)

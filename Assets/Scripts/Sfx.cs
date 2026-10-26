@@ -12,6 +12,7 @@ public static class Sfx
     static AudioClip _shopBuy, _shopSell;                     // 商店买卖音效组（2026-09-25）
     static AudioClip _headshotHit;                            // 爆头命中反馈
     static AudioClip _explosion;                              // 爆炸（RPG 命中 / 自爆兵自爆共用）
+    static AudioClip _chestReveal;                             // 搜刮：揭示一格（2026-10-26）
 
     /// <summary>静态状态清理（供 StaticReset 调用）。
     /// 合成的 AudioClip 与 AudioSource 在退出 Play 时会被销毁，而 _clipsReady 若还是 true，
@@ -29,6 +30,7 @@ public static class Sfx
         _invOpen = _invClose = _confirm = _drop = null;
         _shopBuy = _shopSell = null;
         _explosion = null;
+        _chestReveal = null;
     }
 
     /// <summary>
@@ -223,6 +225,15 @@ public static class Sfx
             float ping2 = (t >= 0.06f) ? Mathf.Sin(2f * Mathf.PI * 2093f * t) * env2 * 0.8f : 0f;
             return (ping1 + ping2) * 0.45f;
         });
+
+        // ---- 搜刮揭示（2026-10-26）----
+        // 每揭示一格一声轻「叮」：比商店买入更轻更短（连续揭示 5 格不能吵成一串铃铛）
+        _chestReveal = Make("chestReveal", 0.09f, t =>
+        {
+            float env = Mathf.Exp(-t * 45f);
+            float tone = Mathf.Sin(2f * Mathf.PI * 1320f * t);
+            return tone * env * 0.32f;
+        });
     }
 
     static AudioClip Make(string name, float dur, System.Func<float, float> gen)
@@ -294,6 +305,9 @@ public static class Sfx
     /// <summary>爆头命中反馈：优先用资源表 headshotHit，留空回落代码合成（命中头部即播，不必击杀）</summary>
     public static void HeadshotHit() { var ga = GameAssets.I; Play(Use(ga != null ? ga.headshotHit : null, _headshotHit)); }
     public static void Kill() { var ga = GameAssets.I; Play(Use(ga != null ? ga.kill : null, _kill), 0.7f); }
+
+    /// <summary>搜刮揭示一格（2026-10-26）：轻「叮」。⚠️ 目前没有资源表槽位（用户没要求可换）；要换音色改 Init 里的合成公式即可。</summary>
+    public static void ChestReveal() => Play(_chestReveal, 0.5f);
     public static void Pickup() { var ga = GameAssets.I; Play(Use(ga != null ? ga.pickup : null, _pickup)); }
     public static void Hurt() { var ga = GameAssets.I; Play(Use(ga != null ? ga.hurt : null, _hurt)); }
     public static void Heal() { var ga = GameAssets.I; Play(Use(ga != null ? ga.heal : null, _heal)); }

@@ -60,6 +60,10 @@ public class ChestConfig : ScriptableObject
     [Tooltip("抽取次数表：每项 = 次数 + 权重。\n例：3 样 50% / 4 样 30% / 5 样 10% / 2 样 10%。\n留空 = 每箱都抽满（次数 = 格数）")]
     public RollChance[] rollTable;
 
+    [Header("搜刮（2026-10-26 新增）")]
+    [Tooltip("每件物品的搜刮时长（秒）。\n⚠️ 0 = 用资源总表 GameAssets 的全局默认（默认 0.6）；填 >0 = 这个箱子统一按它来。\n（个别物品要更久 → 在物品卡 ItemData.searchSeconds 上单独覆盖）")]
+    [Min(0f)] public float searchSecondsPerItem = 0f;
+
     /// <summary>按权重随机决定"抽几次"。</summary>
     public int PickRollCount()
     {
