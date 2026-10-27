@@ -5,6 +5,7 @@ public enum ItemContainer
 {
     BackpackInventory,   // 背包库存格
     BackpackSlot,        // 背包快捷武器槽
+    BackpackMagic,       // 背包魔法槽（2026-10-27）
     ChestSlot,           // 箱子格子
 }
 
@@ -17,6 +18,7 @@ public struct ItemRef
 
     public static ItemRef Inventory(int i) => new ItemRef { container = ItemContainer.BackpackInventory, index = i };
     public static ItemRef Slot(int i) => new ItemRef { container = ItemContainer.BackpackSlot, index = i };
+    public static ItemRef MagicSlot(int i) => new ItemRef { container = ItemContainer.BackpackMagic, index = i };
     public static ItemRef ChestSlot(Chest c, int i) => new ItemRef { container = ItemContainer.ChestSlot, index = i, chest = c };
 }
 
@@ -55,6 +57,8 @@ public static class ItemMoveService
                 return bp != null ? bp.InventoryAt(r.index) : null;
             case ItemContainer.BackpackSlot:
                 return bp != null ? bp.SlotToStack(r.index) : null;
+            case ItemContainer.BackpackMagic:
+                return bp != null ? bp.MagicSlotToStack(r.index) : null;
             case ItemContainer.ChestSlot:
                 if (r.chest == null || !r.chest.CanPlaceAt(r.index)) return null;   // 未揭示 → 不能拖
                 return r.chest.GetSlot(r.index);
@@ -80,6 +84,10 @@ public static class ItemMoveService
                 if (bp == null || to.index < 0 || to.index >= bp.slots.Length) return false;
                 if (!PlayerBackpack.CanEquipInSlot(src.def)) return false;   // 只有武器能进快捷槽
                 break;
+            case ItemContainer.BackpackMagic:
+                if (bp == null || to.index < 0 || to.index >= bp.magics.Length) return false;
+                if (!PlayerBackpack.CanEquipInMagicSlot(src.def)) return false;   // 只有魔法能进魔法槽
+                break;
             case ItemContainer.ChestSlot:
                 if (to.chest == null || !to.chest.CanPlaceAt(to.index)) return false;   // 未揭示不能放
                 break;
@@ -99,8 +107,12 @@ public static class ItemMoveService
         {
             if (from.container == ItemContainer.BackpackSlot
                 && (dst.def == null || !PlayerBackpack.CanEquipInSlot(dst.def))) return false;
+            if (from.container == ItemContainer.BackpackMagic
+                && (dst.def == null || !PlayerBackpack.CanEquipInMagicSlot(dst.def))) return false;
             if (to.container == ItemContainer.BackpackSlot
                 && (src.def == null || !PlayerBackpack.CanEquipInSlot(src.def))) return false;
+            if (to.container == ItemContainer.BackpackMagic
+                && (src.def == null || !PlayerBackpack.CanEquipInMagicSlot(src.def))) return false;
         }
 
         return true;   // 空格 / 同款合并 / 互换 都在 Move 里按实际情况处理
@@ -113,14 +125,15 @@ public static class ItemMoveService
         if (bp == null) return false;
         if (!CanDrop(from, to)) return false;
 
-        var src = Peek(from);
-        if (src == null || src.IsEmpty) return false;
-
         var pc = PlayerController.Instance;
         bool fromIsCurrent = from.container == ItemContainer.BackpackSlot && from.index == bp.currentSlot;
 
-        // 拖的是当前手持那把 → 先把镜像里的弹匣写回槽（否则拖走的余量是旧的）
+        // ⚠️ 必须在 `Peek` **之前**保存（2026-10-27 修的 bug）：
+        //    否则读到的是槽里的旧弹匣 —— 打剩 1 发拖进背包会变回 8 发。
         if (fromIsCurrent && pc != null) pc.SaveCurrentSlotAmmo();
+
+        var src = Peek(from);
+        if (src == null || src.IsEmpty) return false;
 
         var dst = GetAt(to);
         bool dstEmpty = dst == null || dst.IsEmpty;
@@ -148,7 +161,7 @@ public static class ItemMoveService
 
         // 快捷槽变化 → 同步镜像；当前手持被拖空 → 自动切下一个有武器的槽（都空则空手）
         bool slotTouched = from.container == ItemContainer.BackpackSlot || to.container == ItemContainer.BackpackSlot;
-        if (slotTouched)
+        if (slotTouched)   // 魔法槽不需要这套（`PlayerMagic` 每帧比对 `CurrentMagic` 自动生效）
         {
             if (from.container == ItemContainer.BackpackSlot
                 && bp.slots[from.index].weapon == null
@@ -167,7 +180,45 @@ public static class ItemMoveService
         return true;
     }
 
-    static bool IsBackpack(ItemContainer c) => c == ItemContainer.BackpackInventory || c == ItemContainer.BackpackSlot;
+    /// <summary>拆分：从 `from` 分 `count` 个到 `to`（同容器、`to` 为空、`from` 可堆叠且 1 ≤ count &lt; 原数量）。
+    /// 拆出来的那一格**独立存在**，不会合并到已有的同款格（用户 2026-10-27 定）。</summary>
+    public static bool Split(ItemRef from, ItemRef to, int count)
+    {
+        var bp = Backpack;
+        var src = Peek(from);
+        if (src == null || src.def == null || !src.def.canStack) return false;
+        if (count <= 0 || count >= src.count) return false;
+        if (IsBackpack(from.container) != IsBackpack(to.container)) return false;   // 只拆进同一容器
+
+        var dst = GetAt(to);
+        if (dst != null && !dst.IsEmpty) return false;   // 目标必须空
+
+        switch (to.container)
+        {
+            case ItemContainer.BackpackInventory:
+                if (bp == null || to.index < 0 || to.index >= bp.Capacity) return false;
+                break;
+            case ItemContainer.ChestSlot:
+                if (to.chest == null || !to.chest.CanPlaceAt(to.index)) return false;
+                break;
+            default:
+                return false;   // 快捷槽 / 魔法槽不可堆叠
+        }
+
+        var part = Clone(src);
+        part.count = count;
+        src.count -= count;
+        SetAt(to, part);
+
+        if (BackpackPanel.Instance != null) BackpackPanel.Instance.RefreshIfOpen();
+        if (ChestPanel.Instance != null) ChestPanel.Instance.RefreshIfOpen();
+        Sfx.Confirm();
+        return true;
+    }
+
+    static bool IsBackpack(ItemContainer c) => c == ItemContainer.BackpackInventory
+                                            || c == ItemContainer.BackpackSlot
+                                            || c == ItemContainer.BackpackMagic;
 
     static ItemStack GetAt(ItemRef r)
     {
@@ -175,6 +226,7 @@ public static class ItemMoveService
         {
             case ItemContainer.BackpackInventory: return Backpack != null ? Backpack.InventoryAt(r.index) : null;
             case ItemContainer.BackpackSlot: return Backpack != null ? Backpack.SlotToStack(r.index) : null;
+            case ItemContainer.BackpackMagic: return Backpack != null ? Backpack.MagicSlotToStack(r.index) : null;
             case ItemContainer.ChestSlot: return r.chest != null ? r.chest.GetSlot(r.index) : null;
             default: return null;
         }
@@ -187,6 +239,7 @@ public static class ItemMoveService
         {
             case ItemContainer.BackpackInventory: bp?.SetInventoryAt(r.index, s); break;
             case ItemContainer.BackpackSlot: bp?.SetSlotFromStack(r.index, s); break;
+            case ItemContainer.BackpackMagic: bp?.SetMagicSlotFromStack(r.index, s); break;
             case ItemContainer.ChestSlot: r.chest?.SetSlot(r.index, s); break;
         }
     }

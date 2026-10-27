@@ -96,3 +96,9 @@ MonoBehaviour:
   chestSearchFadeTime: 0.2
   chestSearchUnknownTint: {r: 1, g: 1, b: 1, a: 0.4}
   chestSearchMagnifierColor: {r: 1, g: 1, b: 1, a: 0.9}
+  defaultAmmoByKind:
+  - {fileID: 11400000, guid: d176837c964cd8340bde713e374a9776, type: 2}
+  - {fileID: 11400000, guid: 9a8cd917b207ba5419c48078e571b609, type: 2}
+  - {fileID: 11400000, guid: 1249746d5e75a254b8c4b577857169a5, type: 2}
+  - {fileID: 11400000, guid: da30d83d4a7b86943b8e92c323fe9974, type: 2}
+  - {fileID: 11400000, guid: 9006f1bafed17f544856bc9367178a01, type: 2}

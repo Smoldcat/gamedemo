@@ -98,6 +98,8 @@ public static class StaticReset
         ResetOf(typeof(ChestPanel), ChestPanel.ResetStatics);        // 箱子面板单例（2026-09-26 补登记：以前只靠 OnDestroy 兜底）
         ResetOf(typeof(ItemVisuals), ItemVisuals.ResetStatics);      // 物品的占位图标（自己创建的运行时 Sprite）
         ResetOf(typeof(ItemDragHandler), ItemDragHandler.ResetStatics);  // 拖拽的静态状态 + 跟随图标 Canvas 引用（2026-10-27）
+        ResetOf(typeof(ItemContextMenu), ItemContextMenu.ResetStatics);  // 右键菜单单例（2026-10-27）
+        ResetOf(typeof(SplitDialog), SplitDialog.ResetStatics);          // 拆分弹窗单例（2026-10-27）
         ResetOf(typeof(Shop), Shop.ResetStatics);                    // 商店注册表（2026-09-25）
         ResetOf(typeof(ShopPanel), ShopPanel.ResetStatics);          // 商店面板：单例 + Tab 帧号（漏了 → 重开一局可能残留"Tab 被占"）
         ResetOf(typeof(ShopInventoryPanel), ShopInventoryPanel.ResetStatics);  // 商店的左侧库存面板：单例

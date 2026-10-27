@@ -110,6 +110,10 @@ public class ChestPanel : MonoBehaviour
         var drop = go.GetComponent<ItemDropTarget>();
         if (drop == null) drop = go.AddComponent<ItemDropTarget>();
         drop.target = r;
+
+        var menu = go.GetComponent<ItemContextMenuTrigger>();
+        if (menu == null) menu = go.AddComponent<ItemContextMenuTrigger>();
+        menu.target = r;
     }
 
     /// <summary>拖拽开始：高亮所有能接受这个物品的格子（未揭示格 / 跨容器有物品的格会自动排除）。</summary>
@@ -237,6 +241,8 @@ public class ChestPanel : MonoBehaviour
         if (!_opened) return;
         _opened = false;
         StopSearch();   // 搜索中断：已揭示的保持，未揭示的下次打开从 0 重新搜
+        ItemContextMenu.Close();   // 右键菜单 / 拆分弹窗跟着面板一起关（2026-10-27）
+        SplitDialog.Close();
         // 收起悬停提示：面板根节点虽然被隐藏了，但 tooltip 自己那个 activeSelf 标记还留着 true，
         // 下次开箱时会在 Update 跑到之前**闪一帧**在旧位置（2026-09-25 顺手修）。
         if (_tipGo != null) _tipGo.SetActive(false);

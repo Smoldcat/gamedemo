@@ -39,15 +39,20 @@ public class BackpackPanel : MonoBehaviour
     GameObject _root;
 
     // 布局常量（参考 1280×720）
-    const int SlotCount = 3;
+    const int SlotCount = 3;                 // 武器槽
+    const int TotalSlots = SlotCount + 1;    // + 1 个魔法槽（2026-10-27）
     // 2026-09-20：改成"左侧竖排面板"（参考塔科夫式背包）
     const float PanelW = 400f, PanelH = 660f;
     const float PanelLeftMargin = 16f;       // 面板距屏幕左边
     const float Pad = 16f;                   // 面板内左右边距
-    const float SlotW = 112f, SlotH = 96f, SlotGap = 10f;
+    // 4 格（3 武器 + 1 魔法）：84*4 + 8*3 = 360 ≤ 可用 368
+    const float SlotW = 84f, SlotH = 96f, SlotGap = 8f;
     const float GridW = InvGridUI.GridW, GridH = 4 * InvGridUI.CellH + 3 * InvGridUI.CellGap;  // 库存网格整块（5 列 × 4 行可视区）
     const float CellW = InvGridUI.CellW, CellH = InvGridUI.CellH, CellGap = InvGridUI.CellGap;   // 统一度量见 InvGridUI（别在这改数值）
     const float BarW = 300f, BarH = 14f;     // 底部占用条
+
+    /// <summary>魔法槽的闲置色 = **与武器槽完全同款**（用户 2026-10-27：不要新样式，只把"空槽"改成"魔法"）。</summary>
+    static Color MagicSlotColor() => UIUtil.SlotColor();
     // Tooltip（悬停武器属性）尺寸：**定义已搬到 `UIUtil.TipW / TipH`**（2026-10-15，与 tooltip 摆位同处）。
     // ⚠️ 三条约束搬走后依然成立（改 `UIUtil` 那两个常量时照看）：
     //  ① **两条路径必须一致**：代码生成兜底用 `UIUtil.TipW/TipH`，而**实际生效的是 prefab 里
@@ -57,13 +62,11 @@ public class BackpackPanel : MonoBehaviour
     //  ③ 商店那份比它高一档（多一行「价格」）：`ShopUI.TipH = UIUtil.TipH + 24f`。
 
     // ---- 快捷槽元素 ----
-    RectTransform[] _slotCell = new RectTransform[SlotCount];
-    Image[] _slotFrame = new Image[SlotCount];   // 槽位边框（当前槽高亮）
-    Image[] _slotIcon = new Image[SlotCount];
-    Text[] _slotName = new Text[SlotCount];
-    Text[] _slotMag = new Text[SlotCount];
-    Text[] _slotDropTxt = new Text[SlotCount];
-    Button[] _slotDropBtn = new Button[SlotCount];
+    RectTransform[] _slotCell = new RectTransform[TotalSlots];
+    Image[] _slotFrame = new Image[TotalSlots];   // 槽位边框（当前槽高亮）
+    Image[] _slotIcon = new Image[TotalSlots];
+    Text[] _slotName = new Text[TotalSlots];
+    Text[] _slotMag = new Text[TotalSlots];
 
     // ---- 库存 ----
     GameObject _invGrid;
@@ -89,7 +92,7 @@ public class BackpackPanel : MonoBehaviour
 
     /// <summary>快捷槽"普通态"颜色：代码生成时 = SlotColor()；用外部 prefab 时 = prefab 里 Frame 的原始色。
     /// 这样"普通槽色"可以在 prefab 里直接调，而"当前槽高亮色"仍走 GameAssets 参数（状态色归代码）。</summary>
-    readonly Color[] _slotIdleColor = new Color[SlotCount];
+    readonly Color[] _slotIdleColor = new Color[TotalSlots];
 
     // ---- 杂项 UI ----
     Text _medkitText;
@@ -102,10 +105,6 @@ public class BackpackPanel : MonoBehaviour
     RectTransform _tooltipRect;   // tooltip 的 RectTransform（BuildUI 缓存，避免每帧 GetComponent）
     RectTransform _rootRect;      // 面板根的 RectTransform（tooltip 位置换算要用）
     ItemData _lastHoverDef;       // 上次显示 tooltip 的物品定义（鼠标没换东西就不重建字符串）
-
-    // ---- 丢弃二次确认 ----
-    int _dropConfirmSlot = -1;      // -1 = 无确认中；否则是槽位号
-    float _dropConfirmUntil;
 
     /// <summary>本面板当前是否开着。**替代了旧的 `_pausedByMe`**：
     /// 现在"暂停 / 隐藏整块 HUD / 隐藏准星"三件事统一交给 `UIState` 记账（它支持多个面板共存），
@@ -170,10 +169,6 @@ public class BackpackPanel : MonoBehaviour
             }
         }
 
-        // 丢弃二次确认超时还原
-        if (_dropConfirmSlot >= 0 && Time.unscaledTime >= _dropConfirmUntil)
-            ResetDropConfirm();
-
         // 库存滚动：面板开着才读滚轮（机制在共享的 ScrollableGrid；内容没溢出时 Tick 自动 no-op）
         if (_opened) _invScroll.Tick();
 
@@ -235,19 +230,42 @@ public class BackpackPanel : MonoBehaviour
             _slotIcon[i]    = Comp<Image>(slot, "Icon");
             _slotName[i]    = Comp<Text>(slot, "Name");
             _slotMag[i]     = Comp<Text>(slot, "Mag");
-            _slotDropTxt[i] = Comp<Text>(slot, "DropBtn/Txt");
             if (_slotFrame[i] != null) _slotIdleColor[i] = _slotFrame[i].color;   // 普通槽色以 prefab 为准
 
-            // 丢弃按钮：onClick 监听器**存不进 prefab** → 这里统一重挂；prefab 漏挂 Button 也补上
+            // 旧的「丢弃」按钮已删除（2026-10-27：改右键菜单）
             var drop = slot.Find("DropBtn");
-            if (drop != null)
+            if (drop != null) drop.gameObject.SetActive(false);
+        }
+
+        // 第 4 格：魔法槽（prefab 只有 3 格 → 复制第 3 格 + 改样式；2026-10-27）
+        if (_slotCell[SlotCount - 1] != null)
+        {
+            var src = _slotCell[SlotCount - 1];
+            var slot4 = Instantiate(src.gameObject, src.parent);
+            slot4.name = "Slot" + (SlotCount + 1);
+            _slotCell[SlotCount] = slot4.GetComponent<RectTransform>();
+            _slotFrame[SlotCount] = Comp<Image>(slot4.transform, "Frame");
+            _slotIcon[SlotCount] = Comp<Image>(slot4.transform, "Icon");
+            _slotName[SlotCount] = Comp<Text>(slot4.transform, "Name");
+            _slotMag[SlotCount] = Comp<Text>(slot4.transform, "Mag");
+            _slotIdleColor[SlotCount] = MagicSlotColor();
+            if (_slotFrame[SlotCount] != null) _slotFrame[SlotCount].color = MagicSlotColor();
+            // ⚠️ 样式必须和代码路径的武器槽**同一张图**（圆角描边）：
+            //    复制体带回 prefab 的填充图 → 会变成"实心直角方块"（2026-10-27 用户反馈两次）
+            if (_slotFrame[SlotCount] != null)
             {
-                _slotDropBtn[i] = drop.GetComponent<Button>();
-                if (_slotDropBtn[i] == null) _slotDropBtn[i] = drop.gameObject.AddComponent<Button>();
-                int idx = i;
-                _slotDropBtn[i].onClick.RemoveAllListeners();
-                _slotDropBtn[i].onClick.AddListener(() => OnDropBtnClick(idx));
+                _slotFrame[SlotCount].sprite = UIUtil.SlotFrameSprite();
+                _slotFrame[SlotCount].type = Image.Type.Sliced;
             }
+            if (_slotIcon[SlotCount] != null) _slotIcon[SlotCount].enabled = false;
+            if (_slotName[SlotCount] != null) _slotName[SlotCount].text = "魔法";
+            if (_slotMag[SlotCount] != null) _slotMag[SlotCount].text = "E 使用";
+            var magicKey = Comp<Text>(slot4.transform, "Key");
+            if (magicKey != null) { magicKey.text = "E"; magicKey.color = Color.white; }
+            var drop4 = slot4.transform.Find("DropBtn");
+            if (drop4 != null) drop4.gameObject.SetActive(false);
+
+            RelayoutSlots();
         }
 
         // 「整理」按钮同理：重挂 onClick
@@ -262,7 +280,7 @@ public class BackpackPanel : MonoBehaviour
         bool slotsComplete = true;
         for (int i = 0; i < SlotCount; i++)
             if (_slotFrame[i] == null || _slotIcon[i] == null || _slotName[i] == null ||
-                _slotMag[i] == null || _slotDropTxt[i] == null) { slotsComplete = false; break; }
+                _slotMag[i] == null) { slotsComplete = false; break; }
 
         if (_titleText == null || _medkitText == null || _invGrid == null || _invBarFill == null ||
             !slotsComplete || _tooltipGo == null || _tooltipText == null)
@@ -367,55 +385,40 @@ public class BackpackPanel : MonoBehaviour
         slotLabel.rectTransform.anchoredPosition = new Vector2(textCx, slotLabelY);
 
         float slotY = slotLabelY - 10f - SlotH * 0.5f;
-        float startX = -(SlotW * SlotCount + SlotGap * (SlotCount - 1)) * 0.5f + SlotW * 0.5f;
-        for (int i = 0; i < SlotCount; i++)
+        float startX = -(SlotW * TotalSlots + SlotGap * (TotalSlots - 1)) * 0.5f + SlotW * 0.5f;
+        for (int i = 0; i < TotalSlots; i++)
         {
+            bool isMagic = i == SlotCount;   // 第 4 格 = 魔法槽（2026-10-27）
             var cell = new GameObject("Slot" + (i + 1));
             cell.transform.SetParent(_root.transform, false);
             _slotCell[i] = cell.AddComponent<RectTransform>();
             _slotCell[i].sizeDelta = new Vector2(SlotW, SlotH);
             _slotCell[i].anchoredPosition = new Vector2(startX + i * (SlotW + SlotGap), slotY);
 
-            // 槽位边框（当前槽高亮用，Sliced 描边）
-            _slotFrame[i] = AddImage(cell.transform, "Frame", new Vector2(SlotW, SlotH), UIUtil.SlotColor());
+            // 槽位边框（当前槽高亮用，Sliced 描边）；魔法槽与武器槽同款（不区分颜色）
+            var idle = isMagic ? MagicSlotColor() : UIUtil.SlotColor();
+            _slotFrame[i] = AddImage(cell.transform, "Frame", new Vector2(SlotW, SlotH), idle);
             _slotFrame[i].sprite = sprSlotFrame;
             _slotFrame[i].type = Image.Type.Sliced;
-            _slotIdleColor[i] = UIUtil.SlotColor();   // 普通态槽色（Refresh 里与"当前槽高亮色"二选一）
+            _slotIdleColor[i] = idle;   // 普通态槽色（Refresh 里与"当前槽高亮色"二选一）
 
             // 图标
-            _slotIcon[i] = AddImage(cell.transform, "Icon", new Vector2(56f, 34f), Color.white);
+            _slotIcon[i] = AddImage(cell.transform, "Icon", new Vector2(56f, 30f), Color.white);
             _slotIcon[i].preserveAspect = true;
             _slotIcon[i].rectTransform.anchoredPosition = new Vector2(0f, 20f);
+            if (isMagic) _slotIcon[i].enabled = false;
 
-            // 武器名
-            _slotName[i] = AddText(cell.transform, "Name", new Vector2(SlotW - 12f, 20f), "", 13, Color.white);
+            // 名称（魔法槽空态显示"魔法"）
+            _slotName[i] = AddText(cell.transform, "Name", new Vector2(SlotW - 12f, 20f), isMagic ? "魔法" : "", 13, Color.white);
             _slotName[i].rectTransform.anchoredPosition = new Vector2(0f, -8f);
 
-            // 弹匣
-            _slotMag[i] = AddText(cell.transform, "Mag", new Vector2(SlotW - 12f, 16f), "", 12, new Color(0.75f, 0.8f, 0.88f));
+            // 弹匣 / 提示
+            _slotMag[i] = AddText(cell.transform, "Mag", new Vector2(SlotW - 12f, 16f), isMagic ? "E 使用" : "", 12, new Color(0.75f, 0.8f, 0.88f));
             _slotMag[i].rectTransform.anchoredPosition = new Vector2(0f, -28f);
 
-            // 数字角标
-            var key = AddText(cell.transform, "Key", new Vector2(26f, 18f), (i + 1).ToString(), 13, new Color(0.5f, 0.56f, 0.66f));
+            // 数字角标（魔法槽 = E）
+            var key = AddText(cell.transform, "Key", new Vector2(26f, 18f), isMagic ? "E" : (i + 1).ToString(), 13, new Color(0.5f, 0.56f, 0.66f));
             key.rectTransform.anchoredPosition = new Vector2(-SlotW * 0.5f + 14f, SlotH * 0.5f - 12f);
-
-            // 丢弃按钮（二次确认）
-            var dropGo = new GameObject("DropBtn");
-            dropGo.transform.SetParent(cell.transform, false);
-            var dropRt = dropGo.AddComponent<RectTransform>();
-            dropRt.sizeDelta = new Vector2(64f, 26f);
-            dropRt.anchoredPosition = new Vector2(0f, -SlotH * 0.5f - 16f);
-            var dropImg = dropGo.AddComponent<Image>();
-            dropImg.sprite = sprFrame;
-            dropImg.type = Image.Type.Sliced;
-            dropImg.color = new Color(0.45f, 0.18f, 0.15f, 0.9f);
-            dropImg.raycastTarget = true;
-            _slotDropTxt[i] = AddText(dropGo.transform, "Txt", new Vector2(60f, 22f), "丢弃", 12, new Color(1f, 0.8f, 0.75f));
-            _slotDropTxt[i].rectTransform.anchoredPosition = Vector2.zero;
-            _slotDropBtn[i] = dropGo.AddComponent<Button>();
-            _slotDropBtn[i].targetGraphic = dropImg;
-            int slotIdx = i;
-            _slotDropBtn[i].onClick.AddListener(() => OnDropBtnClick(slotIdx));
         }
 
         // ---- 库存区 ----
@@ -486,7 +489,6 @@ public class BackpackPanel : MonoBehaviour
         UIState.Push();           // 暂停 + 隐藏整块 HUD + 隐藏准星（**唯一出口**，支持多界面共存）
         _root.SetActive(true);
         Sfx.OpenInventory();
-        ResetDropConfirm();
         _invScroll.ResetToTop();   // 每次打开都从顶开始
         Refresh();
     }
@@ -498,7 +500,8 @@ public class BackpackPanel : MonoBehaviour
         _root.SetActive(false);
         Sfx.CloseInventory();
         UIState.Pop();
-        ResetDropConfirm();
+        ItemContextMenu.Close();   // 右键菜单 / 拆分弹窗跟着面板一起关（2026-10-27）
+        SplitDialog.Close();
 
         // 与箱子面板"绑成一个整体"：任意一方关闭 → 两个一起关
         //（对方内部也有幂等守卫，所以不会递归打转）
@@ -525,6 +528,26 @@ public class BackpackPanel : MonoBehaviour
         RefreshIfOpen();
     }
 
+    /// <summary>4 格统一重排（prefab 的 3 个槽原本 112 宽，加魔法槽后一起缩到 84）。</summary>
+    void RelayoutSlots()
+    {
+        if (_slotCell[0] == null) return;
+        float y = _slotCell[0].anchoredPosition.y;
+        float startX = -(SlotW * TotalSlots + SlotGap * (TotalSlots - 1)) * 0.5f + SlotW * 0.5f;
+        for (int i = 0; i < TotalSlots; i++)
+        {
+            var rt = _slotCell[i];
+            if (rt == null) continue;
+            rt.sizeDelta = new Vector2(SlotW, SlotH);
+            rt.anchoredPosition = new Vector2(startX + i * (SlotW + SlotGap), y);
+
+            if (_slotFrame[i] != null) _slotFrame[i].rectTransform.sizeDelta = new Vector2(SlotW, SlotH);
+            if (_slotIcon[i] != null) _slotIcon[i].rectTransform.sizeDelta = new Vector2(56f, 30f);
+            if (_slotName[i] != null) _slotName[i].rectTransform.sizeDelta = new Vector2(SlotW - 12f, 20f);
+            if (_slotMag[i] != null) _slotMag[i].rectTransform.sizeDelta = new Vector2(SlotW - 12f, 16f);
+        }
+    }
+
     // ==================== 拖拽（2026-10-27） ====================
 
     /// <summary>给格子挂上拖拽源 / 放置目标（幂等；每次 Refresh 重设索引）。</summary>
@@ -537,6 +560,10 @@ public class BackpackPanel : MonoBehaviour
         var drop = go.GetComponent<ItemDropTarget>();
         if (drop == null) drop = go.AddComponent<ItemDropTarget>();
         drop.target = r;
+
+        var menu = go.GetComponent<ItemContextMenuTrigger>();
+        if (menu == null) menu = go.AddComponent<ItemContextMenuTrigger>();
+        menu.target = r;
     }
 
     /// <summary>拖拽开始：高亮所有能接受这个物品的格子（亮蓝 = 与「当前槽高亮」同一支状态色）。</summary>
@@ -546,11 +573,12 @@ public class BackpackPanel : MonoBehaviour
         var bp = _pc != null ? _pc.backpack : null;
         if (bp == null) return;
 
-        // 快捷槽
-        for (int i = 0; i < SlotCount; i++)
+        // 快捷槽（3 武器 + 1 魔法）
+        for (int i = 0; i < TotalSlots; i++)
         {
             if (_slotFrame[i] == null) continue;
-            if (ItemMoveService.CanDrop(source, ItemRef.Slot(i))) Highlight(_slotFrame[i]);
+            var target = i < SlotCount ? ItemRef.Slot(i) : ItemRef.MagicSlot(0);
+            if (ItemMoveService.CanDrop(source, target)) Highlight(_slotFrame[i]);
         }
 
         // 库存（含空格 —— `_invDropCells` 是"所有格子"）
@@ -666,19 +694,37 @@ public class BackpackPanel : MonoBehaviour
                 _slotMag[i].text = "按 1/2/3 装备";
             }
 
-            // 丢弃按钮文字（未被确认态占用时统一）
-            if (_dropConfirmSlot != i)
-            {
-                _slotDropTxt[i].text = "丢弃";
-                _slotDropTxt[i].color = new Color(1f, 0.8f, 0.75f);
-            }
-
             // 拖拽（2026-10-27）：快捷槽既是源也是目标；Frame 必须接射线（prefab 里可能关掉了）
             if (_slotCell[i] != null)
             {
                 EnsureDragTargets(_slotCell[i].gameObject, ItemRef.Slot(i));
                 if (_slotFrame[i] != null) _slotFrame[i].raycastTarget = true;
             }
+        }
+
+        // 魔法槽（第 4 格；2026-10-27）
+        int mi = SlotCount;
+        if (_slotCell[mi] != null && _slotFrame[mi] != null)
+        {
+            var magic = bp != null ? bp.CurrentMagic : null;
+            _slotFrame[mi].color = _slotIdleColor[mi];   // 魔法槽没有"当前"概念，始终闲置色
+            if (_slotIcon[mi] != null)
+            {
+                // ⚠️ 复制第 4 格时把 Icon 的 `enabled` 关掉了（空槽态）→ 这里必须恢复，否则装备后只有名字没有图标
+                _slotIcon[mi].enabled = magic != null;
+                _slotIcon[mi].sprite = magic != null ? ItemVisuals.IconOf(magic) : null;
+                _slotIcon[mi].color = magic != null ? ItemVisuals.ColorOf(magic) : Color.white;
+                _slotIcon[mi].gameObject.SetActive(magic != null);
+            }
+            if (_slotName[mi] != null)
+            {
+                _slotName[mi].text = magic != null ? magic.DisplayName : "魔法";
+                _slotName[mi].color = magic != null ? ItemVisuals.ColorOf(magic) : new Color(0.45f, 0.5f, 0.6f);
+            }
+            if (_slotMag[mi] != null) _slotMag[mi].text = "E 使用";
+
+            EnsureDragTargets(_slotCell[mi].gameObject, ItemRef.MagicSlot(0));
+            _slotFrame[mi].raycastTarget = true;
         }
 
         // 库存：清空重建（**固定显示 capacity 个格子**，空格子也画出来 —— 一眼看出还剩几格）
@@ -760,17 +806,7 @@ public class BackpackPanel : MonoBehaviour
             _invDropCells.Add(rt);
             EnsureDragTargets(cell, ItemRef.Inventory(i));
 
-            // 右键丢弃：给**有物品**的格子挂一个点击分发器（左键仍归下面那个 Button 管）
-            // ⚠️ `index` 必须**每次 Refresh 重新绑** —— 格子是重建的，且丢弃后下标会整体前移
-            var cellClick = cell.GetComponent<BackpackCellClick>();
-            if (hasItem)
-            {
-                if (cellClick == null) cellClick = cell.AddComponent<BackpackCellClick>();
-                cellClick.panel = this;
-                cellClick.index = i;
-                cellClick.enabled = true;
-            }
-            else if (cellClick != null) cellClick.enabled = false;
+            // 右键菜单由 `EnsureDragTargets` 统一挂（`ItemContextMenuTrigger`，2026-10-27）
 
             if (!hasItem) { _invCells.Add(null); continue; }   // 空格子到此为止（只画个框）
 
@@ -826,82 +862,6 @@ public class BackpackPanel : MonoBehaviour
     }
 
     // ==================== 丢弃二次确认 ====================
-
-    void OnDropBtnClick(int slotIdx)
-    {
-        if (_pc == null) return;
-        if (_dropConfirmSlot == slotIdx)
-        {
-            // 已确认态再点一次 → 真正丢弃
-            ResetDropConfirm();
-            _pc.DropSlotAt(slotIdx);
-            Sfx.Drop();
-            Refresh();
-            return;
-        }
-        // 第一次点 → 进入确认态
-        ResetDropConfirm();
-        _dropConfirmSlot = slotIdx;
-        _dropConfirmUntil = Time.unscaledTime + 2f;
-        _slotDropTxt[slotIdx].text = "再点确认！";
-        _slotDropTxt[slotIdx].color = new Color(1f, 0.4f, 0.3f);
-        Sfx.Confirm();
-    }
-
-    void ResetDropConfirm()
-    {
-        _dropConfirmSlot = -1;
-        _dropConfirmUntil = 0f;
-        if (_slotDropTxt != null)
-            for (int i = 0; i < SlotCount; i++)
-                if (_slotDropTxt[i] != null)
-                {
-                    _slotDropTxt[i].text = "丢弃";
-                    _slotDropTxt[i].color = new Color(1f, 0.8f, 0.75f);
-                }
-    }
-
-    // ==================== 库存格右键丢弃（2026-09-28） ====================
-
-    // 库存格的"待确认丢弃"目标：第一次右键记下来，2 秒内再右键同一格才真丢。
-    // ⚠️ 存的是**格子在 `backpack.inventory` 里的下标** —— 丢弃后必须 Refresh（下标会变），
-    //    所以确认态用完立刻清掉。
-    int _dropInvIndex = -1;
-    float _dropInvUntil;
-
-    /// <summary>
-    /// 库存格**右键**：第一次 = 提示确认；2 秒内再右键同一格 = 真正丢弃。
-    /// 与快捷武器槽的"点两次丢弃"同一套交互（都是再确认一次），区别只是库存格没有独立按钮，
-    /// 所以第一次右键改用 `HUD.Announce` 给提示。
-    ///
-    /// ⚠️ 由 <see cref="BackpackCellClick"/> 转发进来（它挂在每个格子上）——
-    ///    走 `EventSystem` 才能正确对应"虚拟光标指的是哪一格"。
-    /// </summary>
-    public void RequestDropItem(int index)
-    {
-        if (Time.unscaledTime > _dropInvUntil) _dropInvIndex = -1;   // 超过 2 秒 → 回到"第一次"
-
-        if (_pc == null) _pc = PlayerController.Instance;
-        if (_pc == null || _pc.backpack == null) return;
-        var bp = _pc.backpack;
-        if (index < 0 || index >= bp.inventory.Count) return;
-        var item = bp.inventory[index];
-        if (item == null || item.def == null || item.IsEmpty) return;
-
-        if (_dropInvIndex == index)
-        {
-            _dropInvIndex = -1;
-            _pc.DropItemFromInventory(index);
-            Sfx.Drop();
-            Refresh();
-            return;
-        }
-
-        _dropInvIndex = index;
-        _dropInvUntil = Time.unscaledTime + 2f;
-        HUD.Announce("再点一次右键丢弃  " + item.DisplayName, 1.2f, 24, new Color(1f, 0.6f, 0.4f));
-        Sfx.Confirm();
-    }
 
     // ==================== Tooltip ====================
 

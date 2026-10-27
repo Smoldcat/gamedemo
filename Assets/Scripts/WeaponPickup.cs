@@ -46,6 +46,9 @@ public class WeaponPickup : MonoBehaviour, IInteractable
     /// `magAmmo` 负值 = 满弹（新枪）；主动丢在地上的枪会传真实余量。</summary>
     public static WeaponPickup Create(WeaponData w, Vector3 pos, int magAmmo = -1, AmmoData ammoId = null)
     {
+        // ⚠️ 用户 2026-10-27 定：ammoId 永远不为 null（按口径兜底一级弹药）
+        ammoId = PlayerBackpack.ResolveDefaultAmmo(w, ammoId);
+
         var root = new GameObject("WeaponPickup_" + w.weaponName);
         root.transform.position = pos;
 

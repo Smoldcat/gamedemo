@@ -111,6 +111,8 @@ public class GameAssetsEditor : Editor
         ("chestSearchFadeTime",        "放大镜淡出(秒)",     "搜索完成后放大镜淡出的时长。0 = 立刻消失。默认 0.2", null),
         ("chestSearchUnknownTint",     "未知态斜纹色",       "未知态格子的斜纹磨砂颜色（含透明度）。默认白色 40%，与贴图里的深/浅灰条纹相乘。调低更含蓄、调高条纹更亮", null),
         ("chestSearchMagnifierColor",  "放大镜颜色",         "放大镜的颜色（含透明度）。默认白色 90%", null),
+
+        ("defaultAmmoByKind", "默认弹药（按口径）", "武器没指定弹匣等级时用的「一级弹药卡」。下标 = AmmoKind：0=手枪 1=步枪 2=狙击 3=冲锋枪 4=霰弹。\\n留空 = 该口径不补默认（换弹时再按背包里的货自动挑）", "默认弹药（2026-10-27 新增）"),
     };
 
     readonly HashSet<string> _handled = new HashSet<string>();

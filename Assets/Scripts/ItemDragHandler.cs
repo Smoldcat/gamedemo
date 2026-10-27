@@ -44,6 +44,7 @@ public class ItemDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, I
 
     public void OnBeginDrag(PointerEventData e)
     {
+        ItemContextMenu.Close();   // 拖拽开始 → 收起右键菜单（2026-10-27）
         if (!ItemMoveService.CanDrag(source)) return;
 
         IsDragging = true;

@@ -509,8 +509,9 @@ public class PlayerController : MonoBehaviour
         UpdateGunVisual();
     }
 
-    /// <summary>切快捷槽前把当前弹匣写回背包,避免弹匣状态丢失(i = 目标槽; 空槽忽略)</summary>
-    void SwitchSlot(int i)
+    /// <summary>切快捷槽前把当前弹匣写回背包,避免弹匣状态丢失(i = 目标槽; 空槽忽略)。
+    /// `public`（2026-10-27）：快捷槽右键菜单的「装备」= 切换手持。</summary>
+    public void SwitchSlot(int i)
     {
         if (backpack == null || i < 0 || i >= backpack.slots.Length) return;
         if (backpack.slots[i].weapon == null) return;   // 空槽不切
@@ -651,30 +652,7 @@ public class PlayerController : MonoBehaviour
         AdvanceAds(Time.deltaTime);
 
         // ---- Q 使用血包（未满血才可用；无血包/满血给提示，不静默）----
-        if (Input.GetKeyDown(KeyCode.Q))
-        {
-            var h = _hp != null ? _hp : GetComponent<Health>();
-            if (h != null && h.alive)
-            {
-                if (h.hp >= h.maxHp)
-                    HUD.Announce("生命值已满", 1.0f, 26, new Color(0.7f, 0.7f, 0.7f));
-                else if (backpack == null || backpack.Medkits <= 0)
-                    HUD.Announce("没有血包了", 1.0f, 26, new Color(0.9f, 0.7f, 0.4f));
-                else
-                {
-                    // 用掉那一格并把**它的定义卡**拿回来 → 回血量从卡里读（数据驱动，不再写死 50）
-                    var used = backpack.UseMedkit();
-                    if (used != null)
-                    {
-                        h.Heal(used.healAmount);
-                        DamageText.Spawn(transform.position + Vector3.up * 1.2f, used.healAmount, DamageText.Kind.Heal);
-                        Sfx.Heal();
-                        Effects.HealFx(transform.position);   // 治疗光环（GameAssets.healPrefab 留空则不播）
-                        HUD.Announce($"+{used.healAmount:0} 生命值", 1.0f, 28, new Color(0.4f, 1f, 0.5f));
-                    }
-                }
-            }
-        }
+        if (Input.GetKeyDown(KeyCode.Q)) TryUseMedkit();
 
         // ---- 鼠标增量（每帧只取一次）：准星由"增量"驱动，不再由鼠标绝对位置驱动 ----
         _mouseDelta = TakeMouseDelta();
@@ -1054,6 +1032,9 @@ public class PlayerController : MonoBehaviour
     void Fire()
     {
         magAmmo--;
+        // ⚠️ 每发写回槽（2026-10-27）：否则"打剩 1 发 → 拖进背包"读到的是旧弹匣（回满 8 发）。
+        //    弹匣随枪 = 任何"离开手持"的路径都必须能读到真实余量。
+        SaveCurrentSlotAmmo();
         // 开枪强制退出奔跑（掉回「行走」，要重新按 Shift 才能再跑）—— 这就是「腰射时用行走速度」的由来。
         // 与塔科夫同类做法；这里从简：不禁止「跑着开枪」，只是**开枪即掉速**。
         running = false;
@@ -1567,6 +1548,70 @@ public class PlayerController : MonoBehaviour
             //    丢别的槽没必要打断（那是"换枪"语义，不该让玩家白等一次换弹）。
             if (wasCurrent) LoadMirrorFromSlot();
         }
+    }
+
+    // ==================== 右键菜单用到的公开动作（2026-10-27） ====================
+
+    /// <summary>使用一个血包（Q 键 / 背包右键菜单共用）：优先用背包里的第一个。</summary>
+    public void TryUseMedkit()
+    {
+        var h = _hp != null ? _hp : GetComponent<Health>();
+        if (h == null || !h.alive) return;
+        if (h.hp >= h.maxHp)
+        {
+            HUD.Announce("生命值已满", 1.0f, 26, new Color(0.7f, 0.7f, 0.7f));
+            return;
+        }
+        if (backpack == null || backpack.Medkits <= 0)
+        {
+            HUD.Announce("没有血包了", 1.0f, 26, new Color(0.9f, 0.7f, 0.4f));
+            return;
+        }
+        var used = backpack.UseMedkit();
+        if (used != null) HealBy(used);
+    }
+
+    /// <summary>用背包**指定格**的血包（右键菜单「使用」）。</summary>
+    public void TryUseMedkitAt(int index)
+    {
+        var h = _hp != null ? _hp : GetComponent<Health>();
+        if (h == null || !h.alive) return;
+        if (h.hp >= h.maxHp)
+        {
+            HUD.Announce("生命值已满", 1.0f, 26, new Color(0.7f, 0.7f, 0.7f));
+            return;
+        }
+        var used = backpack != null ? backpack.UseMedkitAt(index) : null;
+        if (used != null) HealBy(used);
+    }
+
+    /// <summary>用**箱子指定格**的血包（右键菜单「使用」）。</summary>
+    public void UseMedkitFromChest(Chest chest, int index)
+    {
+        var h = _hp != null ? _hp : GetComponent<Health>();
+        if (h == null || !h.alive) return;
+        if (h.hp >= h.maxHp)
+        {
+            HUD.Announce("生命值已满", 1.0f, 26, new Color(0.7f, 0.7f, 0.7f));
+            return;
+        }
+        if (chest == null) return;
+        var stack = chest.GetSlot(index);
+        var med = stack != null ? stack.def as MedkitData : null;
+        if (med == null) return;
+        chest.TakeFromSlot(index, 1);
+        HealBy(med);
+    }
+
+    void HealBy(MedkitData med)
+    {
+        var h = _hp != null ? _hp : GetComponent<Health>();
+        if (h == null || med == null) return;
+        h.Heal(med.healAmount);
+        DamageText.Spawn(transform.position + Vector3.up * 1.2f, med.healAmount, DamageText.Kind.Heal);
+        Sfx.Heal();
+        Effects.HealFx(transform.position);   // 治疗光环（GameAssets.healPrefab 留空则不播）
+        HUD.Announce($"+{med.healAmount:0} 生命值", 1.0f, 28, new Color(0.4f, 1f, 0.5f));
     }
 
     /// <summary>丢弃魔法槽（背包面板「丢弃」按钮用）：掉到地上成为一张魔法卡。

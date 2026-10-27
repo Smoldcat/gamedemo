@@ -256,6 +256,9 @@ public class PlayerBackpack : MonoBehaviour
     {
         if (i < 0 || i >= Capacity) return;
         EnsureInventorySize(i + 1);
+        // 武器进库存也补齐弹匣等级（null = 按口径一级）→ 下游永远不用判空
+        if (s != null && !s.IsEmpty && s.def is WeaponData w)
+            s.ammoId = ResolveDefaultAmmo(w, s.ammoId);
         inventory[i] = (s != null && !s.IsEmpty) ? s : null;
     }
 
@@ -286,12 +289,37 @@ public class PlayerBackpack : MonoBehaviour
         if (w == null) return false;
         slots[i].weapon = w;
         slots[i].magAmmo = AmmoOf(w, s.magAmmo);
-        slots[i].ammoId = s.ammoId;
+        slots[i].ammoId = ResolveDefaultAmmo(w, s.ammoId);
         return true;
     }
 
     /// <summary>这个物品能不能放进快捷武器槽（只接受武器）。</summary>
     public static bool CanEquipInSlot(ItemData def) => def is WeaponData;
+
+    /// <summary>魔法槽第 i 格转成 `ItemStack` 副本（空 → null）。</summary>
+    public ItemStack MagicSlotToStack(int i)
+    {
+        EnsureSlots();
+        if (i < 0 || i >= magics.Length) return null;
+        var slot = magics[i];
+        if (slot == null || slot.magic == null) return null;
+        return new ItemStack { def = slot.magic, count = 1 };
+    }
+
+    /// <summary>把 `ItemStack` 写回魔法槽（只接受魔法；空 → 清空该槽）。返回是否成功。</summary>
+    public bool SetMagicSlotFromStack(int i, ItemStack s)
+    {
+        EnsureSlots();
+        if (i < 0 || i >= magics.Length) return false;
+        if (s == null || s.IsEmpty) { magics[i].magic = null; return true; }
+        var m = s.def as MagicData;
+        if (m == null) return false;
+        magics[i].magic = m;
+        return true;
+    }
+
+    /// <summary>这个物品能不能放进魔法槽（只接受魔法）。</summary>
+    public static bool CanEquipInMagicSlot(ItemData def) => def is MagicData;
 
     /// <summary>清空一个快捷槽（武器 + 弹匣 + 等级）。</summary>
     public void ClearSlot(int i)
@@ -455,6 +483,15 @@ public class PlayerBackpack : MonoBehaviour
         return magAmmo < 0 ? size : Mathf.Clamp(magAmmo, 0, size);
     }
 
+    /// <summary>武器弹匣等级的**兜底**：`ammoId == null` → 按口径取一级弹药卡（`GameAssets.defaultAmmoByKind`）。
+    /// ⚠️ 用户 2026-10-27 定：`ammoId` **永远不为 null**（`None` 口径的 RPG 除外）——
+    ///    以后做"随机弹药等级 / 数量"时，所有下游都不用再判空。</summary>
+    public static AmmoData ResolveDefaultAmmo(WeaponData w, AmmoData ammoId)
+    {
+        if (ammoId != null || w == null) return ammoId;
+        return GameAssets.I != null ? GameAssets.I.DefaultAmmo(w.ammoKind) : null;
+    }
+
     /// <summary>捡到一把武器：**优先自动装进空快捷槽并成为当前武器**；快捷槽满了则进库存。
     /// `magAmmo` 负值 = 满弹（新枪 / 敌人掉落 / 开局铺的枪都走它）；捡地上用过的枪时传它的真实余量。
     /// <returns>true = 已收下；false = 快捷槽与库存都放不下（背包已满，枪留在原地）</returns></summary>
@@ -469,7 +506,7 @@ public class PlayerBackpack : MonoBehaviour
             {
                 slots[i].weapon = w;
                 slots[i].magAmmo = AmmoOf(w, magAmmo);
-                slots[i].ammoId = ammoId;
+                slots[i].ammoId = ResolveDefaultAmmo(w, ammoId);
                 currentSlot = i;
                 return true;
             }
@@ -492,7 +529,7 @@ public class PlayerBackpack : MonoBehaviour
             var s = inventory[i];
             if (s == null || s.def != w) continue;
             s.magAmmo = AmmoOf(w, magAmmo);
-            s.ammoId = ammoId;
+            s.ammoId = ResolveDefaultAmmo(w, ammoId);
             break;
         }
         return put;
@@ -665,6 +702,20 @@ public class PlayerBackpack : MonoBehaviour
             if (eb) return -1;
             return string.CompareOrdinal(a.DisplayName, b.DisplayName);
         });
+    }
+
+    /// <summary>用掉**指定格**的血包（右键菜单「使用」）；不是血包 / 越界 → null。</summary>
+    public MedkitData UseMedkitAt(int index)
+    {
+        if (index < 0 || index >= inventory.Count) return null;
+        var s = inventory[index];
+        if (s == null || s.def == null) return null;
+        var m = s.def as MedkitData;
+        if (m == null || s.IsEmpty) return null;
+
+        s.count -= 1;
+        if (s.count <= 0) inventory.RemoveAt(index);
+        return m;
     }
 
     /// <summary>使用一个血包（未满血才可，由调用方判断）。

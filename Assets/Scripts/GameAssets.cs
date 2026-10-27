@@ -246,6 +246,18 @@ public class GameAssets : ScriptableObject
     [Tooltip("放大镜颜色（含透明度）。默认白色 90%")]
     public Color chestSearchMagnifierColor = new Color(1f, 1f, 1f, 0.9f);
 
+    // ---------------- 默认弹药（按口径；2026-10-27 新增） ----------------
+    [Tooltip("武器没指定弹匣等级时用的「一级弹药卡」。下标 = AmmoKind：0=手枪 1=步枪 2=狙击 3=冲锋枪 4=霰弹。\n留空 = 该口径不补默认（换弹时再按背包里的货自动挑）")]
+    public AmmoData[] defaultAmmoByKind = new AmmoData[5];
+
+    /// <summary>按口径取一级弹药（越界 / 空 → null）。</summary>
+    public AmmoData DefaultAmmo(AmmoKind kind)
+    {
+        int i = (int)kind;
+        if (i < 0 || defaultAmmoByKind == null || i >= defaultAmmoByKind.Length) return null;
+        return defaultAmmoByKind[i];
+    }
+
     const string ResourcePath = "GameAssets";
 
     static GameAssets _instance;
