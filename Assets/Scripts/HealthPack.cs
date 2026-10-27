@@ -53,7 +53,7 @@ public class HealthPack : MonoBehaviour, IInteractable
         InteractFocus.Unregister(this);   // 注册配注销
     }
 
-    public static HealthPack Create(Vector3 pos)
+    public static HealthPack Create(Vector3 pos, MedkitData def = null)
     {
         var root = new GameObject("HealthPack");
         root.transform.position = pos;
@@ -85,6 +85,7 @@ public class HealthPack : MonoBehaviour, IInteractable
         }
 
         var p = root.AddComponent<HealthPack>();
+        if (def != null) p.item = def;   // 记住"丢的是哪一种血包"（2026-10-27 审查 C-6：否则丢大捡小）
         p._baseY = pos.y;
         p._t = Random.Range(0f, 6f);
         Layers.SetRecursively(root, Layers.Pickup);

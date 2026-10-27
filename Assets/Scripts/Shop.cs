@@ -70,11 +70,26 @@ public class Shop : MonoBehaviour, IInteractable
         return (i >= 0 && _stock != null && i < _stock.Length) ? _stock[i] : 0;
     }
 
-    /// <summary>这件物品的玩家买入价（-1 = 本店不卖它）。</summary>
-    public int BuyPriceOf(ItemData def) => config != null ? config.BuyPriceOf(def) : -1;
+    /// <summary>这件物品的玩家买入价（-1 = 本店不卖它）。
+    /// ⚠️ 弹药按**单发**结算（2026-10-27 用户定）：配置表里的价格是"一包"的价，这里除以 `packSize`。
+    ///    否则会出现"60 金买 1 发、一包 30 发卖 720 金"（审查 C-4）。</summary>
+    public int BuyPriceOf(ItemData def)
+    {
+        int pack = PackSizeOf(def);
+        int p = config != null ? config.BuyPriceOf(def) : -1;
+        return p < 0 ? -1 : Mathf.Max(1, Mathf.RoundToInt(p / (float)pack));
+    }
 
-    /// <summary>这件物品的玩家卖出价（0 = 本店不收它）。</summary>
-    public int SellPriceOf(ItemData def) => config != null ? config.SellPriceOf(def) : 0;
+    /// <summary>这件物品的玩家卖出价（0 = 本店不收它）；弹药按**单发**结算（同上）。</summary>
+    public int SellPriceOf(ItemData def)
+    {
+        int pack = PackSizeOf(def);
+        int p = config != null ? config.SellPriceOf(def) : 0;
+        return p <= 0 ? 0 : Mathf.Max(1, Mathf.RoundToInt(p / (float)pack));
+    }
+
+    /// <summary>"一件"里包含几个：弹药 = `packSize`，其它 = 1。</summary>
+    static int PackSizeOf(ItemData def) => def is AmmoData a && a.packSize > 1 ? a.packSize : 1;
 
     // ==================== IInteractable ====================
 
@@ -197,7 +212,7 @@ public class Shop : MonoBehaviour, IInteractable
         var e = EntryAt(i);
         if (e == null || e.item == null) { reason = "这格没有东西"; return false; }
         if (!IsUnlimited(i) && StockAt(i) <= 0) { reason = "已售罄"; return false; }
-        if (GameState.Gold < Mathf.Max(0, e.buyPrice)) { reason = "金币不足"; return false; }
+        if (GameState.Gold < Mathf.Max(0, BuyPriceOf(e.item))) { reason = "金币不足"; return false; }
 
         var bp = pc != null ? pc.backpack : null;
         if (bp == null) { reason = "背包不可用"; return false; }
@@ -214,7 +229,7 @@ public class Shop : MonoBehaviour, IInteractable
 
         var e = EntryAt(i);
         var bp = pc.backpack;
-        int price = Mathf.Max(0, e.buyPrice);
+        int price = Mathf.Max(0, BuyPriceOf(e.item));
 
         GameState.Gold -= price;
         // ⚠️ 买回来的东西走 `AddItems`（**只进库存**）—— 不自动占快捷槽，避免抢走玩家手上的枪（用户 2026-09-25 定）

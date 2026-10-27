@@ -520,19 +520,22 @@ public class PlayerBackpack : MonoBehaviour
     public int AddWeaponItem(WeaponData w, int magAmmo = -1, AmmoData ammoId = null)
     {
         if (w == null) return 0;
-        int put = AddItems(w, 1);
-        if (put <= 0) return 0;
 
-        // 刚加进去的就是末尾那一格（武器不可堆叠 → 每格 1 把，且存的是同一个引用）→ 把弹匣写上去
-        for (int i = inventory.Count - 1; i >= 0; i--)
+        // ⚠️ 必须**先定格、再建 ItemStack**（2026-10-27 审查 C-2）：
+        //    旧写法是 `AddItems` 后再从末尾倒序找 "def == w" 的格子写弹匣 ——
+        //    当库存里有空洞 / 有第二把同款枪时，会写到**另一把旧枪**身上：
+        //    新入库的枪白送满弹，旧枪的余量与等级被静默改写。
+        int idx = FirstFreeInventorySlot();
+        if (idx < 0) return 0;
+
+        SetInventoryAt(idx, new ItemStack
         {
-            var s = inventory[i];
-            if (s == null || s.def != w) continue;
-            s.magAmmo = AmmoOf(w, magAmmo);
-            s.ammoId = ResolveDefaultAmmo(w, ammoId);
-            break;
-        }
-        return put;
+            def = w,
+            count = 1,
+            magAmmo = AmmoOf(w, magAmmo),
+            ammoId = ResolveDefaultAmmo(w, ammoId),
+        });
+        return 1;
     }
 
     /// <summary>从库存「装备」一把武器：装到空槽；没有空槽则替换当前槽，**被换下的武器下放进库存**。

@@ -129,6 +129,8 @@ public class PlayerThrowable : MonoBehaviour
                 return;
             }
             _active = true;
+            // 进入持弹模式 = 关掉弹药等级选择器（两个选择器互斥；2026-10-27 审查 C-3）
+            if (_pc != null && _pc.ammoSel != null) _pc.ammoSel.OnWeaponSwitch();
             if (_selected == null || CountOf(_selected) <= 0) _selected = _owned[0];
             RefreshVisual();
             return;

@@ -52,6 +52,14 @@ public class AmmoSelector : MonoBehaviour
         if (GameState.GameOver) { if (_selectorOpen) CloseSelector(false); return; }
         if (GameState.Paused)  { if (_selectorOpen) CloseSelector(false); return; }   // 暂停/死亡：取消、不换级
 
+        // 持弹模式下强制关闭（2026-10-27 审查 C-3）：
+        // 否则两个选择器同锚点重叠、左键走扔雷分支、超时还会在持弹模式里后台换弹
+        if (_pc != null && _pc.throwables != null && _pc.throwables.Active)
+        {
+            if (_selectorOpen) CloseSelector(false);
+            return;
+        }
+
         if (_selectorOpen)
         {
             BuildOwned();

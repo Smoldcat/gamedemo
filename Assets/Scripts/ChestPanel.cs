@@ -642,11 +642,16 @@ public class ChestPanel : MonoBehaviour
         var stack = _chest.GetSlot(i);
         if (stack == null || stack.def == null) return;
 
-        int put = bp.AddItems(stack.def, stack.count);      // 能收多少收多少（满了返回 0）
-        if (put <= 0) { HUD.AnnounceBackpackFull(); return; }
+        int idx = bp.FirstFreeInventorySlot();
+        if (idx < 0) { HUD.AnnounceBackpackFull(); return; }
 
-        Sfx.Confirm();
-        _chest.TakeFromSlot(i, put);
+        // ⚠️ 走唯一移动实现：保留弹匣余量 / 弹匣等级（2026-10-27 审查 C-1）
+        // 旧写法 `bp.AddItems(def, count)` 会重建 ItemStack → magAmmo=-1（满弹）、ammoId=null
+        if (!ItemMoveService.Move(ItemRef.ChestSlot(_chest, i), ItemRef.Inventory(idx)))
+        {
+            HUD.AnnounceBackpackFull();
+            return;
+        }
         AfterTransfer();
     }
 
@@ -658,20 +663,20 @@ public class ChestPanel : MonoBehaviour
         if (bp == null) return;
 
         int moved = 0;
-        // 固定槽位（2026-10-26）：拿空一格只会把它置 null，**不会前移** → 正序 / 倒序都安全。
-        // 仍然倒序，保持与旧实现一致（少一次"想顺序"的心智负担）。
+        // 逐格走唯一移动实现：保留弹匣余量 / 等级（2026-10-27 审查 C-1）
+        // 固定槽位（2026-10-26）：拿空一格只置 null、不前移 → 正序 / 倒序都安全。
         for (int i = _chest.SlotCount - 1; i >= 0; i--)
         {
+            if (_chest == null) break;      // 箱子"拿完消失"了
             var stack = _chest.GetSlot(i);
             if (stack == null || stack.def == null) continue;
-            int put = bp.AddItems(stack.def, stack.count);
-            if (put <= 0) continue;
-            moved += put;
-            _chest.TakeFromSlot(i, put);
-            if (_chest == null) break;      // 箱子"拿完消失"了
+
+            int idx = bp.FirstFreeInventorySlot();
+            if (idx < 0) break;
+            if (!ItemMoveService.Move(ItemRef.ChestSlot(_chest, i), ItemRef.Inventory(idx))) continue;
+            moved++;
         }
 
-        Sfx.Confirm();
         if (moved <= 0) HUD.AnnounceBackpackFull();
         else HUD.Announce("收进背包 " + moved + " 件", 1.0f, 26, new Color(0.6f, 1f, 0.7f));
         AfterTransfer();

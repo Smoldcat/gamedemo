@@ -225,10 +225,11 @@ public class ShopPanel : MonoBehaviour
             int stock = _shop.StockAt(i);
             bool unlimited = _shop.IsUnlimited(i);
             bool soldOut = !unlimited && stock <= 0;
-            int buy = Mathf.Max(0, e.buyPrice);
+            int buy = Mathf.Max(0, _shop.BuyPriceOf(e.item));
 
             cell.stock.text = unlimited ? "∞" : Mathf.Max(0, stock).ToString();
-            cell.price.text = soldOut ? "补货中" : buy.ToString();
+            // 弹药按单发卖 → 标"/发"，避免玩家以为一次买一包（2026-10-27 审查 C-4）
+            cell.price.text = soldOut ? "补货中" : (buy + (e.item is AmmoData ? "/发" : ""));
             cell.price.color = soldOut ? ShopUI.DimColor : ShopUI.PriceColor;
             cell.stock.color = soldOut ? ShopUI.DimColor : Color.white;
             if (soldOut)
