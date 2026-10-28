@@ -109,7 +109,21 @@ public class Crosshair : MonoBehaviour
     [Tooltip("十字线段粗细（像素）")]
     public float thickness = 2f;
     [Tooltip("换弹进度环直径（像素，与准星同一套缩放）")]
-    public float reloadRingSize = 40f;
+    public float reloadRingSize = 28f;
+
+    [Header("换弹反馈（2026-10-28：环缩小 + 十字转 45° 缩成红点）")]
+    [Tooltip("换弹时四根线缩短后的长度（像素）")]
+    public float reloadDotSize = 10f;
+    [Tooltip("换弹时四根线额外旋转的角度（度）。-45 = 逆时针 45°（十字 → X）")]
+    public float reloadRotateAngle = -45f;
+    [Tooltip("进入换弹姿态的时长（秒）")]
+    public float reloadEnterTime = 0.12f;
+    [Tooltip("退出换弹姿态的时长（秒）")]
+    public float reloadExitTime = 0.15f;
+    [Tooltip("换弹姿态的颜色（红 = 此时开不了枪）")]
+    public Color reloadColor = new Color(1f, 0.23f, 0.19f);
+    [Tooltip("换弹完成瞬间白闪时长（秒）")]
+    public float reloadFinishFlash = 0.06f;
     [Header("命中标记（hitmarker：打中敌人瞬间短暂出现的米字）")]
     [Tooltip("命中标记的半径（像素）：米字线段中心到准星中心的距离。默认 18 ≈ 比主十字略大，出现时像\"在主十字外炸开一圈\"")]
     public float hitMarkerRadius = 18f;
@@ -173,6 +187,11 @@ public class Crosshair : MonoBehaviour
     Image _spreadRing;             // 散布圈（散布楔形的内切圆投影）
     Texture2D _spreadTex, _reloadTex;   // 运行时生成的圆环贴图（OnDestroy 必须释放，否则每局累积一组）
     float _lastArmGap = -1f;       // 上一帧十字留空（脏值检查：没变就不重排四根线）
+    float _reloadPose;             // 0 = 正常十字，1 = 换弹姿态（转 45° + 远端回缩）
+    float _reloadPoseVel;          // SmoothDamp 的速度缓存（丝滑进出，避免尾段急停）
+    bool _wasReloadPose;           // 上一帧是否处于姿态（用于"结束恢复原始布局"）
+    bool _flashFired;              // 本次退出是否已经闪过白（防止每帧刷新白闪）
+    float _reloadFlashUntil;       // 换弹完成白闪截止时刻
     Health _playerHealth;          // 玩家生命组件（订阅受伤，做准星受击抖动）
     float _hitShakeUntil;          // 受击抖动结束时间
     bool _cursorGameplay = true;   // 当前光标是否处于"游玩"状态（只在变化时切换，见 ApplyCursorMode）
@@ -377,7 +396,8 @@ public class Crosshair : MonoBehaviour
         var ringGo = new GameObject("ReloadRing");
         ringGo.transform.SetParent(_root, false);
         var ringRt = ringGo.AddComponent<RectTransform>();
-        ringRt.sizeDelta = new Vector2(reloadRingSize, reloadRingSize);
+        float ringSize = Mathf.Max(8f, reloadRingSize);   // 防御：误填 0 / 负数时环仍可见
+        ringRt.sizeDelta = new Vector2(ringSize, ringSize);
         ringRt.anchoredPosition = Vector2.zero;
         _reloadRing = ringGo.AddComponent<Image>();
         _reloadRing.raycastTarget = false;
@@ -389,6 +409,8 @@ public class Crosshair : MonoBehaviour
         _reloadRing.fillClockwise = true;
         _reloadRing.fillAmount = 0f;
         ringGo.SetActive(false);
+        // 环放最底层：换弹时四根线缩短后会落在环**里面**，线必须在环上面才看得见
+        ringGo.transform.SetAsFirstSibling();
 
         // 统一放到 UI 层（与 HUD 一致；Overlay 下不影响渲染）
         Layers.SetRecursively(_canvas.gameObject, UIUtil.UILayer);
@@ -446,9 +468,32 @@ public class Crosshair : MonoBehaviour
         Vector2 hitOffset = Time.time < _hitShakeUntil ? Random.insideUnitCircle * 6f : Vector2.zero;
         _root.anchoredPosition = new Vector2(pos.x - Screen.width * 0.5f, pos.y - Screen.height * 0.5f) / sf + hitOffset;
 
-        // 换弹中：整块准星替换成圆形进度环（进度 = 已换弹时间 / 总换弹时间）
+        // 换弹姿态（2026-10-28）：环缩小 + 四根线逆时针转 45°、缩短成点、外移到环外
+        //  · 进入 / 退出都平滑：`reloading` 变 false 后仍从 1 收敛到 0（切枪打断也能自愈）
+        //  · 中心点 / 散布圈在姿态期间隐藏；四根线改成红色（"此时开不了枪"）
         var pc = PlayerController.Instance;
         bool reloading = pc != null && pc.reloading && pc.weapon != null;
+
+        // SmoothDamp：自带加速/减速，比线性 MoveTowards 更丝滑；进入 ↔ 退出切换时速度也连续
+        float targetPose = reloading ? 1f : 0f;
+        float smoothTime = Mathf.Max(0.02f, (reloading ? reloadEnterTime : reloadExitTime) * 0.6f);
+        _reloadPose = Mathf.SmoothDamp(_reloadPose, targetPose, ref _reloadPoseVel, smoothTime);
+
+        // 白闪放在**退出末段**（十字快恢复时）闪一次，而不是刚开始退出就闪
+        if (!reloading && _wasReloadPose && _reloadPose < 0.5f && !_flashFired)
+        {
+            _reloadFlashUntil = Time.time + reloadFinishFlash;
+            _flashFired = true;
+        }
+        if (reloading) _flashFired = false;
+
+        bool reloadPose = _reloadPose > 0.001f;
+
+        // ⚠️ 姿态结束必须**恢复原始布局**：`ApplyReloadPose` 会把左右线改成"竖矩形 + 90°/270° 旋转"，
+        //    退出后如果只靠位置更新，旋转和交换过的 sizeDelta 会残留 → 像素栅格差 1~2px，看起来"歪了一点"（2026-10-28 用户实测）。
+        if (!reloadPose && _wasReloadPose) ResetBarsLayout();
+        _wasReloadPose = reloadPose;
+
         if (_reloadRing != null)
         {
             if (_reloadRing.gameObject.activeSelf != reloading) _reloadRing.gameObject.SetActive(reloading);
@@ -461,12 +506,17 @@ public class Crosshair : MonoBehaviour
                 if (_reloadRing.color != ringCol) _reloadRing.color = ringCol;
             }
         }
-        if (_bars != null)
-            foreach (var b in _bars)
-                if (b != null) b.enabled = !reloading;
 
-        // 换弹时让位给换弹环：避免两个圈重叠（关闭时下一帧会按散布重新显示）
-        if (reloading && _spreadRing != null && _spreadRing.gameObject.activeSelf)
+        // 四根线始终显示；中心点只在正常姿态显示（换弹时变成"四个点"）
+        if (_bars != null)
+        {
+            for (int i = 0; i < 4; i++)
+                if (_bars[i] != null) _bars[i].enabled = true;
+            if (_bars[4] != null) _bars[4].enabled = !reloadPose;
+        }
+
+        // 换弹姿态期间隐藏散布圈（避免和进度环重叠）
+        if (reloadPose && _spreadRing != null && _spreadRing.gameObject.activeSelf)
             _spreadRing.gameObject.SetActive(false);
 
         // 命中标记：每帧定位/配色/动画（普通=4 根单线，击杀=8 根双线；含收缩 / 淡入 / 淡出三段）
@@ -476,7 +526,19 @@ public class Crosshair : MonoBehaviour
         //    （2026-10-15 用户实测）。放这里则换弹中它也按时消失。
         UpdateHitMarkers();
 
-        if (reloading) return;   // 换弹时准星已隐藏，不必再更新配色
+        // 换弹姿态进行中：覆盖四根线布局（旋转 + 缩短 + 外移），颜色红（完成瞬间白闪）
+        if (reloadPose)
+        {
+            ApplyReloadPose(_reloadPose);
+            // 完成白闪优先；换弹中保持红色；退出动画期间从红渐变回常态色
+            Color rc = Time.time < _reloadFlashUntil
+                ? colorHitFlash
+                : reloading ? reloadColor : Color.Lerp(colorIdle, reloadColor, _reloadPose);
+            if (_bars != null)
+                for (int i = 0; i < 4; i++)
+                    if (_bars[i] != null && _bars[i].color != rc) _bars[i].color = rc;
+            return;   // 姿态期间不画散布圈
+        }
 
         // 颜色：命中闪白 → 常态（`colorIdle`）。
         // ⚠️ 2026-10-17 **按用户决定移除了"准星指着敌人变色"**（原为 白=未瞄准 / 红=指着身体 / 绿=指着头部）：
@@ -492,6 +554,62 @@ public class Crosshair : MonoBehaviour
                 if (b != null && b.color != col) b.color = col;
 
         UpdateSpreadRing(pc, col);   // 散布圈 + 十字扩张（随武器散布角与瞄准距离）
+    }
+
+    /// <summary>换弹姿态：四根线从十字（0/90/180/270）逆时针转 45°、缩短成点、外移到进度环外（2026-10-28）。</summary>
+    void ApplyReloadPose(float t)
+    {
+        if (_bars == null) return;
+        // 防御：点长度不能超过原线段，也不能 <= 0（Inspector 误填时不至于线段消失/反向）
+        float targetLen = Mathf.Clamp(reloadDotSize, 1f, size);
+        float len = Mathf.Lerp(size, targetLen, t);
+
+        // ⚠️ 内端固定在**当前实际留空**（`_lastArmGap`，含散布圈扩张），只把远端往回缩。
+        //    若用基础 `gap`，进入姿态的第一帧会从"当前扩张位置"突然内跳到基础 gap（2026-10-28 自查）。
+        float inner = _lastArmGap > 0.01f ? _lastArmGap : gap;
+        float dist = inner + len * 0.5f;
+        float rot = reloadRotateAngle * t;
+
+        for (int i = 0; i < 4; i++)
+        {
+            var b = _bars[i];
+            if (b == null) continue;
+
+            // 0=上(0°) 1=下(180°) 2=左(270°) 3=右(90°)；统一成"竖矩形 + 旋转"再叠加换弹角
+            float baseAngle = i == 0 ? 0f : i == 1 ? 180f : i == 2 ? 270f : 90f;
+            float a = baseAngle + rot;
+            float rad = a * Mathf.Deg2Rad;
+
+            var rt = b.rectTransform;
+            rt.sizeDelta = new Vector2(thickness, len);
+            rt.localRotation = Quaternion.Euler(0f, 0f, a);
+            rt.anchoredPosition = new Vector2(Mathf.Sin(rad), Mathf.Cos(rad)) * dist;
+        }
+    }
+
+    /// <summary>把四根线恢复成**原始布局**（上下竖矩形、左右横矩形、无旋转），并强制下一帧按散布圈重排。
+    /// ⚠️ 换弹姿态用的是"统一竖矩形 + 旋转"表示；不还原的话会残留旋转 / 交换过的尺寸，
+    ///    像素栅格差 1~2px → 看起来"歪了一点"（2026-10-28 用户实测）。</summary>
+    void ResetBarsLayout()
+    {
+        if (_bars == null) return;
+        float off = gap + size * 0.5f;
+
+        ResetBar(0, new Vector2(thickness, size), new Vector2(0f, off));
+        ResetBar(1, new Vector2(thickness, size), new Vector2(0f, -off));
+        ResetBar(2, new Vector2(size, thickness), new Vector2(-off, 0f));
+        ResetBar(3, new Vector2(size, thickness), new Vector2(off, 0f));
+
+        _lastArmGap = -1f;   // 强制 UpdateSpreadRing 重新按当前散布圈排一次
+    }
+
+    void ResetBar(int i, Vector2 sizeDelta, Vector2 pos)
+    {
+        if (_bars == null || i < 0 || i >= _bars.Length || _bars[i] == null) return;
+        var rt = _bars[i].rectTransform;
+        rt.sizeDelta = sizeDelta;
+        rt.localRotation = Quaternion.identity;
+        rt.anchoredPosition = pos;
     }
 
     /// <summary>
