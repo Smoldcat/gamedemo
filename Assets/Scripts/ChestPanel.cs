@@ -642,12 +642,8 @@ public class ChestPanel : MonoBehaviour
         var stack = _chest.GetSlot(i);
         if (stack == null || stack.def == null) return;
 
-        int idx = bp.FirstFreeInventorySlot();
-        if (idx < 0) { HUD.AnnounceBackpackFull(); return; }
-
-        // ⚠️ 走唯一移动实现：保留弹匣余量 / 弹匣等级（2026-10-27 审查 C-1）
-        // 旧写法 `bp.AddItems(def, count)` 会重建 ItemStack → magAmmo=-1（满弹）、ammoId=null
-        if (!ItemMoveService.Move(ItemRef.ChestSlot(_chest, i), ItemRef.Inventory(idx)))
+        // ⚠️ 走唯一移动实现：保留弹匣余量 / 等级（C-1）；同款可堆叠会合并进已有格（A-10）
+        if (!ItemMoveService.TakeIntoBackpack(ItemRef.ChestSlot(_chest, i)))
         {
             HUD.AnnounceBackpackFull();
             return;
@@ -671,14 +667,17 @@ public class ChestPanel : MonoBehaviour
             var stack = _chest.GetSlot(i);
             if (stack == null || stack.def == null) continue;
 
-            int idx = bp.FirstFreeInventorySlot();
-            if (idx < 0) break;
-            if (!ItemMoveService.Move(ItemRef.ChestSlot(_chest, i), ItemRef.Inventory(idx))) continue;
+            if (!ItemMoveService.TakeIntoBackpack(ItemRef.ChestSlot(_chest, i))) break;
             moved++;
         }
 
-        if (moved <= 0) HUD.AnnounceBackpackFull();
-        else HUD.Announce("收进背包 " + moved + " 件", 1.0f, 26, new Color(0.6f, 1f, 0.7f));
+        if (moved <= 0)
+        {
+            // 区分"背包满"和"根本没有可拿的东西（空箱 / 全未揭示）"（2026-10-28 审查 A-7）
+            if (!bp.HasFreeInventorySlot()) HUD.AnnounceBackpackFull();
+            else HUD.Announce("没有可拿的东西", 1.0f, 26, new Color(0.9f, 0.75f, 0.5f));
+        }
+        else HUD.Announce("收进背包 " + moved + " 格", 1.0f, 26, new Color(0.6f, 1f, 0.7f));
         AfterTransfer();
     }
 

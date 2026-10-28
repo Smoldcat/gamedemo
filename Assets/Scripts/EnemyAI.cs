@@ -252,8 +252,14 @@ public class EnemyAI : MonoBehaviour
         // 前方有障碍则侧向绕行。
         // ⚠️ 掩码刻意**带上玩家/敌人**（Layers.AvoidMask）：保留原来"躲开同伴"的行为，
         //    避免敌人贴着同伴硬挤；只看阻挡物会让它们叠在一起。
-        Vector3 origin = transform.position + Vector3.up * 0.4f;
-        if (Physics.Raycast(origin, dir, 1.2f, Layers.AvoidMask, QueryTriggerInteraction.Ignore))
+        // 避障射线 10Hz 就够（A-12：原来每物理帧一条，30 敌人 ≈ 1500 次/秒；0.1 秒延迟玩家感知不到）
+        if (Time.time >= _nextAvoidProbe)
+        {
+            _nextAvoidProbe = Time.time + 0.1f;
+            Vector3 origin = transform.position + Vector3.up * 0.4f;
+            _avoidHit = Physics.Raycast(origin, dir, 1.2f, Layers.AvoidMask, QueryTriggerInteraction.Ignore);
+        }
+        if (_avoidHit)
         {
             Vector3 side = Vector3.Cross(Vector3.up, dir);
             dir = (Random.value < 0.5f) ? (dir + side * 0.8f).normalized : (dir - side * 0.8f).normalized;
@@ -281,6 +287,8 @@ public class EnemyAI : MonoBehaviour
     float _blindUntil;        // 致盲截止时刻（`Time.time` 口径）
     float _slowUntil;         // 减速截止时刻
     float _slowMul = 1f;      // 减速倍率（1 = 正常；0.5 = 半速）
+    float _nextAvoidProbe;    // 避障射线节流（0.1s 一次，A-12）
+    bool _avoidHit;           // 上一次避障探测的结果
     Vector3 _blindDir;        // 致盲时"乱走"的方向
     float _blindNextTurn;     // 下次换向的时刻
     GameObject _blindIcon;    // 头顶致盲图标（懒创建）

@@ -112,7 +112,7 @@ public class PlayerMagic : MonoBehaviour
         //    见 PlayerController / Crosshair / BackpackPanel 的同款注释与写法）。
         if (Instance != null && Instance != this)
         {
-            Destroy(gameObject);
+            Destroy(this);   // ✅ 只销毁重复组件，不能销毁整个 Player（B-2；其他单例都是 Destroy(this)）
             return;
         }
         Instance = this;

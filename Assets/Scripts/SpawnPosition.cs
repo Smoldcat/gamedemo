@@ -139,6 +139,9 @@ public static class SpawnPosition
     /// </summary>
     static bool OverlapsPoint(Vector3 p, float radius)
     {
-        return Physics.CheckSphere(new Vector3(p.x, GameConst.ObstacleProbeY, p.z), radius);
+        // ⚠️ 必须给正掩码（A-13）：原来不传 mask 会连玩家/敌人/拾取物一起算"被占用"，
+        //    导致明明空着的位置刷不出怪、或把怪塞进别的单位里。
+        return Physics.CheckSphere(new Vector3(p.x, GameConst.ObstacleProbeY, p.z), radius,
+            Layers.Blocker, QueryTriggerInteraction.Ignore);
     }
 }

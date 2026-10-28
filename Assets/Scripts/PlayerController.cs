@@ -1666,7 +1666,9 @@ public class PlayerController : MonoBehaviour
         if (a != null) { AmmoPickup.Create(a, pos, count); return; }
         if (m != null) { MagicPickup.Create(m, pos); return; }
         if (t != null) { ThrowablePickup.Create(t, pos, count); return; }   // 投掷物：可堆叠 → 整格掉（N 颗一包）
-        if (isMedkit) { HealthPack.Create(pos, stack.def as MedkitData); return; }   // 血包类型跟着走（C-6）
+        // ⚠️ 必须用**取走前**缓存的 `def`：`TakeFromInventory` 会把空的 stack `Clear()`（def = null），
+        //    再读 `stack.def` 就永远是 null（2026-10-28 审查 A-3）
+        if (isMedkit) { HealthPack.Create(pos, def as MedkitData); return; }
     }
 
     /// 把当前手上弹匣写回背包槽（换枪/切槽前调用，防止弹匣状态丢失导致免费回满弹）。

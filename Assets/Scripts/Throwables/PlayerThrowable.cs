@@ -31,6 +31,7 @@ public class PlayerThrowable : MonoBehaviour
 
     bool _selectorOpen;
     float _selectorCloseAt;
+    float _nextOwnedRefresh;         // 库存扫描节流（0.25s 一次，A-11）
     float _scrollAccum;              // 选择器滚轮的"整格"累加器（与切枪滚轮同一套手感）
 
     readonly List<ThrowableData> _owned = new List<ThrowableData>(8);   // 本帧"库存 > 0"的种类（按名字排序）
@@ -85,7 +86,12 @@ public class PlayerThrowable : MonoBehaviour
             return;
         }
 
-        RefreshOwned();
+        // 0.25 秒刷新一次库存即可（A-11：原来每帧遍历 ItemDatabase + CountItems + Sort，30 敌人场景下纯浪费）
+        if (Time.time >= _nextOwnedRefresh)
+        {
+            _nextOwnedRefresh = Time.time + 0.25f;
+            RefreshOwned();
+        }
 
         if (_selected == null || CountOf(_selected) <= 0)
         {

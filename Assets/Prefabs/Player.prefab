@@ -297,7 +297,11 @@ MonoBehaviour:
   accel: 40
   weapon: {fileID: 11400000, guid: cbf04b0c12f3fe64793ac73c07ea3551, type: 2}
   magAmmo: 4
+  magAmmoId: {fileID: 0}
   backpack: {fileID: 0}
+  magic: {fileID: 0}
+  throwables: {fileID: 0}
+  ammoSel: {fileID: 0}
   running: 1
   reloading: 1
   recoilKickSpeed: 8
@@ -309,6 +313,10 @@ MonoBehaviour:
   headshotRadiusRatio: 0.0125
   bodyAimRadius: 0.9
   aimDeadZoneRadius: 0.6
+  bulletUpAngle: 0.6
+  bulletDownAngle: 0.15
+  headshotUpAngle: 0.7
+  headshotDownAngle: 0
 --- !u!114 &1834013450686954770
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -323,12 +331,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   slots:
   - weapon: {fileID: 0}
-    magAmmo: 12
+    magAmmo: -1
+    ammoId: {fileID: 0}
+    magic: {fileID: 0}
   - weapon: {fileID: 0}
-    magAmmo: 4
+    magAmmo: -1
+    ammoId: {fileID: 0}
+    magic: {fileID: 0}
   - weapon: {fileID: 0}
-    magAmmo: 6
+    magAmmo: -1
+    ammoId: {fileID: 0}
+    magic: {fileID: 0}
   currentSlot: -1
+  magics:
+  - weapon: {fileID: 0}
+    magAmmo: 0
+    ammoId: {fileID: 0}
+    magic: {fileID: 0}
   inventory: []
   startMedkits: 2
 --- !u!114 &209369971587789907
@@ -359,10 +378,20 @@ MonoBehaviour:
   gap: 5
   thickness: 2
   reloadRingSize: 40
-  crosshairSprite: {fileID: 0}
+  hitMarkerRadius: 18
+  hitMarkerLength: 8
+  hitMarkerThickness: 2
+  hitMarkerDuration: 0.18
+  hitMarkerColor: {r: 0.95, g: 0.95, b: 0.95, a: 0.95}
+  hitMarkerHeadColor: {r: 1, g: 0.45, b: 0.4, a: 0.95}
+  hitMarkerPunchScale: 1.35
+  hitMarkerFadeIn: 1
+  hitMarkerTimeUp: 0.3
+  hitMarkerTimeHold: 0.5
+  hitMarkerFade: 1
+  hitMarkerKillThickness: 2
+  hitMarkerKillLineGap: 3
   colorIdle: {r: 0.95, g: 0.95, b: 0.95, a: 0.9}
-  colorBody: {r: 1, g: 0.25, b: 0.2, a: 1}
-  colorHead: {r: 0.35, g: 1, b: 0.45, a: 1}
   colorHitFlash: {r: 1, g: 1, b: 1, a: 1}
   spreadRingAlpha: 0.55
   useVirtualCursor: 1

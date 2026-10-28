@@ -212,7 +212,9 @@ public class Shop : MonoBehaviour, IInteractable
         var e = EntryAt(i);
         if (e == null || e.item == null) { reason = "这格没有东西"; return false; }
         if (!IsUnlimited(i) && StockAt(i) <= 0) { reason = "已售罄"; return false; }
-        if (GameState.Gold < Mathf.Max(0, BuyPriceOf(e.item))) { reason = "金币不足"; return false; }
+        int unitPrice = BuyPriceOf(e.item);
+        if (unitPrice < 0) { reason = "本店不卖它"; return false; }   // 表外物品：-1 不能当 0 白送（B-1）
+        if (GameState.Gold < unitPrice) { reason = "金币不足"; return false; }
 
         var bp = pc != null ? pc.backpack : null;
         if (bp == null) { reason = "背包不可用"; return false; }
@@ -229,7 +231,8 @@ public class Shop : MonoBehaviour, IInteractable
 
         var e = EntryAt(i);
         var bp = pc.backpack;
-        int price = Mathf.Max(0, BuyPriceOf(e.item));
+        int price = BuyPriceOf(e.item);
+        if (price < 0) { reason = "本店不卖它"; return false; }   // 防御：CanBuy 已拦，双保险
 
         GameState.Gold -= price;
         // ⚠️ 买回来的东西走 `AddItems`（**只进库存**）—— 不自动占快捷槽，避免抢走玩家手上的枪（用户 2026-09-25 定）

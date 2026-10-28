@@ -198,7 +198,12 @@ public class Chest : MonoBehaviour, IInteractable
         int slots = SlotCount;
         _slots = new ItemStack[slots];
         _revealed = new bool[slots];
-        if (config == null) return;
+
+        if (config == null)
+        {
+            RevealEmptySlots();
+            return;
+        }
 
         // ① 保底：必出的那一样（可指定，**不写死成武器**）
         if (config.guaranteedItem != null)
@@ -212,6 +217,19 @@ public class Chest : MonoBehaviour, IInteractable
             if (e == null) continue;
             AddRolled(e.item, Random.Range(e.minCount, e.maxCount + 1));
         }
+
+        // ⚠️ 空槽天然"已知是空"→ 直接标记揭示（2026-10-28 审查 A-1）：
+        //    否则它们永远进不了搜刮队列，也就永远不能作为拖拽目标（"拖到任何空格"失效）。
+        RevealEmptySlots();
+    }
+
+    /// <summary>把所有空格标记为"已揭示"（空格不需要搜刮，开箱即视为已知）。
+    /// ⚠️ 必须在**填充完成之后**调用：在填充之前调会把所有槽都标成已揭示，破坏搜刮。</summary>
+    void RevealEmptySlots()
+    {
+        if (_revealed == null || _slots == null) return;
+        for (int i = 0; i < _slots.Length; i++)
+            if (_slots[i] == null) _revealed[i] = true;
     }
 
     /// <summary>把一次抽到的东西放进格子：可堆叠先进同类格，否则放进**第一个空槽**；槽位满了就丢弃（不溢出）。</summary>

@@ -27,7 +27,12 @@ public class ItemContextMenu : MonoBehaviour
         Ensure();
         // ⚠️ 必须先激活再定位：Canvas 未激活时 RectTransform 还没布局，ScreenPointToLocalPointInRectangle 会失败
         _inst.gameObject.SetActive(true);
-        _inst.Build(target);
+        // 没有可用操作（未揭示格 / 空槽）→ 不打开空菜单（2026-10-28 审查 A-6）
+        if (_inst.Build(target) <= 0)
+        {
+            _inst.gameObject.SetActive(false);
+            return;
+        }
         _inst.Place(screenPos);
     }
 
@@ -79,13 +84,14 @@ public class ItemContextMenu : MonoBehaviour
         canvas.gameObject.SetActive(false);
     }
 
-    void Build(ItemRef target)
+    int Build(ItemRef target)
     {
         for (int i = 0; i < _items.Count; i++)
             if (_items[i] != null) Destroy(_items[i]);
         _items.Clear();
 
         var actions = ItemActions.Build(target);
+        int count = actions.Count;
         float h = Pad * 2f + actions.Count * ItemH + Mathf.Max(0, actions.Count - 1) * Gap;
         _panel.sizeDelta = new Vector2(W, h);
 
@@ -130,6 +136,8 @@ public class ItemContextMenu : MonoBehaviour
 
             _items.Add(go);
         }
+
+        return count;
     }
 
     void Place(Vector2 screenPos)

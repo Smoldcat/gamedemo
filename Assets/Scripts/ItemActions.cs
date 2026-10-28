@@ -95,15 +95,19 @@ public static class ItemActions
         return list;
     }
 
+    static int FindEmptyWeaponSlot(PlayerBackpack bp)
+    {
+        for (int i = 0; i < bp.slots.Length; i++)
+            if (bp.slots[i] != null && bp.slots[i].weapon == null) return i;
+        return -1;
+    }
+
     // ==================== 动作实现 ====================
 
     static void Take(ItemRef r)
     {
-        var bp = PlayerController.Instance != null ? PlayerController.Instance.backpack : null;
-        if (bp == null) return;
-        int idx = bp.FirstFreeInventorySlot();
-        if (idx < 0) return;
-        ItemMoveService.Move(r, ItemRef.Inventory(idx));
+        // 优先合并进同款未满格，其次放空位（A-10；Move 内部会刷新面板）
+        if (!ItemMoveService.TakeIntoBackpack(r)) HUD.AnnounceBackpackFull();
     }
 
     static void Use(ItemRef r)
@@ -132,8 +136,21 @@ public static class ItemActions
         }
         if (r.container == ItemContainer.ChestSlot) { EquipFromChest(pc, bp, r, stack); return; }
 
-        if (stack.def is WeaponData) pc.EquipFromInventory(stack.def.StackId);
-        else if (stack.def is MagicData) pc.EquipMagicFromInventory(stack.def.StackId);
+        // 库存武器 / 魔法：按**引用索引**装（B-6：`StackId` 只会匹配第一把同款，多把同款时会装错）
+        if (stack.def is WeaponData)
+        {
+            int target = FindEmptyWeaponSlot(bp);
+            if (target < 0) target = bp.currentSlot >= 0 ? bp.currentSlot : 0;
+            if (ItemMoveService.Move(r, ItemRef.Slot(target)))
+            {
+                bp.currentSlot = target;          // 装备并手持
+                pc.LoadMirrorFromSlot();
+            }
+        }
+        else if (stack.def is MagicData)
+        {
+            ItemMoveService.Move(r, ItemRef.MagicSlot(0));   // 目标空 = 装；有魔法 = 互换回库存
+        }
         RefreshPanels();   // ⚠️ 不刷新的话要关掉背包再开才看得到（2026-10-27 用户报的 bug）
     }
 

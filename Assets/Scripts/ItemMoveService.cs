@@ -98,8 +98,10 @@ public static class ItemMoveService
         var dst = GetAt(to);
         bool dstEmpty = dst == null || dst.IsEmpty;
 
-        // 跨容器（背包 ↔ 箱子）：目标有物品 → 拒绝
-        if (IsBackpack(from.container) != IsBackpack(to.container) && !dstEmpty) return false;
+        // 跨容器（背包 ↔ 箱子）：目标有物品 → 拒绝；但**同款可堆叠**允许合并（A-10：拿取不再多占一格）
+        bool sameStack = !dstEmpty && src.def != null && src.def.canStack
+                         && dst.def != null && dst.def.CanMergeWith(src.def);
+        if (IsBackpack(from.container) != IsBackpack(to.container) && !dstEmpty && !sameStack) return false;
 
         // ⚠️ 互换时**双向**都要能住进对方的容器：快捷槽只收武器 → 快捷槽里的枪不能和库存里的血包 / 子弹互换。
         //    否则写回槽会失败（返回 false 没人看），而库存那格已经被枪覆盖 → 血包凭空消失。
@@ -214,6 +216,30 @@ public static class ItemMoveService
         if (ChestPanel.Instance != null) ChestPanel.Instance.RefreshIfOpen();
         Sfx.Confirm();
         return true;
+    }
+
+    /// <summary>把某格取进背包：优先合并进同款未满格，否则放空位（A-10）。返回是否成功。</summary>
+    public static bool TakeIntoBackpack(ItemRef from)
+    {
+        var bp = Backpack;
+        if (bp == null) return false;
+        var src = Peek(from);
+        if (src == null || src.IsEmpty || src.def == null) return false;
+
+        if (src.def.canStack)
+        {
+            for (int i = 0; i < bp.Capacity; i++)
+            {
+                var s = bp.InventoryAt(i);
+                if (s == null || s.def == null || !s.def.CanMergeWith(src.def)) continue;
+                if (s.count >= s.def.MaxStack) continue;
+                if (Move(from, ItemRef.Inventory(i))) return true;
+            }
+        }
+
+        int idx = bp.FirstFreeInventorySlot();
+        if (idx < 0) return false;
+        return Move(from, ItemRef.Inventory(idx));
     }
 
     static bool IsBackpack(ItemContainer c) => c == ItemContainer.BackpackInventory
